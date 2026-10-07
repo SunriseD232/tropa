@@ -9,7 +9,7 @@ namespace Tropa.Core.Cores;
 /// </summary>
 public sealed partial record GeoLock(int Schema, IReadOnlyList<GeoFile> Files)
 {
-    [GeneratedRegex(@"^https://raw\.githubusercontent\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[0-9a-f]{40}/[A-Za-z0-9._/-]+\.srs$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^https://raw\.githubusercontent\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[0-9a-f]{40}/(?:[A-Za-z0-9._/-]|%2[1-9A-F]|%40)+\.srs$", RegexOptions.CultureInvariant)]
     private static partial Regex PinnedUrl();
 
     [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,63}$", RegexOptions.CultureInvariant)]

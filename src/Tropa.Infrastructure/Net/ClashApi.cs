@@ -49,5 +49,13 @@ public sealed class ClashApi(int port, string secret) : IDisposable
         }
     }
 
+    /// <summary>Переключает selector на выход <paramref name="outbound"/> без переподключения.</summary>
+    public async Task SelectAsync(string selector, string outbound, CancellationToken ct)
+    {
+        using var body = new StringContent("{\"name\":" + JsonSerializer.Serialize(outbound) + "}", System.Text.Encoding.UTF8, "application/json");
+        using var response = await _client.PutAsync("proxies/" + Uri.EscapeDataString(selector), body, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+    }
+
     public void Dispose() => _client.Dispose();
 }

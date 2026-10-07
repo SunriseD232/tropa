@@ -243,6 +243,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
 
     private static SettingsSection Dpi() => new("dpi", "Обход DPI", "Только для трафика, который идёт напрямую, и только средствами ядер — без сторонних драйверов.",
     [
+        new ToggleRow("Сначала обход DPI, при неудаче — через сервер", "dpiFirst", s => s.Routing.DpiFirst,
+            (s, v) => s with { Routing = s.Routing with { DpiFirst = v } }),
         new ChoiceRow("Набор", "dpiPreset", Opts("Выключено", "Мягко", "Агрессивно", "Свои"),
             s => (int)s.Dpi.DpiPreset, (s, i) => s with { Dpi = s.Dpi.WithPreset((DpiPreset)i) }),
         new ToggleRow("Фрагментация TLS", "fragment", s => s.Dpi.Fragment, (s, v) => Custom(s, d => d with { Fragment = v })),

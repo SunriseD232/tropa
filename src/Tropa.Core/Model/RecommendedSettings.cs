@@ -46,6 +46,8 @@ public static class RecommendedSettings
             Routing = current.Routing with
             {
                 Preset = RoutePreset.ExceptRu,
+                // Основной способ для заблокированного внутри страны — обход DPI, сервер подстрахует.
+                DpiFirst = true,
                 BlockQuic = true,
                 UdpProxy = true,
             },

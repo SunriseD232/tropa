@@ -40,6 +40,10 @@ public sealed class SingBoxGoldenTests
     {
         ["01-reality-vision-tun-except-ru"] = () => Input(Defaults, Reality),
 
+        // Сначала обход DPI: группы YouTube/Discord/Telegram/заблокированное через переключатели, вход проверки.
+        ["13-dpi-first-blocked-only"] = () => Input(
+            Defaults with { Routing = Defaults.Routing with { Preset = RoutePreset.BlockedOnly, DpiFirst = true } }, Reality) with { DpiProbePort = 19911 },
+
         // Shadowsocks-2022 активный, Hysteria2 в группе авто-выбора; Mux включён — у Hysteria2 его быть не должно.
         ["12-shadowsocks-hysteria2"] = () => Input(
             Defaults with { Dpi = Defaults.Dpi with { Mux = true } }, Ss2022, [Ss2022, Hy2], [Ss2022, Hy2]),

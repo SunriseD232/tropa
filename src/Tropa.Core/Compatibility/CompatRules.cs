@@ -66,6 +66,8 @@ public static class CompatRules
             s => s with { Dpi = s.Dpi with { Mux = false } }),
         new("muxConc", (s, _) => !s.Dpi.Mux, "Mux выключен"),
         new("templateText", (s, _) => !s.Expert.Template, "включите свой шаблон"),
+        new("dpiFirst", (s, _) => s.Routing.Preset == RoutePreset.All, "при «Всё через сервер» обход DPI не используется",
+            s => s with { Routing = s.Routing with { DpiFirst = false } }),
         new("subUACustom", (s, _) => s.Subscriptions.SubUA != UserAgentMode.Custom, "выберите «Свой»"),
     ];
 

@@ -11,6 +11,18 @@ public static class RuleSets
     public const string GeoipRu = "geoip-ru";
     public const string GeositeRuBlocked = "geosite-ru-blocked";
     public const string GeoipRuBlocked = "geoip-ru-blocked";
+    public const string GeoipRuBlockedCommunity = "geoip-ru-blocked-community";
+    public const string GeositeGovRu = "geosite-category-gov-ru";
+    public const string GeositeBankRu = "geosite-category-bank-ru";
+    public const string GeositeRuOnlyInside = "geosite-ru-available-only-inside";
+    /// <summary>ИИ-сервисы, закрытые для России с их стороны (OpenAI, Anthropic, Gemini…): только через сервер.</summary>
+    public const string GeositeAiNonCn = "geosite-category-ai-noncn";
+
+    /// <summary>Всегда напрямую: госуслуги, банки, сайты, доступные только из России.</summary>
+    public static IReadOnlyList<string> AlwaysDirect { get; } = [RuServices, GeositeGovRu, GeositeBankRu, GeositeRuOnlyInside];
+
+    /// <summary>Заблокированное в России (runetfreedom/russia-v2ray-rules-dat).</summary>
+    public static IReadOnlyList<string> Blocked { get; } = [GeositeRuBlocked, GeoipRuBlocked, GeoipRuBlockedCommunity];
 
     /// <summary>Сайты, к которым по умолчанию применяется фрагментация (набор «Мягко»).</summary>
     public static IReadOnlyList<string> FragmentDefaults { get; } =

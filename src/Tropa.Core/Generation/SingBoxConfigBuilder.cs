@@ -48,6 +48,9 @@ public sealed record SingBoxInput
 
     /// <summary>Путь к xray.exe: в режиме TUN его собственный трафик отправляется напрямую, иначе он зациклится в туннель.</summary>
     public string? XrayPath { get; init; }
+
+    /// <summary>Порт входа проверки обхода DPI (режим «сначала обход DPI»); null — без проверок.</summary>
+    public int? DpiProbePort { get; init; }
 }
 
 /// <summary>
@@ -266,18 +269,20 @@ public static class SingBoxConfigBuilder
         switch (s.Dns.LocalDnsRule)
         {
             case LocalDnsRule.Russian:
-                ctx.RuleSetTags.Add(RuleSets.RuServices);
+                foreach (var tag in RuleSets.AlwaysDirect)
+                    ctx.RuleSetTags.Add(tag);
                 ctx.RuleSetTags.Add(RuleSets.GeositeCategoryRu);
                 rules.Push(new JsonObject
                 {
-                    ["rule_set"] = StrArray([RuleSets.RuServices, RuleSets.GeositeCategoryRu]),
+                    ["rule_set"] = StrArray([.. RuleSets.AlwaysDirect, RuleSets.GeositeCategoryRu]),
                     ["server"] = "local",
                 });
                 rules.Push(new JsonObject { ["domain_suffix"] = StrArray(["ru", "su", "xn--p1ai"]), ["server"] = "local" });
                 break;
             case LocalDnsRule.DirectRules:
-                ctx.RuleSetTags.Add(RuleSets.RuServices);
-                rules.Push(new JsonObject { ["rule_set"] = StrArray([RuleSets.RuServices]), ["server"] = "local" });
+                foreach (var tag in RuleSets.AlwaysDirect)
+                    ctx.RuleSetTags.Add(tag);
+                rules.Push(new JsonObject { ["rule_set"] = StrArray(RuleSets.AlwaysDirect), ["server"] = "local" });
                 break;
             case LocalDnsRule.None:
                 break;
@@ -412,6 +417,18 @@ public static class SingBoxConfigBuilder
             mixed["users"] = Users(ctx);
         inbounds.Push(mixed);
 
+        if (s.Routing.DpiFirst && ctx.Input.DpiProbePort is { } probePort)
+        {
+            inbounds.Push(new JsonObject
+            {
+                ["type"] = "socks",
+                ["tag"] = DpiGroups.ProbeInboundTag,
+                ["listen"] = "127.0.0.1",
+                ["listen_port"] = probePort,
+                ["users"] = Users(ctx),
+            });
+        }
+
         if (s.Connection.LanAllow)
         {
             inbounds.Push(new JsonObject
@@ -488,6 +505,24 @@ public static class SingBoxConfigBuilder
         outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DirectTag });
         if (ctx.Input.XrayDirectPort is { } directPort)
             outbounds.Push(XraySocks(ctx, NoiseDirectTag, directPort));
+
+        if (s.Routing.DpiFirst)
+        {
+            // Адреса заблокированного узнаём через удалённый DNS: провайдерский их подменяет.
+            outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DpiGroups.DirectTag, ["domain_resolver"] = "remote" });
+            foreach (var g in DpiGroups.All)
+            {
+                outbounds.Push(new JsonObject
+                {
+                    ["type"] = "selector",
+                    ["tag"] = g.SelectorTag,
+                    ["outbounds"] = StrArray([DpiGroups.DirectTag, ProxyTag]),
+                    ["default"] = DpiGroups.DirectTag,
+                    ["interrupt_exist_connections"] = true,
+                });
+            }
+        }
+
         return outbounds;
     }
 
@@ -708,6 +743,17 @@ public static class SingBoxConfigBuilder
         if (xrayLoopRule)
             rules.Push(new JsonObject { ["process_path"] = StrArray([ctx.Input.XrayPath!]), ["action"] = "route", ["outbound"] = DirectTag });
 
+        if (s.Routing.DpiFirst && ctx.Input.DpiProbePort is not null)
+        {
+            rules.Push(new JsonObject
+            {
+                ["inbound"] = StrArray([DpiGroups.ProbeInboundTag]),
+                ["action"] = "route",
+                ["outbound"] = DpiGroups.DirectTag,
+                ["tls_fragment"] = true,
+            });
+        }
+
         if (s.General.Ipv6Block)
             rules.Push(new JsonObject { ["ip_version"] = 6, ["action"] = "reject" });
         if (s.Routing.BlockQuic)
@@ -715,9 +761,10 @@ public static class SingBoxConfigBuilder
 
         rules.Push(new JsonObject { ["ip_is_private"] = true, ["outbound"] = DirectTag });
 
-        // Российские сервисы — напрямую раньше всего остального.
-        ctx.RuleSetTags.Add(RuleSets.RuServices);
-        rules.Push(Route(ctx, new JsonObject { ["rule_set"] = StrArray([RuleSets.RuServices]) }, RuleAction.Direct));
+        // Госуслуги, банки и сайты, доступные только из России, — напрямую раньше всего остального.
+        foreach (var tag in RuleSets.AlwaysDirect)
+            ctx.RuleSetTags.Add(tag);
+        rules.Push(Route(ctx, new JsonObject { ["rule_set"] = StrArray(RuleSets.AlwaysDirect) }, RuleAction.Direct));
 
         foreach (var rule in s.Routing.Rules.Where(r => r.Enabled && !r.Match.IsEmpty))
         {
@@ -737,20 +784,45 @@ public static class SingBoxConfigBuilder
         }
 
         string final;
+        if (s.Routing.Preset != RoutePreset.All)
+        {
+            // ИИ-сервисы закрыты для России их владельцами — обход DPI не поможет, только сервер.
+            AddRuleSetRule(ctx, rules, RuleSets.GeositeAiNonCn, RuleAction.Proxy);
+        }
+
+        if (s.Routing.DpiFirst)
+        {
+            // Сначала обход DPI: каждая группа — через свой переключатель «напрямую с обходом ↔ сервер».
+            foreach (var g in DpiGroups.All)
+            {
+                foreach (var tag in g.RuleSets)
+                    ctx.RuleSetTags.Add(tag);
+                rules.Push(new JsonObject
+                {
+                    ["rule_set"] = StrArray(g.RuleSets),
+                    ["action"] = "route",
+                    ["outbound"] = g.SelectorTag,
+                    ["tls_fragment"] = true,
+                });
+            }
+        }
+
         switch (s.Routing.Preset)
         {
             case RoutePreset.ExceptRu:
                 // Заблокированное — через сервер, даже если это .ru; остальное российское — напрямую.
-                AddRuleSetRule(ctx, rules, RuleSets.GeositeRuBlocked, RuleAction.Proxy);
-                AddRuleSetRule(ctx, rules, RuleSets.GeoipRuBlocked, RuleAction.Proxy);
+                // При «сначала обход DPI» заблокированное уже разобрано группами выше.
+                foreach (var tag in s.Routing.DpiFirst ? [] : RuleSets.Blocked)
+                    AddRuleSetRule(ctx, rules, tag, RuleAction.Proxy);
                 AddRuleSetRule(ctx, rules, RuleSets.GeositeCategoryRu, RuleAction.Direct);
                 rules.Push(Route(ctx, new JsonObject { ["domain_suffix"] = StrArray(["ru", "su", "xn--p1ai"]) }, RuleAction.Direct));
                 AddRuleSetRule(ctx, rules, RuleSets.GeoipRu, RuleAction.Direct);
                 final = ProxyTag;
                 break;
             case RoutePreset.BlockedOnly:
-                AddRuleSetRule(ctx, rules, RuleSets.GeositeRuBlocked, RuleAction.Proxy);
-                AddRuleSetRule(ctx, rules, RuleSets.GeoipRuBlocked, RuleAction.Proxy);
+                // При «сначала обход DPI» заблокированное уже разобрано группами выше.
+                foreach (var tag in s.Routing.DpiFirst ? [] : RuleSets.Blocked)
+                    AddRuleSetRule(ctx, rules, tag, RuleAction.Proxy);
                 final = DirectTag;
                 break;
             default:

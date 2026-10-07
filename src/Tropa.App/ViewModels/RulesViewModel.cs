@@ -101,8 +101,10 @@ internal sealed partial class RulesViewModel : ObservableObject
             OnPropertyChanged(nameof(AppRulesNote));
             OnPropertyChanged(nameof(StoreAppsVisible));
         });
+        engine.DpiStatusChanged += (_, _) => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(DpiFirstStatus)));
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() =>
         {
+            OnPropertyChanged(nameof(DpiFirstStatus));
             if (s.State != ConnectionState.Connected)
                 NeedsApply = false;
         });
@@ -192,6 +194,37 @@ internal sealed partial class RulesViewModel : ObservableObject
     [ObservableProperty]
     public partial bool UdpProxy { get; set; }
 
+    /// <summary>Сначала обход DPI, при неудаче — через сервер (info.ru.json: dpiFirst).</summary>
+    [ObservableProperty]
+    public partial bool DpiFirst { get; set; }
+
+    public string? DpiFirstReason => Core.Compatibility.CompatRules.Evaluate(_engine.State.Settings).Disabled.GetValueOrDefault("dpiFirst");
+
+    public bool DpiFirstEnabled => DpiFirstReason is null;
+
+    /// <summary>Как сейчас идёт каждая группа: напрямую с обходом или через сервер.</summary>
+    public string? DpiFirstStatus
+    {
+        get
+        {
+            if (!DpiFirst)
+                return null;
+            var status = _engine.DpiStatus;
+            if (status.Count == 0)
+                return _engine.Status.State == ConnectionState.Connected
+                    ? "Проверяю, где обход работает…"
+                    : "После подключения Тропа проверит каждую группу и для неработающих сама включит сервер.";
+            return string.Join(" · ", Core.Routing.DpiGroups.All.Where(g => status.ContainsKey(g.Key))
+                .Select(g => g.Title + ": " + (status[g.Key] ? "обход DPI" : "через сервер")));
+        }
+    }
+
+    partial void OnDpiFirstChanged(bool value)
+    {
+        OnPropertyChanged(nameof(DpiFirstStatus));
+        Update(r => r with { DpiFirst = value });
+    }
+
     [ObservableProperty]
     public partial string? NewApp { get; set; }
 
@@ -217,6 +250,10 @@ internal sealed partial class RulesViewModel : ObservableObject
         DpiIndex = (int)_engine.State.Settings.Dpi.DpiPreset;
         OnPropertyChanged(nameof(DpiDescription));
         UdpProxy = routing.UdpProxy;
+        DpiFirst = routing.DpiFirst;
+        OnPropertyChanged(nameof(DpiFirstReason));
+        OnPropertyChanged(nameof(DpiFirstEnabled));
+        OnPropertyChanged(nameof(DpiFirstStatus));
         Apps.Clear();
         Sites.Clear();
         foreach (var rule in routing.Rules)

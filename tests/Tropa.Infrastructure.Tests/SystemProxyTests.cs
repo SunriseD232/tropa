@@ -102,7 +102,15 @@ public sealed class PinnedFilesTests : IDisposable
     public void Embedded_locks_are_valid()
     {
         Assert.Equal("1.14.2", PinnedFiles.Cores.Get("sing-box").Version);
-        Assert.Equal(4, PinnedFiles.Geo.Files.Count);
+        // Каждый набор правил, на который ссылается генератор, закреплён в lock-файле.
+        var pinned = PinnedFiles.Geo.Files.Select(f => f.Name).ToHashSet();
+        var used = Core.Routing.RuleSets.AlwaysDirect.Where(t => t != Core.Routing.RuleSets.RuServices)
+            .Concat(Core.Routing.RuleSets.Blocked)
+            .Concat(Core.Routing.DpiGroups.All.SelectMany(g => g.RuleSets))
+            .Concat([Core.Routing.RuleSets.GeositeCategoryRu, Core.Routing.RuleSets.GeoipRu, Core.Routing.RuleSets.GeositeAiNonCn]);
+        Assert.All(used, tag => Assert.Contains(tag, pinned));
+        // Все — из одного источника и закреплены по коммиту.
+        Assert.All(PinnedFiles.Geo.Files, f => Assert.StartsWith("https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/", f.Url, StringComparison.Ordinal));
     }
 
     [Fact]

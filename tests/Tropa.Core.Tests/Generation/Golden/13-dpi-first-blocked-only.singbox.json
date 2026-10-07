@@ -85,24 +85,24 @@
           "password": "tropa-pass"
         }
       ]
+    },
+    {
+      "type": "socks",
+      "tag": "probe-dpi",
+      "listen": "127.0.0.1",
+      "listen_port": 19911,
+      "users": [
+        {
+          "username": "tropa-user",
+          "password": "tropa-pass"
+        }
+      ]
     }
   ],
   "outbounds": [
     {
-      "type": "urltest",
-      "tag": "proxy",
-      "outbounds": [
-        "srv-00000001",
-        "srv-00000003",
-        "srv-00000005"
-      ],
-      "url": "https://www.gstatic.com/generate_204",
-      "interval": "3m",
-      "tolerance": 50
-    },
-    {
       "type": "vless",
-      "tag": "srv-00000001",
+      "tag": "proxy",
       "server": "nl1.example.com",
       "server_port": 443,
       "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
@@ -123,57 +123,57 @@
       }
     },
     {
-      "type": "trojan",
-      "tag": "srv-00000003",
-      "server": "fi.example.com",
-      "server_port": 443,
-      "password": "pw",
-      "tls": {
-        "enabled": true,
-        "server_name": "fi.example.com",
-        "alpn": [
-          "h2",
-          "http/1.1"
-        ],
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        }
-      }
-    },
-    {
-      "type": "vless",
-      "tag": "srv-00000005",
-      "server": "us.example.com",
-      "server_port": 443,
-      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
-      "packet_encoding": "xudp",
-      "tls": {
-        "enabled": true,
-        "server_name": "us.example.com",
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        }
-      },
-      "transport": {
-        "type": "grpc",
-        "service_name": "svc"
-      }
+      "type": "direct",
+      "tag": "direct"
     },
     {
       "type": "direct",
-      "tag": "direct"
+      "tag": "dpi-direct",
+      "domain_resolver": "remote"
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-youtube",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-discord",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-telegram",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-blocked",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
     }
   ],
   "route": {
     "rule_set": [
-      {
-        "type": "local",
-        "tag": "geoip-ru",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geoip-ru.srs"
-      },
       {
         "type": "local",
         "tag": "geoip-ru-blocked",
@@ -185,6 +185,12 @@
         "tag": "geoip-ru-blocked-community",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geoip-ru-blocked-community.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geoip-telegram",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geoip-telegram.srs"
       },
       {
         "type": "local",
@@ -212,6 +218,12 @@
       },
       {
         "type": "local",
+        "tag": "geosite-discord",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-discord.srs"
+      },
+      {
+        "type": "local",
         "tag": "geosite-ru-available-only-inside",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-ru-available-only-inside.srs"
@@ -221,6 +233,18 @@
         "tag": "geosite-ru-blocked",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-ru-blocked.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-telegram",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-telegram.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-youtube",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-youtube.srs"
       },
       {
         "type": "inline",
@@ -284,6 +308,14 @@
         "action": "hijack-dns"
       },
       {
+        "inbound": [
+          "probe-dpi"
+        ],
+        "action": "route",
+        "outbound": "dpi-direct",
+        "tls_fragment": true
+      },
+      {
         "ip_version": 6,
         "action": "reject"
       },
@@ -315,50 +347,41 @@
       },
       {
         "rule_set": [
-          "geosite-ru-blocked"
+          "geosite-youtube"
         ],
         "action": "route",
-        "outbound": "proxy"
+        "outbound": "dpi-youtube",
+        "tls_fragment": true
       },
       {
         "rule_set": [
-          "geoip-ru-blocked"
+          "geosite-discord"
         ],
         "action": "route",
-        "outbound": "proxy"
+        "outbound": "dpi-discord",
+        "tls_fragment": true
       },
       {
         "rule_set": [
+          "geosite-telegram",
+          "geoip-telegram"
+        ],
+        "action": "route",
+        "outbound": "dpi-telegram",
+        "tls_fragment": true
+      },
+      {
+        "rule_set": [
+          "geosite-ru-blocked",
+          "geoip-ru-blocked",
           "geoip-ru-blocked-community"
         ],
         "action": "route",
-        "outbound": "proxy"
-      },
-      {
-        "rule_set": [
-          "geosite-category-ru"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "domain_suffix": [
-          "ru",
-          "su",
-          "xn--p1ai"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "rule_set": [
-          "geoip-ru"
-        ],
-        "action": "route",
-        "outbound": "direct"
+        "outbound": "dpi-blocked",
+        "tls_fragment": true
       }
     ],
-    "final": "proxy",
+    "final": "direct",
     "default_domain_resolver": "local",
     "auto_detect_interface": true
   },

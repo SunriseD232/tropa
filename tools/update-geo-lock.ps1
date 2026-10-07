@@ -13,12 +13,23 @@
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# Источник — runetfreedom/russia-v2ray-rules-dat (официальный источник российских гео-баз v2rayN), обновляется каждые 6 часов.
 $sources = @(
-    @{ Name = 'geosite-category-ru'; Repo = 'SagerNet/sing-geosite'; Branch = 'rule-set'; Path = 'geosite-category-ru.srs'; License = 'GPL-3.0 (sing-geosite)' },
-    @{ Name = 'geoip-ru'; Repo = 'SagerNet/sing-geoip'; Branch = 'rule-set'; Path = 'geoip-ru.srs'; License = 'GPL-3.0 / MaxMind GeoLite2 (sing-geoip)' },
-    @{ Name = 'geosite-ru-blocked'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-ru-blocked.srs'; License = 'GPL-3.0' },
-    @{ Name = 'geoip-ru-blocked'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geoip/geoip-ru-blocked.srs'; License = 'GPL-3.0' }
+    @{ Name = 'geosite-category-ru'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-category-ru.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geosite-category-gov-ru'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-category-gov-ru.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geosite-category-bank-ru'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-category-bank-ru.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geosite-ru-available-only-inside'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geoip-ru'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geoip/geoip-ru.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geosite-ru-blocked'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-ru-blocked.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geoip-ru-blocked'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geoip/geoip-ru-blocked.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geoip-ru-blocked-community'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geoip/geoip-ru-blocked-community.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geosite-category-ai-noncn'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-category-ai-%21cn.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geosite-youtube'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-youtube.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geosite-discord'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-discord.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geosite-telegram'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geosite/geosite-telegram.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' },
+    @{ Name = 'geoip-telegram'; Repo = 'runetfreedom/russia-v2ray-rules-dat'; Branch = 'release'; Path = 'sing-box/rule-set-geoip/geoip-telegram.srs'; License = 'GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)' }
 )
+
 
 $work = Join-Path ([IO.Path]::GetTempPath()) ("tropa-geo-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null

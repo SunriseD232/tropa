@@ -823,6 +823,7 @@ public sealed class TropaEngine : IAsyncDisposable
         }
 
         var clashPort = ServerTester.FreePort();
+        var dpiProbePort = effective.Routing.DpiFirst ? ServerTester.FreePort() : (int?)null;
         var clashSecret = SecretStore.NewRandomToken();
         var group = effective.Connection.AutoSelect
             ? State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null
@@ -864,6 +865,7 @@ public sealed class TropaEngine : IAsyncDisposable
             LocalAuth = Auth,
             ClashApiPort = clashPort,
             ClashApiSecret = clashSecret,
+            DpiProbePort = dpiProbePort,
             XrayPorts = xrayPorts,
             XrayDirectPort = xrayDirectPort,
             XrayAuth = xrayAuth,
@@ -922,6 +924,10 @@ public sealed class TropaEngine : IAsyncDisposable
         _trafficCts = new CancellationTokenSource();
         _ = PumpTrafficAsync(new ClashApi(clashPort, clashSecret), _trafficCts.Token);
         _ = MonitorAsync(active.Id, _trafficCts.Token);
+        if (dpiProbePort is { } probe)
+            _ = DpiMonitorAsync(new ClashApi(clashPort, clashSecret), probe, _trafficCts.Token);
+        else
+            SetDpiStatus(new Dictionary<string, bool>());
     }
 
     /// <summary>Серверы, которые попадут в конфиг: активный, группа, промежуточные звенья цепочек и серверы из правил.</summary>
@@ -1011,6 +1017,79 @@ public sealed class TropaEngine : IAsyncDisposable
         catch (Exception ex) when (ex is CoreStartException or IntegrityException or IOException or InvalidOperationException)
         {
             Log?.Invoke(this, "Фоновая проверка сервера не удалась: " + Scrubber.Scrub(ex.Message));
+        }
+    }
+
+    // ---------------- Сначала обход DPI ----------------
+
+    /// <summary>Группа → идёт ли она сейчас напрямую с обходом (true) или через сервер (false).</summary>
+    public IReadOnlyDictionary<string, bool> DpiStatus { get; private set; } = new Dictionary<string, bool>();
+
+    public event EventHandler? DpiStatusChanged;
+
+    private void SetDpiStatus(IReadOnlyDictionary<string, bool> status)
+    {
+        DpiStatus = status;
+        DpiStatusChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Как часто перепроверять обход DPI (в тестах — чаще).</summary>
+    internal TimeSpan DpiCheckInterval { get; set; } = TimeSpan.FromMinutes(3);
+
+    /// <summary>Только для тестов: свой адрес проверки группы вместо настоящего сервиса.</summary>
+    internal Func<Core.Routing.DpiGroup, Uri>? DpiProbeUrlOverride { get; set; }
+
+    /// <summary>
+    /// Проверяет каждую группу через вход проверки (тот же путь, что у обычного трафика: напрямую
+    /// с фрагментацией). Не открылось — группа переключается на сервер; заработало снова — обратно.
+    /// Переключение мгновенное (Clash API), без переподключения.
+    /// </summary>
+    private async Task DpiMonitorAsync(ClashApi api, int probePort, CancellationToken ct)
+    {
+        using (api)
+        {
+            var current = new Dictionary<string, bool>();
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    foreach (var g in Core.Routing.DpiGroups.All)
+                    {
+                        var works = await ProbeDpiAsync(probePort, DpiProbeUrlOverride?.Invoke(g) ?? g.ProbeUrl, ct).ConfigureAwait(false);
+                        if (!current.TryGetValue(g.Key, out var was) || was != works)
+                        {
+                            await api.SelectAsync(g.SelectorTag, works ? Core.Routing.DpiGroups.DirectTag : SingBoxConfigBuilder.ProxyTag, ct).ConfigureAwait(false);
+                            current[g.Key] = works;
+                            Log?.Invoke(this, $"Обход DPI для «{g.Title}»: " + (works ? "работает, напрямую." : "не открывается, через сервер."));
+                            SetDpiStatus(new Dictionary<string, bool>(current));
+                        }
+                    }
+
+                    await Task.Delay(DpiCheckInterval, ct).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (HttpRequestException ex)
+            {
+                Log?.Invoke(this, "Проверка обхода DPI остановилась: " + Scrubber.Scrub(ex.Message));
+            }
+        }
+    }
+
+    /// <summary>Открывается ли адрес через вход проверки: ответ с заголовками за 8 секунд.</summary>
+    private async Task<bool> ProbeDpiAsync(int probePort, Uri url, CancellationToken ct)
+    {
+        using var client = ServerTester.ProbeClient(probePort, Auth, TimeSpan.FromSeconds(8), allowRedirect: false);
+        try
+        {
+            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            return (int)response.StatusCode < 500;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            return false;
         }
     }
 

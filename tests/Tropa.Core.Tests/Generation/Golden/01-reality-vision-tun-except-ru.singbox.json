@@ -27,6 +27,9 @@
       {
         "rule_set": [
           "ru-services",
+          "geosite-category-gov-ru",
+          "geosite-category-bank-ru",
+          "geosite-ru-available-only-inside",
           "geosite-category-ru"
         ],
         "server": "local"
@@ -128,9 +131,39 @@
       },
       {
         "type": "local",
+        "tag": "geoip-ru-blocked-community",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geoip-ru-blocked-community.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-category-ai-noncn",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-category-ai-noncn.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-category-bank-ru",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-category-bank-ru.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-category-gov-ru",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-category-gov-ru.srs"
+      },
+      {
+        "type": "local",
         "tag": "geosite-category-ru",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-category-ru.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-ru-available-only-inside",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-ru-available-only-inside.srs"
       },
       {
         "type": "local",
@@ -214,10 +247,20 @@
       },
       {
         "rule_set": [
-          "ru-services"
+          "ru-services",
+          "geosite-category-gov-ru",
+          "geosite-category-bank-ru",
+          "geosite-ru-available-only-inside"
         ],
         "action": "route",
         "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geosite-category-ai-noncn"
+        ],
+        "action": "route",
+        "outbound": "proxy"
       },
       {
         "rule_set": [
@@ -229,6 +272,13 @@
       {
         "rule_set": [
           "geoip-ru-blocked"
+        ],
+        "action": "route",
+        "outbound": "proxy"
+      },
+      {
+        "rule_set": [
+          "geoip-ru-blocked-community"
         ],
         "action": "route",
         "outbound": "proxy"

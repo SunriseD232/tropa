@@ -73,6 +73,19 @@
           </StackPanel>
         </DockPanel>
         <TextBlock Classes="muted" Text="{Binding DpiDescription}" />
+        <DockPanel Margin="0,8,0,0">
+          <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding DpiFirst}" IsEnabled="{Binding DpiFirstEnabled}" OnContent="" OffContent="" />
+          <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="dpiFirst" />
+          <StackPanel Spacing="2">
+            <TextBlock Text="Сначала обход DPI, при неудаче — через сервер" FontSize="15" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="YouTube, Discord, Telegram и другие заблокированные сайты идут напрямую с обходом DPI. Где обход не открывает сервис, Тропа сама пускает его через сервер. Ваши правила важнее." />
+            <TextBlock Classes="muted" Foreground="{DynamicResource WarnFg}" Text="{Binding DpiFirstReason, StringFormat='Сейчас недоступно: {0}.'}"
+                       IsVisible="{Binding DpiFirstReason, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <TextBlock Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" Text="{Binding DpiFirstStatus}"
+                       IsVisible="{Binding DpiFirstStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+        </DockPanel>
       </StackPanel>
     </Border>
 
