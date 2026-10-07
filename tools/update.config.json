@@ -1,6 +1,6 @@
 {
   "schema": 1,
   "manifestUrl": "https://github.com/sunrised23292/tropa/releases/latest/download/manifest.json",
-  "publicKey": "",
-  "bundledSequence": 0
+  "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEodaKvfM4i8XM4+/Lr6l/4WgqU+oaGobfQ3jnEZdmj0RQR1rEZsA8VcGvgBHhOiQokTShy/06XKlJ9HgM2REeNw==",
+  "bundledSequence": 1
 }
