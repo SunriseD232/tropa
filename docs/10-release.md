@@ -13,7 +13,7 @@ dotnet run --project tools/Tropa.Release -- keygen --out "$env:USERPROFILE\Tropa
 - Программа спросит пароль (не короче 12 символов). Ключ сохраняется зашифрованным (PKCS#8, AES-256, 600 000 итераций).
 - Сделайте копию файла и пароля на флешку или в менеджер паролей. **Без ключа нельзя выпустить обновление**, а новый ключ старые копии Тропы не примут: тогда друзьям придётся вручную поставить новую версию.
 - Напечатанный публичный ключ вставьте в `tools/update.config.json` → `publicKey`.
-- `manifestUrl` уже указан: `https://github.com/sunrised23292/tropa/releases/latest/download/manifest.json`.
+- `manifestUrl` уже указан: `https://github.com/SunriseD232/tropa/releases/latest/download/manifest.json`.
   Подпись лежит рядом: тот же адрес + `.sig`. **Выпуски должны быть доступны без входа в GitHub**
   (публичный репозиторий): иначе Тропа у друзей не сможет скачать ни манифест, ни установщик.
 
