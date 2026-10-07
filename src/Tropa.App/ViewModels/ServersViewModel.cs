@@ -1,11 +1,14 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Tropa.App.Services;
 using Tropa.Core.Compatibility;
 using Tropa.Core.Model;
+using Tropa.Core.Testing;
 using Tropa.Infrastructure;
+using Tropa.Infrastructure.Testing;
 
 namespace Tropa.App.ViewModels;
 
@@ -23,6 +26,8 @@ internal sealed partial class GroupTab(string title, Guid? subscriptionId, bool 
 
 internal sealed partial class ServerItemViewModel(Profile profile) : ObservableObject
 {
+    private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
+
     public Profile Profile { get; } = profile;
     public Guid Id => Profile.Id;
     public string Name => Format.NameWithoutFlag(Profile.Name);
@@ -37,6 +42,9 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
     public partial string Delay { get; set; } = "—";
 
     [ObservableProperty]
+    public partial string Speed { get; set; } = "—";
+
+    [ObservableProperty]
     public partial string Status { get; set; } = "";
 
     /// <summary>ok / warn / bad / "" — для цвета плашки статуса.</summary>
@@ -45,22 +53,67 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
 
     [ObservableProperty]
     public partial bool Removed { get; set; }
+
+    // Подробности для правой панели.
+    [ObservableProperty]
+    public partial string Tcp { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string Udp { get; set; } = "—";
+
+    [ObservableProperty]
+    public partial string Stability { get; set; } = "не проверялась";
+
+    [ObservableProperty]
+    public partial string Explanation { get; set; } = "Сервер ещё не проверялся.";
+
+    [ObservableProperty]
+    public partial string Checked { get; set; } = "";
+
+    [ObservableProperty]
+    public partial bool Testing { get; set; }
+
+    public void Apply(ServerTestResult? r)
+    {
+        if (r is null)
+            return;
+        var status = ServerHealth.Classify(r);
+        Delay = r.DelayMs is { } ms ? $"{ms} мс" : "—";
+        Speed = r.Frozen ? "замерзает" : r.SpeedMbps is { } sp ? sp.ToString("0.#", Ru) + " Мбит/с" : "—";
+        Tcp = r.TcpMs is { } tcp ? $"{tcp} мс" : Profile.ChainVia is null ? "нет ответа" : "через цепочку";
+        Udp = r.UdpOk switch { true => "работает", false => "не проходит", _ => "—" };
+        if (r.Loss is { } loss)
+            Stability = $"потери {loss:P0}, медиана {r.MedianMs} мс, разброс ±{r.JitterMs} мс";
+        Status = status is HealthStatus.HandshakeError or HealthStatus.NoResponse && r.Error is { } e ? e : ServerHealth.Title(status);
+        StatusKind = status switch
+        {
+            HealthStatus.Working => "ok",
+            HealthStatus.Slow => "warn",
+            HealthStatus.Unknown => "",
+            _ => "bad",
+        };
+        Explanation = ServerHealth.Explain(r);
+        Checked = "Проверено " + r.At.ToLocalTime().ToString("dd.MM HH:mm", Ru);
+    }
 }
 
-/// <summary>Экран «Серверы»: подписки, список, тест реальной задержки, выбор сервера.</summary>
+/// <summary>Экран «Серверы»: подписки, список, проверки, выбор сервера.</summary>
 internal sealed partial class ServersViewModel : ObservableObject
 {
     private readonly TropaEngine _engine;
     private readonly InfoViewModel _info;
     private readonly Action _openImport;
-    private readonly Dictionary<Guid, (string Delay, string Status, string Kind)> _results = [];
 
     public ServersViewModel(TropaEngine engine, InfoViewModel info, Action openImport)
     {
         _engine = engine;
         _info = info;
         _openImport = openImport;
-        engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(Refresh);
+        engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            if (!IsBusy)
+                Refresh();
+        });
         Refresh();
     }
 
@@ -75,7 +128,10 @@ internal sealed partial class ServersViewModel : ObservableObject
     public partial string Summary { get; set; } = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NotBusy))]
     public partial bool IsBusy { get; set; }
+
+    public bool NotBusy => !IsBusy;
 
     [ObservableProperty]
     public partial string? Message { get; set; }
@@ -120,24 +176,14 @@ internal sealed partial class ServersViewModel : ObservableObject
             if (tab is { All: false } && (tab.Manual ? sp.Profile.SubscriptionId is not null : sp.Profile.SubscriptionId != tab.SubscriptionId))
                 continue;
             var item = new ServerItemViewModel(sp.Profile) { IsActive = sp.Profile.Id == s.ActiveProfileId, Removed = sp.RemovedByProvider is not null };
-            if (_results.TryGetValue(sp.Profile.Id, out var r))
-            {
-                item.Delay = r.Delay;
-                item.Status = r.Status;
-                item.StatusKind = r.Kind;
-            }
-            else if (ProfileCompat.Issues(sp.Profile) is { Count: > 0 })
-            {
-                (item.Status, item.StatusKind) = ("Несовместимые параметры", "bad");
-            }
+            if (ProfileCompat.Issues(sp.Profile) is { Count: > 0 } issues)
+                (item.Status, item.StatusKind, item.Explanation) = ("Несовместимые параметры", "bad", issues[0]);
             else if (sp.Profile.Security.AllowInsecure)
-            {
-                (item.Status, item.StatusKind) = ("Без проверки сертификата", "bad");
-            }
+                (item.Status, item.StatusKind, item.Explanation) = ("Без проверки сертификата", "bad", "У сервера отключена проверка сертификата: трафик может прочитать посредник. В авто-выбор такой сервер не попадает.");
             else if (item.Removed)
-            {
                 (item.Status, item.StatusKind) = ("Удалён провайдером", "warn");
-            }
+            else
+                item.Apply(sp.LastTest);
 
             if (item.IsActive && string.IsNullOrEmpty(item.Status))
                 (item.Status, item.StatusKind) = ("Выбран", "ok");
@@ -193,35 +239,50 @@ internal sealed partial class ServersViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            Refresh();
         }
     }
 
     [RelayCommand]
-    private async Task TestAllAsync()
+    private Task TestAllAsync() => RunTestsAsync(Items.ToList(), TestKinds.Standard,
+        "Проверяю серверы: пинг, задержка, скорость и UDP. Текущее подключение не прерывается…");
+
+    [RelayCommand]
+    private Task TestSelectedAsync() => Selected is { } s
+        ? RunTestsAsync([s], TestKinds.Standard, $"Проверяю «{s.Name}»…")
+        : Task.CompletedTask;
+
+    [RelayCommand]
+    private Task StabilitySelectedAsync() => Selected is { } s
+        ? RunTestsAsync([s], TestKinds.Stability, $"Проверяю стабильность «{s.Name}»: 30 запросов раз в секунду…")
+        : Task.CompletedTask;
+
+    private async Task RunTestsAsync(List<ServerItemViewModel> items, TestKinds kinds, string startMessage)
     {
+        if (items.Count == 0)
+            return;
         IsBusy = true;
-        Message = "Проверяю серверы через временный экземпляр ядра — текущее подключение не прерывается…";
+        Message = startMessage;
+        foreach (var i in items)
+            i.Testing = true;
+        // Строки обновляются по мере готовности, не дожидаясь конца проверки всех серверов.
+        var progress = new Progress<TestProgress>(p =>
+        {
+            var item = items.FirstOrDefault(i => i.Id == p.ProfileId);
+            if (item is null)
+                return;
+            item.Testing = false;
+            if (kinds != TestKinds.Stability)
+                item.Apply(p.Result);
+        });
         try
         {
-            var profiles = Items.Select(i => i.Profile).ToList();
-            var results = await _engine.TestAsync(profiles, Infrastructure.Testing.TestKinds.Standard);
-            foreach (var (id, r) in results)
-            {
-                var status = Core.Testing.ServerHealth.Classify(r);
-                var kind = status switch
-                {
-                    Core.Testing.HealthStatus.Working => "ok",
-                    Core.Testing.HealthStatus.Slow => "warn",
-                    _ => "bad",
-                };
-                var delay = r.DelayMs is { } ms ? $"{ms} мс" + (r.SpeedMbps is { } sp ? $" · {sp:0.#} Мбит/с" : "") : "—";
-                _results[id] = (delay, r.Error is { } e && status != Core.Testing.HealthStatus.Working ? e : Core.Testing.ServerHealth.Title(status), kind);
-            }
-
-            RebuildItems();
-            var ok = results.Values.Count(r => Core.Testing.ServerHealth.Classify(r) is Core.Testing.HealthStatus.Working or Core.Testing.HealthStatus.Slow);
+            var results = await _engine.TestAsync(items.Select(i => i.Profile).ToList(), kinds, progress);
+            var ok = results.Values.Count(r => ServerHealth.Classify(r) is HealthStatus.Working or HealthStatus.Slow);
             var frozen = results.Values.Count(r => r.Frozen);
-            Message = $"Работают {ok} из {results.Count}." + (frozen > 0 ? $" «Замёрзли» (данные не идут, хотя пинг есть): {frozen}." : "");
+            Message = kinds == TestKinds.Stability
+                ? null
+                : $"Работают {ok} из {results.Count}." + (frozen > 0 ? $" «Замёрзли» — пинг есть, а данные не идут: {frozen}. Авто-выбор их не возьмёт." : "");
         }
         catch (Exception ex) when (ex is Infrastructure.Cores.CoreStartException or Infrastructure.Cores.IntegrityException or InvalidOperationException)
         {
@@ -229,7 +290,10 @@ internal sealed partial class ServersViewModel : ObservableObject
         }
         finally
         {
+            foreach (var i in items)
+                i.Testing = false;
             IsBusy = false;
+            Refresh();
         }
     }
 

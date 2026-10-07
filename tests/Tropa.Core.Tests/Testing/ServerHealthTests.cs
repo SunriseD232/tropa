@@ -85,3 +85,31 @@ public sealed class ServerHealthTests
         Assert.False(d.IsFrozen);
     }
 }
+
+public sealed class ReplacementTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
+
+    private static ServerTestResult R(int delay, bool frozen = false, double speed = 50, DateTimeOffset? at = null) =>
+        new() { At = at ?? Now, TcpMs = 10, DelayMs = delay, SpeedMbps = speed, Frozen = frozen };
+
+    [Fact]
+    public void Picks_fastest_working_then_slow_never_broken_or_stale()
+    {
+        Guid a = Guid.NewGuid(), b = Guid.NewGuid(), c = Guid.NewGuid(), d = Guid.NewGuid(), cur = Guid.NewGuid();
+        var list = new (Guid, ServerTestResult?)[]
+        {
+            (cur, R(20)),                                   // текущий — не предлагаем
+            (a, R(120)),
+            (b, R(80)),
+            (c, R(30, frozen: true)),                       // «замёрз» — никогда
+            (d, R(10, at: Now - TimeSpan.FromHours(3))),    // устаревший замер — не доверяем
+        };
+        Assert.Equal(b, ServerHealth.PickReplacement(list, cur, Now));
+
+        var onlySlow = new (Guid, ServerTestResult?)[] { (a, R(900)), (c, R(30, frozen: true)) };
+        Assert.Equal(a, ServerHealth.PickReplacement(onlySlow, cur, Now));
+
+        Assert.Null(ServerHealth.PickReplacement([(c, R(30, frozen: true)), (d, null)], cur, Now));
+    }
+}

@@ -5,6 +5,7 @@ using Tropa.Core.Generation;
 using Tropa.Core.Model;
 using Tropa.Core.Parsing;
 using Tropa.Core.Security;
+using Tropa.Core.Testing;
 using Tropa.Infrastructure.Cores;
 using Tropa.Infrastructure.Net;
 using Tropa.Infrastructure.Service;
@@ -321,11 +322,34 @@ public sealed class TropaEngine : IAsyncDisposable
 
     // ---------------- Тесты ----------------
 
-    public Task<IReadOnlyDictionary<Guid, Core.Testing.ServerTestResult>> TestAsync(
+    /// <summary>Проверяет серверы и сохраняет результаты: они видны в списке и учитываются авто-выбором.</summary>
+    public async Task<IReadOnlyDictionary<Guid, ServerTestResult>> TestAsync(
         IReadOnlyList<Profile> profiles, TestKinds kinds = TestKinds.Standard, IProgress<TestProgress>? progress = null,
-        TesterOptions? options = null, CancellationToken ct = default) =>
-        ServerTester.TestAsync(profiles, State.Profiles.Select(p => p.Profile).ToList(), State.Settings, kinds, _locations,
-            _paths.RunDirectory, Scrubber, line => Log?.Invoke(this, line), progress, ct, options);
+        TesterOptions? options = null, AppSettings? settingsOverride = null, CancellationToken ct = default)
+    {
+        var results = await ServerTester.TestAsync(profiles, State.Profiles.Select(p => p.Profile).ToList(), settingsOverride ?? State.Settings,
+            kinds, _locations, _paths.RunDirectory, Scrubber, line => Log?.Invoke(this, line), progress, ct, options).ConfigureAwait(false);
+        Update(s => s with
+        {
+            Profiles = s.Profiles.Select(sp => results.TryGetValue(sp.Profile.Id, out var r)
+                ? sp with { LastTest = MergeResult(sp.LastTest, r, kinds) }
+                : sp).ToList(),
+        });
+        return results;
+    }
+
+    /// <summary>
+    /// Проверка стабильности не заменяет основной замер, а дополняет его; основной замер
+    /// сохраняет прежние данные о стабильности.
+    /// </summary>
+    private static ServerTestResult MergeResult(ServerTestResult? old, ServerTestResult fresh, TestKinds kinds)
+    {
+        if (old is null)
+            return fresh;
+        if (kinds == TestKinds.Stability)
+            return old with { Loss = fresh.Loss, JitterMs = fresh.JitterMs, MedianMs = fresh.MedianMs, Error = fresh.Error ?? old.Error };
+        return fresh.Loss is null ? fresh with { Loss = old.Loss, JitterMs = old.JitterMs, MedianMs = old.MedianMs } : fresh;
+    }
 
     // ---------------- Подключение ----------------
 
@@ -412,7 +436,9 @@ public sealed class TropaEngine : IAsyncDisposable
         var clashSecret = SecretStore.NewRandomToken();
         var group = effective.Connection.AutoSelect
             ? State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null
-                    && p.Profile.Transport.Type != TransportType.Xhttp && ProfileCompat.Issues(p.Profile).Count == 0)
+                    && p.Profile.Transport.Type != TransportType.Xhttp && ProfileCompat.Issues(p.Profile).Count == 0
+                    // urltest видит только задержку и «заморозку» не замечает — такие серверы убираем сами.
+                    && !ServerHealth.ShouldExclude(p.LastTest, _now()))
                 .Select(p => p.Profile).ToList()
             : [];
         var config = SingBoxConfigBuilder.Build(new SingBoxInput
@@ -466,6 +492,69 @@ public sealed class TropaEngine : IAsyncDisposable
 
         _trafficCts = new CancellationTokenSource();
         _ = PumpTrafficAsync(new ClashApi(clashPort, clashSecret), _trafficCts.Token);
+        _ = MonitorAsync(active.Id, _trafficCts.Token);
+    }
+
+    /// <summary>Интервал фоновой проверки текущего сервера. Внутреннее — для тестов.</summary>
+    internal TimeSpan? MonitorIntervalOverride { get; set; }
+
+    internal TesterOptions? MonitorTesterOptions { get; set; }
+
+    /// <summary>
+    /// Фоновая проверка (docs/07-testing-diagnostics.md, §1): urltest видит только задержку, а «заморозку»
+    /// замечает лишь тест скорости. Раз в ≥30 минут скачиваем 1 МБ через текущий сервер; если он
+    /// «замёрз» или перестал отвечать — переключаемся на лучший рабочий (при включённом авто-выборе)
+    /// или предупреждаем.
+    /// </summary>
+    private async Task MonitorAsync(Guid activeId, CancellationToken ct)
+    {
+        var interval = MonitorIntervalOverride
+            ?? TimeSpan.FromMinutes(Math.Max(30, State.Settings.Connection.AutoIntervalMinutes * 10));
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(interval, ct).ConfigureAwait(false);
+                var active = State.Profiles.FirstOrDefault(p => p.Profile.Id == activeId)?.Profile;
+                if (active is null || Status.State != ConnectionState.Connected)
+                    return;
+
+                var light = State.Settings with { Connection = State.Settings.Connection with { SpeedSizeMb = 1 } };
+                var results = await TestAsync([active], TestKinds.Delay | TestKinds.Speed, null, MonitorTesterOptions, light, ct).ConfigureAwait(false);
+                if (!results.TryGetValue(activeId, out var r) || !ServerHealth.ShouldExclude(r, _now()))
+                    continue;
+
+                var name = active.Name;
+                var replacement = State.Settings.Connection.AutoSelect
+                    ? ServerHealth.PickReplacement(
+                        State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null)
+                            .Select(p => (p.Profile.Id, p.LastTest)), activeId, _now())
+                    : null;
+
+                if (replacement is { } next)
+                {
+                    var nextName = State.Profiles.First(p => p.Profile.Id == next).Profile.Name;
+                    // Не ct: переподключение само отменяет этот токен, и с ним подключиться заново было бы нельзя.
+                    await SetActiveAsync(next, CancellationToken.None).ConfigureAwait(false);
+                    if (Status.State == ConnectionState.Connected)
+                        SetStatus(Status with { Message = $"Сервер «{name}» перестал работать ({ServerHealth.Title(ServerHealth.Classify(r)).ToLowerInvariant()}). Переключено на «{nextName}»." });
+                    return;
+                }
+
+                SetStatus(Status with
+                {
+                    Message = $"Сервер «{name}»: {ServerHealth.Title(ServerHealth.Classify(r)).ToLowerInvariant()}. " + ServerHealth.Explain(r)
+                        + (State.Settings.Connection.AutoSelect ? " Проверенных рабочих замен нет — нажмите «Тест всех» на экране «Серверы»." : ""),
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex) when (ex is CoreStartException or IntegrityException or IOException or InvalidOperationException)
+        {
+            Log?.Invoke(this, "Фоновая проверка сервера не удалась: " + Scrubber.Scrub(ex.Message));
+        }
     }
 
     private async Task PumpTrafficAsync(ClashApi api, CancellationToken ct)

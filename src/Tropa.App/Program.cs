@@ -8,7 +8,13 @@ internal static class Program
     public static int Main(string[] args)
     {
         // Один экземпляр на сеанс пользователя: два экземпляра боролись бы за прокси Windows и порты.
-        using var single = new Mutex(initiallyOwned: true, @"Local\Tropa.App.SingleInstance", out var createdNew);
+        var mutexName = @"Local\Tropa.App.SingleInstance";
+#if DEBUG
+        // Отладочный экземпляр с отдельным каталогом данных не должен конфликтовать с установленной Тропой.
+        if (Environment.GetEnvironmentVariable("TROPA_DATA_DIR") is { Length: > 0 } dataDir)
+            mutexName += "." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(dataDir)))[..12];
+#endif
+        using var single = new Mutex(initiallyOwned: true, mutexName, out var createdNew);
         if (!createdNew)
             return 0;
 

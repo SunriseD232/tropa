@@ -120,7 +120,12 @@ public sealed class StateStore(string directory)
             return;
         Directory.CreateDirectory(BackupDirectory);
         var backups = Directory.GetFiles(BackupDirectory, "settings-*.json").Order(StringComparer.Ordinal).ToList();
-        var last = backups.Count > 0 ? File.GetLastWriteTimeUtc(backups[^1]) : DateTime.MinValue;
+        // Время копии — из её имени: File.Copy сохраняет время изменения исходного файла,
+        // и по файловой системе копия выглядела бы старше или моложе, чем есть.
+        var last = backups.Count > 0 && DateTime.TryParseExact(Path.GetFileNameWithoutExtension(backups[^1])["settings-".Length..],
+            "yyyyMMdd-HHmmss", CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed
+            : DateTime.MinValue;
         if (now.UtcDateTime - last >= BackupInterval)
         {
             var name = $"settings-{now.UtcDateTime.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.json";
@@ -194,6 +199,7 @@ public sealed class StateStore(string directory)
                 RemovedByProvider = sp.RemovedByProvider,
                 Favorite = sp.Favorite,
                 Order = sp.Order,
+                LastTest = sp.LastTest,
             }).ToList(),
         };
     }
@@ -247,6 +253,7 @@ public sealed class StateStore(string directory)
                 RemovedByProvider = p.RemovedByProvider,
                 Favorite = p.Favorite,
                 Order = p.Order,
+                LastTest = p.LastTest,
             });
         }
 
@@ -294,6 +301,7 @@ internal sealed record StoredProfileDto
     public DateTimeOffset? RemovedByProvider { get; init; }
     public bool Favorite { get; init; }
     public int Order { get; init; }
+    public Core.Testing.ServerTestResult? LastTest { get; init; }
 }
 
 [JsonSourceGenerationOptions(

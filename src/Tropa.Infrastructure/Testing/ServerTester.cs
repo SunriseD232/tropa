@@ -274,26 +274,25 @@ public static partial class ServerTester
                 return (null, false, 0, $"Тестовый файл недоступен (код {(int)response.StatusCode}).");
             await using var stream = await response.Content.ReadAsStreamAsync(total.Token).ConfigureAwait(false);
             var buffer = new byte[64 * 1024];
+            // Отмена отдельного чтения обрывает HTTP-соединение целиком, поэтому чтение не прерываем,
+            // а рядом раз в секунду проверяем детектор. «Замёрзшее» чтение бросаем — его закроет Dispose.
+            var readTask = stream.ReadAsync(buffer, total.Token).AsTask();
             while (true)
             {
-                // Каждое чтение ограничено секундой, чтобы проверять детектор во время тишины.
-                using var tick = CancellationTokenSource.CreateLinkedTokenSource(total.Token);
-                tick.CancelAfter(TimeSpan.FromSeconds(1));
-                int read;
-                try
+                var done = await Task.WhenAny(readTask, Task.Delay(TimeSpan.FromSeconds(1), o.Time, total.Token)).ConfigureAwait(false);
+                if (done != readTask)
                 {
-                    read = await stream.ReadAsync(buffer, tick.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (!total.IsCancellationRequested)
-                {
+                    total.Token.ThrowIfCancellationRequested();
                     if (detector.IsFrozen)
                         return (null, true, detector.Bytes, null);
                     continue;
                 }
 
+                var read = await readTask.ConfigureAwait(false);
                 if (read == 0)
                     break;
                 detector.OnData(read);
+                readTask = stream.ReadAsync(buffer, total.Token).AsTask();
             }
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -310,8 +309,10 @@ public static partial class ServerTester
                 return (null, true, detector.Bytes, null);
             return (null, false, detector.Bytes, "Загрузка через сервер оборвалась.");
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
         {
+            if (detector.IsFrozen)
+                return (null, true, detector.Bytes, null);
             return (null, false, detector.Bytes, "Загрузка через сервер оборвалась.");
         }
 

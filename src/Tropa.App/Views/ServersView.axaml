@@ -59,11 +59,14 @@
     <Grid ColumnDefinitions="*,20,280" IsVisible="{Binding !IsEmpty}">
       <Border Grid.Column="0" Classes="card" Padding="8">
         <StackPanel>
-          <Grid ColumnDefinitions="2*,84,1.4*,104,1.5*" Margin="12,6,12,10">
+          <Grid ColumnDefinitions="2*,84,104,1.1*,1.5*" Margin="12,6,12,10">
             <TextBlock Grid.Column="0" Classes="lbl" Text="СЕРВЕР" />
             <TextBlock Grid.Column="1" Classes="lbl" Text="ПРОТОКОЛ" Margin="8,0,0,0" />
-            <TextBlock Grid.Column="2" Classes="lbl" Text="ТРАНСПОРТ" />
             <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
+              <TextBlock Classes="lbl" Text="СКОРОСТЬ" VerticalAlignment="Center" />
+              <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="speedTest" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
               <TextBlock Classes="lbl" Text="ЗАДЕРЖКА" VerticalAlignment="Center" />
               <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="realDelay" />
             </StackPanel>
@@ -75,7 +78,7 @@
           <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Background="Transparent" DoubleTapped="OnDoubleTapped">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:ServerItemViewModel">
-                <Grid ColumnDefinitions="2*,84,1.4*,104,1.5*" Height="40">
+                <Grid ColumnDefinitions="2*,84,104,1.1*,1.5*" Height="40">
                   <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <Border Background="#2A323A" CornerRadius="4" Width="30" Height="20">
                       <TextBlock Text="{Binding Country}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -83,8 +86,11 @@
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                   </StackPanel>
                   <TextBlock Grid.Column="1" Text="{Binding Protocol}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                  <TextBlock Grid.Column="2" Text="{Binding Transport}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Classes="muted" />
-                  <TextBlock Grid.Column="3" Text="{Binding Delay}" VerticalAlignment="Center" Classes="mono" />
+                  <TextBlock Grid.Column="3" Text="{Binding Speed}" VerticalAlignment="Center" Classes="mono" />
+                  <Panel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Delay}" Classes="mono" IsVisible="{Binding !Testing}" />
+                    <ProgressBar IsIndeterminate="True" Width="56" MinWidth="0" IsVisible="{Binding Testing}" HorizontalAlignment="Left" />
+                  </Panel>
                   <Border Grid.Column="4" Classes="pill status" Classes.ok="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsOk}}"
                           Classes.warn="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsWarn}}"
                           Classes.bad="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsBad}}"
@@ -102,7 +108,38 @@
         <StackPanel Spacing="12" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
           <TextBlock Text="{Binding Selected.Name}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
           <TextBlock Classes="muted" Text="{Binding Selected.Transport}" />
-          <TextBlock Classes="muted" Text="{Binding Selected.Status}" />
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+            <Grid.Styles>
+              <Style Selector="TextBlock"><Setter Property="Margin" Value="0,3" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
+            </Grid.Styles>
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+              <TextBlock Classes="muted" Text="TCP-пинг" VerticalAlignment="Center" />
+              <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="tcping" />
+            </StackPanel>
+            <TextBlock Grid.Row="0" Grid.Column="1" Classes="mono" Text="{Binding Selected.Tcp}" />
+            <TextBlock Grid.Row="1" Classes="muted" Text="Задержка" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="mono" Text="{Binding Selected.Delay}" />
+            <TextBlock Grid.Row="2" Classes="muted" Text="Скорость" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="mono" Text="{Binding Selected.Speed}" />
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+              <TextBlock Classes="muted" Text="UDP" VerticalAlignment="Center" />
+              <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="udpTest" />
+            </StackPanel>
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Selected.Udp}" />
+            <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+              <TextBlock Classes="muted" Text="Стабильность" VerticalAlignment="Center" />
+              <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="stability" />
+            </StackPanel>
+            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Selected.Stability}" />
+          </Grid>
+          <Border CornerRadius="10" Padding="10,8" Background="{StaticResource Card2}">
+            <TextBlock Text="{Binding Selected.Explanation}" TextWrapping="Wrap" />
+          </Border>
+          <TextBlock Classes="muted" Text="{Binding Selected.Checked}" />
+          <UniformGrid Columns="2">
+            <Button Content="Проверить" Command="{Binding TestSelectedCommand}" IsEnabled="{Binding NotBusy}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,4,0" />
+            <Button Content="Стабильность" Command="{Binding StabilitySelectedCommand}" IsEnabled="{Binding NotBusy}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="4,0,0,0" />
+          </UniformGrid>
           <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Использовать этот сервер" Command="{Binding UseSelectedCommand}" />
           <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Удалить" Command="{Binding RemoveSelectedCommand}" />
           <TextBlock Classes="muted" Text="Ключ доступа хранится зашифрованным и здесь не показывается." />

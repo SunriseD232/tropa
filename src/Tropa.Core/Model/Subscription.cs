@@ -1,5 +1,6 @@
 using Tropa.Core.Parsing;
 using Tropa.Core.Security;
+using Tropa.Core.Testing;
 
 namespace Tropa.Core.Model;
 
@@ -30,4 +31,7 @@ public sealed record StoredProfile
     public bool Favorite { get; init; }
 
     public int Order { get; init; }
+
+    /// <summary>Последняя проверка: показывается в списке и учитывается авто-выбором.</summary>
+    public ServerTestResult? LastTest { get; init; }
 }

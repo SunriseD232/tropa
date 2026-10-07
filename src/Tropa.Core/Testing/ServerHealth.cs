@@ -95,6 +95,21 @@ public static class ServerHealth
         _ => "Сервер ещё не проверялся.",
     };
 
+    /// <summary>
+    /// Чем заменить сервер, который перестал работать: свежепроверенный рабочий сервер с наименьшей
+    /// задержкой (медленные — только если рабочих нет). null — заменить нечем.
+    /// </summary>
+    public static Guid? PickReplacement(IEnumerable<(Guid Id, ServerTestResult? Result)> candidates, Guid current, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        var fresh = candidates
+            .Where(c => c.Id != current && c.Result is not null && now - c.Result.At < ResultLifetime)
+            .Select(c => (c.Id, Status: Classify(c.Result), Delay: c.Result!.DelayMs ?? int.MaxValue))
+            .ToList();
+        return fresh.Where(c => c.Status == HealthStatus.Working).OrderBy(c => c.Delay).Select(c => (Guid?)c.Id).FirstOrDefault()
+            ?? fresh.Where(c => c.Status == HealthStatus.Slow).OrderBy(c => c.Delay).Select(c => (Guid?)c.Id).FirstOrDefault();
+    }
+
     /// <summary>Статистика серии замеров: доля потерь, разброс (стандартное отклонение) и медиана.</summary>
     public static (double Loss, int? JitterMs, int? MedianMs) Stability(IReadOnlyList<int?> samples)
     {
