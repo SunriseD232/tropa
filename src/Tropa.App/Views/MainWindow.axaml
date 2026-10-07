@@ -84,6 +84,11 @@
       </Border>
     </Border>
 
+    <!-- Окно «Сервер» -->
+    <Border IsVisible="{Binding Edit.IsOpen}" Background="#BB050709">
+      <v:EditServerView DataContext="{Binding Edit}" />
+    </Border>
+
     <!-- Справка по кнопке «i» -->
     <Border IsVisible="{Binding Info.IsOpen}" Background="#BB050709" PointerPressed="OnInfoBackdropPressed">
       <Border Classes="card" Width="580" MaxHeight="640" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24" PointerPressed="OnInfoCardPressed">

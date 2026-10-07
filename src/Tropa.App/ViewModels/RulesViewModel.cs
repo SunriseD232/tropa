@@ -107,6 +107,18 @@ internal sealed partial class RulesViewModel : ObservableObject
     [ObservableProperty]
     public partial bool BlockQuic { get; set; }
 
+    /// <summary>0 — выключено, 1 — мягко, 2 — агрессивно, 3 — свои (info.ru.json: dpiPreset).</summary>
+    [ObservableProperty]
+    public partial int DpiIndex { get; set; }
+
+    public string DpiDescription => DpiIndex switch
+    {
+        1 => "Фрагментация TLS-приветствия только для YouTube и связанных доменов, которые идут напрямую.",
+        2 => "Фрагментация всех прямых HTTPS-соединений и UDP-шум (шум работает через ядро Xray).",
+        3 => "Свои параметры (настраиваются в разделе «Настройки → Обход DPI»).",
+        _ => "Приёмы обхода DPI для прямого трафика выключены. На трафик через сервер они не влияют.",
+    };
+
     [ObservableProperty]
     public partial bool UdpProxy { get; set; }
 
@@ -132,6 +144,8 @@ internal sealed partial class RulesViewModel : ObservableObject
         var routing = _engine.State.Settings.Routing;
         PresetIndex = (int)routing.Preset;
         BlockQuic = routing.BlockQuic;
+        DpiIndex = (int)_engine.State.Settings.Dpi.DpiPreset;
+        OnPropertyChanged(nameof(DpiDescription));
         UdpProxy = routing.UdpProxy;
         Apps.Clear();
         Sites.Clear();
@@ -164,6 +178,24 @@ internal sealed partial class RulesViewModel : ObservableObject
     partial void OnPresetIndexChanged(int value) => Update(r => r with { Preset = (RoutePreset)Math.Clamp(value, 0, 2) });
 
     partial void OnBlockQuicChanged(bool value) => Update(r => r with { BlockQuic = value });
+
+    partial void OnDpiIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(DpiDescription));
+        if (_loading)
+            return;
+        _engine.UpdateSettings(s => s with
+        {
+            Dpi = value switch
+            {
+                1 => s.Dpi with { DpiPreset = DpiPreset.Soft, Fragment = true, FragScope = FragmentScope.List, Noise = false },
+                2 => s.Dpi with { DpiPreset = DpiPreset.Hard, Fragment = true, FragScope = FragmentScope.All, Noise = true },
+                3 => s.Dpi with { DpiPreset = DpiPreset.Custom },
+                _ => s.Dpi with { DpiPreset = DpiPreset.Off, Fragment = false, Noise = false },
+            },
+        });
+        NeedsApply = _engine.Status.State == ConnectionState.Connected;
+    }
 
     partial void OnUdpProxyChanged(bool value) => Update(r => r with { UdpProxy = value });
 

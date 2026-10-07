@@ -24,6 +24,7 @@
         <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding IsBusy}" />
         <Button Content="Обновить подписки" Command="{Binding UpdateSubscriptionsCommand}" IsEnabled="{Binding !IsBusy}" />
         <Button Content="Тест всех" Command="{Binding TestAllCommand}" IsEnabled="{Binding !IsBusy}" />
+        <Button Content="Вручную" Command="{Binding AddManualCommand}" ToolTip.Tip="Добавить сервер, заполнив поля" />
         <Button Classes="primary" Content="Добавить" Command="{Binding AddCommand}" />
       </StackPanel>
       <StackPanel Spacing="4">
@@ -141,7 +142,10 @@
             <Button Content="Стабильность" Command="{Binding StabilitySelectedCommand}" IsEnabled="{Binding NotBusy}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="4,0,0,0" />
           </UniformGrid>
           <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Использовать этот сервер" Command="{Binding UseSelectedCommand}" />
-          <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Удалить" Command="{Binding RemoveSelectedCommand}" />
+          <UniformGrid Columns="2">
+            <Button Content="Изменить" Command="{Binding EditSelectedCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,4,0" />
+            <Button Content="Удалить" Command="{Binding RemoveSelectedCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="4,0,0,0" />
+          </UniformGrid>
           <TextBlock Classes="muted" Text="Ключ доступа хранится зашифрованным и здесь не показывается." />
         </StackPanel>
       </Border>

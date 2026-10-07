@@ -103,9 +103,11 @@ internal sealed partial class ServersViewModel : ObservableObject
     private readonly TropaEngine _engine;
     private readonly InfoViewModel _info;
     private readonly Action _openImport;
+    private readonly EditServerViewModel _edit;
 
-    public ServersViewModel(TropaEngine engine, InfoViewModel info, Action openImport)
+    public ServersViewModel(TropaEngine engine, InfoViewModel info, Action openImport, EditServerViewModel edit)
     {
+        _edit = edit;
         _engine = engine;
         _info = info;
         _openImport = openImport;
@@ -203,6 +205,16 @@ internal sealed partial class ServersViewModel : ObservableObject
 
     [RelayCommand]
     private void Add() => _openImport();
+
+    [RelayCommand]
+    private void AddManual() => _edit.OpenNew();
+
+    [RelayCommand]
+    private void EditSelected()
+    {
+        if (Selected is { } s)
+            _edit.OpenEdit(s.Profile);
+    }
 
     [RelayCommand]
     private async Task UseSelectedAsync()

@@ -19,7 +19,8 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Info = new InfoViewModel();
         Import = new ImportViewModel(engine, Info);
         Home = new HomeViewModel(engine, Info);
-        Servers = new ServersViewModel(engine, Info, () => Import.Open());
+        Edit = new EditServerViewModel(engine, Info);
+        Servers = new ServersViewModel(engine, Info, () => Import.Open(), Edit);
         Rules = new RulesViewModel(engine, Info);
         Diagnostics = new PlaceholderViewModel("Диагностика", "Пошаговая проверка с понятными объяснениями и отчёт для помощи — в одной из следующих версий.");
         Settings = new PlaceholderViewModel("Настройки", "Полный экран настроек — в одной из следующих версий. Сейчас настройки хранятся с безопасными значениями по умолчанию.");
@@ -30,6 +31,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
 
     public InfoViewModel Info { get; }
     public ImportViewModel Import { get; }
+    public EditServerViewModel Edit { get; }
     public HomeViewModel Home { get; }
     public ServersViewModel Servers { get; }
     public RulesViewModel Rules { get; }

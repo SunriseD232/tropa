@@ -194,6 +194,22 @@ public sealed class TropaEngine : IAsyncDisposable
             await ReconnectAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>Добавляет или заменяет сервер. Если он сейчас используется — переподключение.</summary>
+    public async Task SaveProfileAsync(Profile profile, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var existed = State.Profiles.Any(p => p.Profile.Id == profile.Id);
+        Update(s => s with
+        {
+            Profiles = existed
+                ? s.Profiles.Select(p => p.Profile.Id == profile.Id ? p with { Profile = profile, LastTest = null } : p).ToList()
+                : [.. s.Profiles, new StoredProfile { Profile = profile, Order = s.Profiles.Count }],
+            ActiveProfileId = s.ActiveProfileId ?? profile.Id,
+        });
+        if (Status.State == ConnectionState.Connected && State.ActiveProfileId == profile.Id)
+            await ReconnectAsync(ct).ConfigureAwait(false);
+    }
+
     public void RemoveProfile(Guid profileId) =>
         Update(s => s with
         {

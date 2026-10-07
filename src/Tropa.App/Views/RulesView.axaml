@@ -52,6 +52,26 @@
       </UniformGrid>
     </Border>
 
+    <Border Classes="card">
+      <StackPanel Spacing="10">
+        <DockPanel>
+          <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding DpiIndex}" MinWidth="200">
+            <ComboBoxItem Content="Выключено" />
+            <ComboBoxItem Content="Мягко" />
+            <ComboBoxItem Content="Агрессивно" />
+            <ComboBoxItem Content="Свои" />
+          </ComboBox>
+          <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <TextBlock Text="Обход DPI для прямого трафика" FontSize="18" FontWeight="SemiBold" />
+            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="dpiPreset" />
+            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="fragment" ToolTip.Tip="Фрагментация" />
+            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="noise" ToolTip.Tip="Шум" />
+          </StackPanel>
+        </DockPanel>
+        <TextBlock Classes="muted" Text="{Binding DpiDescription}" />
+      </StackPanel>
+    </Border>
+
     <!-- Приложения -->
     <Border Classes="card">
       <StackPanel Spacing="12">
