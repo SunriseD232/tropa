@@ -286,33 +286,34 @@ public sealed class ServiceTests : IAsyncLifetime
         var statuses = new List<StatusEvent>();
         client.Status += (_, s) => { lock (statuses) statuses.Add(s); };
         var port = FreePort();
-        var started = DateTime.Now;
         Assert.True((await client.SendAsync(new StartRequest(Config(client, port), CaptureModeDto.SystemProxy, port, false, false), TestContext.Current.CancellationToken)).Ok);
 
-        // Убиваем только ядро, запущенное этим тестом: его путь — cores репозитория, время старта — после начала теста.
-        // Чужие процессы sing-box (например, от v2rayN) могут быть недоступны для чтения — их пропускаем.
-        static string? PathOf(Process p)
-        {
-            try
-            {
-                return p.MainModule?.FileName;
-            }
-            catch (System.ComponentModel.Win32Exception)
-            {
-                return null;
-            }
-        }
-
-        var core = Process.GetProcessesByName("sing-box")
-            .Where(p => string.Equals(PathOf(p), Path.Combine(Cores.CoresDirectory, "sing-box.exe"), StringComparison.OrdinalIgnoreCase)
-                && p.StartTime >= started && p.Id != _vless!.Id)
-            .OrderByDescending(p => p.StartTime)
-            .First();
+        // Убиваем только ядро этого теста: оно одно слушает порт, который мы ему дали. По времени запуска
+        // искать нельзя — параллельные тесты запускают свои ядра в то же время.
+        using var core = Process.GetProcessById(ListeningPid(port));
+        Assert.Equal("sing-box", core.ProcessName);
         core.Kill();
 
         Assert.True(await Eventually(() => Task.FromResult(statuses.Any(s => s.Message?.Contains("перезапущено", StringComparison.Ordinal) == true))));
         Assert.True(await Eventually(() => PortOpen(port)));
         await client.SendAsync(new StopRequest(), TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>PID процесса, который слушает 127.0.0.1:port (по таблице netstat).</summary>
+    private static int ListeningPid(int port)
+    {
+        var psi = new ProcessStartInfo("netstat", "-ano -p TCP") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+        using var p = Process.Start(psi)!;
+        var output = p.StandardOutput.ReadToEnd();
+        p.WaitForExit();
+        foreach (var line in output.Split('\n'))
+        {
+            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 5 && parts[1] == $"127.0.0.1:{port}" && parts[3] == "LISTENING")
+                return int.Parse(parts[4], System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        throw new InvalidOperationException($"Никто не слушает порт {port}.");
     }
 
     [Fact]
