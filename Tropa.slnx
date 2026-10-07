@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Tropa.Core.Tests/Tropa.Core.Tests.csproj" />
+    <Project Path="tests/Tropa.Infrastructure.Tests/Tropa.Infrastructure.Tests.csproj" />
     <Project Path="tests/Tropa.Integration.Tests/Tropa.Integration.Tests.csproj" />
   </Folder>
 </Solution>

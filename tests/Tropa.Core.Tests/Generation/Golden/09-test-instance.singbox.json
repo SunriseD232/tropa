@@ -1,0 +1,184 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "udp",
+        "tag": "local",
+        "server": "77.88.8.8"
+      }
+    ],
+    "final": "local"
+  },
+  "inbounds": [
+    {
+      "type": "socks",
+      "tag": "test-srv-00000001",
+      "listen": "127.0.0.1",
+      "listen_port": 31001,
+      "users": [
+        {
+          "username": "tropa-user",
+          "password": "tropa-pass"
+        }
+      ]
+    },
+    {
+      "type": "socks",
+      "tag": "test-srv-00000002",
+      "listen": "127.0.0.1",
+      "listen_port": 31002,
+      "users": [
+        {
+          "username": "tropa-user",
+          "password": "tropa-pass"
+        }
+      ]
+    },
+    {
+      "type": "socks",
+      "tag": "test-srv-00000003",
+      "listen": "127.0.0.1",
+      "listen_port": 31003,
+      "users": [
+        {
+          "username": "tropa-user",
+          "password": "tropa-pass"
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "srv-00000004",
+      "server": "relay.example.ru",
+      "server_port": 443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "ya.ru",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "short_id": "01"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "srv-00000001",
+      "server": "nl1.example.com",
+      "server_port": 443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "flow": "xtls-rprx-vision",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "short_id": "a1b2c3"
+        }
+      },
+      "detour": "srv-00000004"
+    },
+    {
+      "type": "vmess",
+      "tag": "srv-00000002",
+      "server": "se.example.com",
+      "server_port": 443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "security": "auto",
+      "alter_id": 0,
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "cdn.example.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws",
+        "headers": {
+          "Host": "cdn.example.com"
+        },
+        "max_early_data": 2048,
+        "early_data_header_name": "Sec-WebSocket-Protocol"
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "srv-00000003",
+      "server": "fi.example.com",
+      "server_port": 443,
+      "password": "pw",
+      "tls": {
+        "enabled": true,
+        "server_name": "fi.example.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "inbound": [
+          "test-srv-00000001"
+        ],
+        "action": "route",
+        "outbound": "srv-00000001"
+      },
+      {
+        "inbound": [
+          "test-srv-00000002"
+        ],
+        "action": "route",
+        "outbound": "srv-00000002"
+      },
+      {
+        "inbound": [
+          "test-srv-00000003"
+        ],
+        "action": "route",
+        "outbound": "srv-00000003"
+      },
+      {
+        "action": "reject"
+      }
+    ],
+    "final": "direct",
+    "default_domain_resolver": "local"
+  }
+}

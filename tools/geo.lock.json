@@ -1,0 +1,34 @@
+{
+    "schema":  1,
+    "updated":  "2026-10-07",
+    "files":  [
+                  {
+                      "name":  "geosite-category-ru",
+                      "url":  "https://raw.githubusercontent.com/SagerNet/sing-geosite/be94d52ad035da5350a1e5f62515185725034d86/geosite-category-ru.srs",
+                      "sha256":  "91cac7d9735f43d54d26102015f17c8a90cb740086e1bde290e2c03a4eb003a9",
+                      "size":  8576,
+                      "license":  "GPL-3.0 (sing-geosite)"
+                  },
+                  {
+                      "name":  "geoip-ru",
+                      "url":  "https://raw.githubusercontent.com/SagerNet/sing-geoip/7fe82a879ad2666526730c195b55a6d8d9147908/geoip-ru.srs",
+                      "sha256":  "6e23f5580dd443e2f9c4895adafee8d199c1a3487182ad5f0a2256cf59c7e53a",
+                      "size":  50107,
+                      "license":  "GPL-3.0 / MaxMind GeoLite2 (sing-geoip)"
+                  },
+                  {
+                      "name":  "geosite-ru-blocked",
+                      "url":  "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/e1fc08b7b332894411cbbccdd22fcbd540b98e3a/sing-box/rule-set-geosite/geosite-ru-blocked.srs",
+                      "sha256":  "9362ea55b75ff16ba7efdd8a48c0ed1f10460de30481518bb3626bb9259b712a",
+                      "size":  546068,
+                      "license":  "GPL-3.0"
+                  },
+                  {
+                      "name":  "geoip-ru-blocked",
+                      "url":  "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/e1fc08b7b332894411cbbccdd22fcbd540b98e3a/sing-box/rule-set-geoip/geoip-ru-blocked.srs",
+                      "sha256":  "077eb5639b6c1d17cb78baf76dfc29b51ba0ed41b6b77b4f39d6753d95f0a5ef",
+                      "size":  200987,
+                      "license":  "GPL-3.0"
+                  }
+              ]
+}

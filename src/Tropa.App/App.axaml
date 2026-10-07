@@ -2,7 +2,134 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Tropa.App.App"
              RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <!-- Палитра из макета (design/canvas-src/helmet.part) -->
+    <Color x:Key="BgColor">#0F1215</Color>
+    <Color x:Key="SideColor">#14181C</Color>
+    <Color x:Key="CardColor">#171B20</Color>
+    <Color x:Key="Card2Color">#1E242A</Color>
+    <Color x:Key="BorderColor">#242A31</Color>
+    <Color x:Key="TextColor">#E6EAEE</Color>
+    <Color x:Key="MutedColor">#9AA4AE</Color>
+    <Color x:Key="AccentColor">#3DDC97</Color>
+    <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}" />
+    <SolidColorBrush x:Key="Side" Color="{StaticResource SideColor}" />
+    <SolidColorBrush x:Key="Card" Color="{StaticResource CardColor}" />
+    <SolidColorBrush x:Key="Card2" Color="{StaticResource Card2Color}" />
+    <SolidColorBrush x:Key="Line" Color="{StaticResource BorderColor}" />
+    <SolidColorBrush x:Key="Text" Color="{StaticResource TextColor}" />
+    <SolidColorBrush x:Key="Muted" Color="{StaticResource MutedColor}" />
+    <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentDark" Color="#0B1A13" />
+    <SolidColorBrush x:Key="OkBg" Color="#173A2B" />
+    <SolidColorBrush x:Key="OkFg" Color="#7BE8B5" />
+    <SolidColorBrush x:Key="WarnBg" Color="#3A2E14" />
+    <SolidColorBrush x:Key="WarnFg" Color="#F5C76A" />
+    <SolidColorBrush x:Key="BadBg" Color="#3D1C1F" />
+    <SolidColorBrush x:Key="BadFg" Color="#FF9C9C" />
+    <SolidColorBrush x:Key="InfoBg" Color="#152233" />
+    <SolidColorBrush x:Key="InfoFg" Color="#9CC4FF" />
+    <FontFamily x:Key="Mono">Cascadia Mono, Consolas, monospace</FontFamily>
+  </Application.Resources>
+
   <Application.Styles>
     <FluentTheme />
+
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{StaticResource Bg}" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+      <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
+    </Style>
+
+    <Style Selector="TextBlock.h1">
+      <Setter Property="FontSize" Value="26" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.lbl">
+      <Setter Property="Foreground" Value="#8E99A4" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="{StaticResource Mono}" />
+    </Style>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{StaticResource Card}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="Padding" Value="20" />
+    </Style>
+
+    <!-- Боковое меню -->
+    <Style Selector="Button.nav">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#A3ADB7" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Height" Value="44" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="FontSize" Value="15" />
+    </Style>
+    <Style Selector="Button.nav.on">
+      <Setter Property="Background" Value="#1E2A25" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+
+    <Style Selector="Button">
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="MinHeight" Value="40" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="{StaticResource Bg}" />
+      <Setter Property="BorderBrush" Value="#2C333B" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="ToggleButton">
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{StaticResource Accent}" />
+      <Setter Property="Foreground" Value="{StaticResource AccentDark}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#5BE6A8" />
+      <Setter Property="Foreground" Value="{StaticResource AccentDark}" />
+    </Style>
+
+    <!-- Кнопка «i» -->
+    <Style Selector="Button.info">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="13" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="#3A424B" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="#A3ADB7" />
+      <Setter Property="FontStyle" Value="Italic" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Content" Value="i" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.pill">
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="10,3" />
+    </Style>
   </Application.Styles>
 </Application>

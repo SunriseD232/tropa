@@ -1,0 +1,119 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Tropa.App.ViewModels"
+             x:Class="Tropa.App.Views.HomeView"
+             x:DataType="vm:HomeViewModel">
+  <StackPanel Spacing="20">
+    <StackPanel Spacing="4">
+      <TextBlock Classes="h1" Text="Главная" />
+      <TextBlock Classes="muted" Text="{Binding SubscriptionLine}" IsVisible="{Binding SubscriptionLine, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+
+    <Grid ColumnDefinitions="1.15*,20,*">
+      <StackPanel Grid.Column="0" Spacing="20">
+        <!-- Кнопка подключения -->
+        <Border Classes="card" Padding="24,32">
+          <StackPanel Spacing="18" HorizontalAlignment="Stretch">
+            <Button HorizontalAlignment="Center" Width="172" Height="172" CornerRadius="86"
+                    Command="{Binding ToggleCommand}" IsEnabled="{Binding !IsBusy}"
+                    Background="#232A31" Foreground="{StaticResource Text}"
+                    Classes.connected="{Binding IsConnected}"
+                    ToolTip.Tip="Подключить или отключить (Ctrl+Alt+P — в следующей версии)">
+              <Button.Styles>
+                <Style Selector="Button.connected">
+                  <Setter Property="Background" Value="{StaticResource Accent}" />
+                  <Setter Property="Foreground" Value="{StaticResource AccentDark}" />
+                </Style>
+              </Button.Styles>
+              <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <TextBlock Text="⏻" FontSize="40" HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding StateText}" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <TextBlock Text="{Binding SessionTime}" Classes="mono" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" />
+            <Border IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" CornerRadius="12" Padding="12,10"
+                    Background="{StaticResource InfoBg}" Classes.err="{Binding IsError}">
+              <Border.Styles>
+                <Style Selector="Border.err"><Setter Property="Background" Value="{StaticResource BadBg}" /></Style>
+              </Border.Styles>
+              <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+            </Border>
+            <Border Background="{StaticResource Card2}" CornerRadius="12" Padding="16,12">
+              <DockPanel>
+                <Border DockPanel.Dock="Left" Background="#2A323A" CornerRadius="4" Width="34" Height="22" Margin="0,0,12,0" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding CountryCode}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel>
+                  <TextBlock Text="{Binding ServerName}" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding ServerDetails}" Classes="muted" />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <!-- Режим и маршрут -->
+        <Border Classes="card">
+          <StackPanel Spacing="10">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Classes="lbl" Text="ЧТО ПУСКАТЬ ЧЕРЕЗ ТРОПУ" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="mode" />
+            </StackPanel>
+            <UniformGrid Columns="2">
+              <RadioButton GroupName="mode" IsChecked="{Binding ModeTun}" Command="{Binding SetModeCommand}" CommandParameter="tun" Margin="0,0,8,0">
+                <StackPanel>
+                  <TextBlock Text="Весь компьютер" />
+                  <TextBlock Classes="muted" Text="TUN · игры, Discord, UDP" />
+                </StackPanel>
+              </RadioButton>
+              <RadioButton GroupName="mode" IsChecked="{Binding !ModeTun}" Command="{Binding SetModeCommand}" CommandParameter="proxy">
+                <StackPanel>
+                  <TextBlock Text="Только браузеры" />
+                  <TextBlock Classes="muted" Text="системный прокси" />
+                </StackPanel>
+              </RadioButton>
+            </UniformGrid>
+            <TextBlock Classes="muted" Text="{Binding ModeNote}" Foreground="{StaticResource WarnFg}" IsVisible="{Binding !TunAvailable}" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+              <TextBlock Classes="lbl" Text="МАРШРУТ" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="route" />
+            </StackPanel>
+            <ComboBox SelectedIndex="{Binding RouteIndex}" HorizontalAlignment="Stretch">
+              <ComboBoxItem Content="Всё, кроме российского (рекомендуется)" />
+              <ComboBoxItem Content="Только заблокированное" />
+              <ComboBoxItem Content="Всё через прокси" />
+            </ComboBox>
+            <TextBlock Classes="muted" Text="{Binding RouteDescription}" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <StackPanel Grid.Column="2" Spacing="20">
+        <Border Classes="card">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="lbl" Text="ТРАФИК" />
+            <UniformGrid Columns="2">
+              <StackPanel>
+                <TextBlock Classes="muted" Text="Загрузка" />
+                <TextBlock Classes="mono" FontSize="24" Text="{Binding Down}" />
+              </StackPanel>
+              <StackPanel>
+                <TextBlock Classes="muted" Text="Отдача" />
+                <TextBlock Classes="mono" FontSize="24" Text="{Binding Up}" />
+              </StackPanel>
+            </UniformGrid>
+            <TextBlock Classes="muted" Text="{Binding Totals}" />
+          </StackPanel>
+        </Border>
+        <Border Classes="card">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="lbl" Text="КАК ЭТО РАБОТАЕТ СЕЙЧАС" />
+            <TextBlock Classes="muted" Text="Тропа включает прокси Windows, и через сервер идут браузеры и программы, которые его используют. При отключении и даже после сбоя прежние настройки прокси возвращаются." />
+            <TextBlock Classes="muted" Text="Ключи серверов хранятся зашифрованными, ядро sing-box запускается только после проверки его контрольной суммы." />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </Grid>
+  </StackPanel>
+</UserControl>

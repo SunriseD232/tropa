@@ -1,9 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Хранилище, DPAPI, сеть, системный прокси пользователя. -->
+  <!-- Хранилище, DPAPI, сеть, системный прокси пользователя, запуск ядра. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Tropa.Core\Tropa.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Lock-файлы вшиты в сборку: хэши ядер и баз нельзя подменить, положив рядом другой файл. -->
+    <EmbeddedResource Include="..\..\tools\cores.lock.json" LogicalName="Tropa.cores.lock.json" />
+    <EmbeddedResource Include="..\..\tools\geo.lock.json" LogicalName="Tropa.geo.lock.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tropa.Infrastructure.Tests" />
   </ItemGroup>
 </Project>

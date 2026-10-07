@@ -105,7 +105,7 @@ public sealed class SingBoxGoldenTests
             Defaults with
             {
                 Connection = Defaults.Connection with { LanAllow = true, Mode = CaptureMode.SystemProxy, SocksPort = 20808 },
-                General = Defaults.General with { LocalPass = false }, // будет принудительно включён: LAN требует пароль
+                General = Defaults.General with { LocalPass = true }, // в режиме прокси будет принудительно выключен (ADR-013)
                 Dns = Defaults.Dns with
                 {
                     RemoteDns = "https://dns.google/dns-query",
@@ -135,11 +135,20 @@ public sealed class SingBoxGoldenTests
 
     [Theory]
     [MemberData(nameof(Scenarios))]
-    public void Matches_golden(string scenario)
-    {
-        var actual = SingBoxConfigBuilder.Build(All[scenario]());
-        var path = Path.Combine(GoldenDirectory, scenario + ".singbox.json");
+    public void Matches_golden(string scenario) => AssertGolden(scenario, SingBoxConfigBuilder.Build(All[scenario]()));
 
+    [Fact]
+    public void Test_instance_matches_golden()
+    {
+        var json = SingBoxConfigBuilder.BuildTest(
+            [new(Reality with { ChainVia = Relay.Id }, 31001), new(VmessWsProfile, 31002), new(Trojan, 31003)],
+            Defaults, Auth, [Reality, Relay, VmessWsProfile, Trojan]);
+        AssertGolden("09-test-instance", json);
+    }
+
+    private static void AssertGolden(string scenario, string actual)
+    {
+        var path = Path.Combine(GoldenDirectory, scenario + ".singbox.json");
         if (Environment.GetEnvironmentVariable("TROPA_UPDATE_GOLDEN") == "1")
         {
             Directory.CreateDirectory(GoldenDirectory);

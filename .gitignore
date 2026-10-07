@@ -10,3 +10,4 @@ TestResults/
 cores/
 # временные файлы генераторов макета
 design/canvas-src/__pycache__/
+geo/

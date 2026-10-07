@@ -41,7 +41,8 @@
 ## Команды
 
 ```bash
-powershell -ExecutionPolicy Bypass -File tools/fetch-cores.ps1   # скачать ядра по lock-файлу с проверкой хэшей
+powershell -ExecutionPolicy Bypass -File tools/fetch-cores.ps1   # ядра по lock-файлу с проверкой хэшей
+powershell -ExecutionPolicy Bypass -File tools/fetch-geo.ps1     # наборы правил .srs по lock-файлу
 dotnet build Tropa.slnx
 dotnet test Tropa.slnx
 ```
@@ -49,6 +50,11 @@ dotnet test Tropa.slnx
 Новая версия ядра: прочитать changelog, затем `tools/update-cores-lock.ps1 -SingBox X -Xray Y`, проверить diff lock-файла, прогнать тесты.
 
 Скрипты `.ps1` хранятся в UTF-8 с BOM, иначе Windows PowerShell 5.1 ломает кириллицу.
+
+**Ловушки инструментов:** в bash-heredoc этой среды `
+` и `	` превращаются в настоящие перевод строки и табуляцию — файлы с обратными слешами (csproj, C#-строки) писать через Write/Edit, а не через heredoc/sed.
+
+**Запуск интерфейса для проверки:** `TROPA_DATA_DIR=<временная папка> src/Tropa.App/bin/Debug/net10.0-windows/Tropa.exe` (только Debug) — не трогает настоящий профиль. Не нажимать «Подключить» без согласия владельца: это меняет прокси Windows.
 
 ## Структура репозитория (целевая)
 

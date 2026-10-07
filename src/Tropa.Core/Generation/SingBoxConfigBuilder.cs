@@ -48,8 +48,9 @@ public static class SingBoxConfigBuilder
     public const string DirectTag = "direct";
     public const string TunInboundTag = "tun-in";
     public const string MixedInboundTag = "mixed-in";
+    public const string LanInboundTag = "lan-in";
 
-    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, IndentSize = 2 };
+    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, IndentSize = 2, NewLine = "\n" };
 
     public static string Build(SingBoxInput input)
     {
@@ -88,6 +89,82 @@ public static class SingBoxConfigBuilder
             };
         }
 
+        return config.ToJsonString(Indented) + "\n";
+    }
+
+    /// <summary>Сервер для временного тестового экземпляра ядра и его локальный порт.</summary>
+    public sealed record TestTarget(Profile Profile, int Port);
+
+    /// <summary>
+    /// Конфиг для тестов серверов (docs/07-testing-diagnostics.md, §1): у каждого сервера свой
+    /// SOCKS-вход на 127.0.0.1 с паролем, весь прочий трафик отбрасывается. Текущее подключение не трогается.
+    /// </summary>
+    public static string BuildTest(IReadOnlyList<TestTarget> targets, AppSettings settings, LocalAuth auth, IReadOnlyList<Profile>? allProfiles = null)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+        ArgumentNullException.ThrowIfNull(auth);
+        if (targets.Count == 0)
+            throw new ArgumentException("Нет серверов для теста.", nameof(targets));
+
+        var input = new SingBoxInput
+        {
+            Settings = settings,
+            Active = targets[0].Profile,
+            Profiles = allProfiles ?? targets.Select(t => t.Profile).ToList(),
+            RuleSetDirectory = "",
+            LocalAuth = auth,
+        };
+        var ctx = new Context(input, CompatRules.Evaluate(settings).Effective);
+
+        var inbounds = new JsonArray();
+        var outbounds = new JsonArray();
+        var rules = new JsonArray();
+        var added = new HashSet<Guid>();
+
+        void AddServer(Profile p)
+        {
+            if (!added.Add(p.Id))
+                return;
+            if (p.ChainVia is { } via)
+                AddServer(ctx.FindProfile(via));
+            outbounds.Push(Outbound(ctx, p, ctx.TagFor(p)));
+        }
+
+        foreach (var (profile, port) in targets)
+        {
+            AddServer(profile);
+            var inTag = "test-" + ctx.TagFor(profile);
+            inbounds.Push(new JsonObject
+            {
+                ["type"] = "socks",
+                ["tag"] = inTag,
+                ["listen"] = "127.0.0.1",
+                ["listen_port"] = port,
+                ["users"] = Users(ctx),
+            });
+            rules.Push(new JsonObject { ["inbound"] = StrArray([inTag]), ["action"] = "route", ["outbound"] = ctx.TagFor(profile) });
+        }
+
+        rules.Push(new JsonObject { ["action"] = "reject" });
+        outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DirectTag });
+
+        var config = new JsonObject
+        {
+            ["log"] = new JsonObject { ["level"] = "warn", ["timestamp"] = true },
+            ["dns"] = new JsonObject
+            {
+                ["servers"] = new JsonArray(DnsServer("local", ctx.S.Dns.LocalDns, detour: null)),
+                ["final"] = "local",
+            },
+            ["inbounds"] = inbounds,
+            ["outbounds"] = outbounds,
+            ["route"] = new JsonObject
+            {
+                ["rules"] = rules,
+                ["final"] = DirectTag,
+                ["default_domain_resolver"] = "local",
+            },
+        };
         return config.ToJsonString(Indented) + "\n";
     }
 
@@ -273,21 +350,37 @@ public static class SingBoxConfigBuilder
             inbounds.Push(tun);
         }
 
+        // Локальный порт слушает только 127.0.0.1. Для сети — отдельный порт, всегда с паролем (ADR-013).
         var mixed = new JsonObject
         {
             ["type"] = "mixed",
             ["tag"] = MixedInboundTag,
-            ["listen"] = s.Connection.LanAllow ? "0.0.0.0" : "127.0.0.1",
+            ["listen"] = "127.0.0.1",
             ["listen_port"] = s.Connection.SocksPort,
         };
         if (s.General.LocalPass)
+            mixed["users"] = Users(ctx);
+        inbounds.Push(mixed);
+
+        if (s.Connection.LanAllow)
         {
-            var auth = ctx.Input.LocalAuth ?? throw new ArgumentException("Включён пароль на локальный прокси, но логин и пароль не переданы.", nameof(ctx));
-            mixed["users"] = new JsonArray(new JsonObject { ["username"] = auth.Username, ["password"] = auth.Password });
+            inbounds.Push(new JsonObject
+            {
+                ["type"] = "mixed",
+                ["tag"] = LanInboundTag,
+                ["listen"] = "0.0.0.0",
+                ["listen_port"] = s.Connection.LanPort,
+                ["users"] = Users(ctx),
+            });
         }
 
-        inbounds.Push(mixed);
         return inbounds;
+    }
+
+    private static JsonArray Users(Context ctx)
+    {
+        var auth = ctx.Input.LocalAuth ?? throw new ArgumentException("Для порта с паролем не переданы логин и пароль.", nameof(ctx));
+        return new JsonArray(new JsonObject { ["username"] = auth.Username, ["password"] = auth.Password });
     }
 
     // ---------------- Outbounds ----------------

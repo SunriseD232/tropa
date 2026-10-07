@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Tropa.App.ViewModels"
+             x:Class="Tropa.App.Views.PlaceholderView"
+             x:DataType="vm:PlaceholderViewModel">
+  <StackPanel Spacing="16">
+    <TextBlock Classes="h1" Text="{Binding Title}" />
+    <Border Classes="card">
+      <TextBlock Classes="muted" FontSize="15" Text="{Binding Text}" />
+    </Border>
+  </StackPanel>
+</UserControl>

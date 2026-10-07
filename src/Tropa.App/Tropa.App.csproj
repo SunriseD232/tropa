@@ -4,6 +4,7 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <OutputType>WinExe</OutputType>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\tropa.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyName>Tropa</AssemblyName>
   </PropertyGroup>
@@ -17,5 +18,17 @@
     <ProjectReference Include="..\Tropa.Core\Tropa.Core.csproj" />
     <ProjectReference Include="..\Tropa.Infrastructure\Tropa.Infrastructure.csproj" />
     <ProjectReference Include="..\Tropa.Ipc\Tropa.Ipc.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+    <!-- WithCulture=false: иначе MSBuild принимает «.ru.» за культуру и уносит файл в сателлитную сборку -->
+    <EmbeddedResource Include="..\..\docs\info.ru.json" LogicalName="Tropa.info.ru.json" WithCulture="false" />
+  </ItemGroup>
+  <!-- Ядра и наборы правил кладутся рядом с программой; при запуске их хэши сверяются с вшитыми lock-файлами. -->
+  <ItemGroup Condition="Exists('..\..\cores\sing-box.exe')">
+    <None Include="..\..\cores\sing-box.exe" Link="cores\sing-box.exe" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\geo\*.srs" Link="geo\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

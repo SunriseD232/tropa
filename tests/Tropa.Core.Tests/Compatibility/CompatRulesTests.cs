@@ -17,7 +17,7 @@ public sealed class CompatRulesTests
         var r = CompatRules.Evaluate(Defaults);
         // По умолчанию TUN: недоступны только настройки системного прокси и зависимые от выключенных опций.
         Assert.Equal(
-            ["fragParams", "muxConc", "noiseParams", "subUACustom", "sysBypass", "templateText", "uwpLoopback"],
+            ["fragParams", "lanPort", "muxConc", "noiseParams", "subUACustom", "sysBypass", "templateText", "uwpLoopback"],
             r.Disabled.Keys.Order(StringComparer.Ordinal));
     }
 
@@ -50,16 +50,20 @@ public sealed class CompatRulesTests
     }
 
     [Fact]
-    public void Lan_access_forces_password()
+    public void System_proxy_mode_cannot_use_password_on_local_port()
     {
-        var settings = Defaults with
-        {
-            Connection = Defaults.Connection with { LanAllow = true },
-            General = Defaults.General with { LocalPass = false },
-        };
-        var r = CompatRules.Evaluate(settings);
+        var r = CompatRules.Evaluate(Mode(CaptureMode.SystemProxy));
         Assert.True(r.IsDisabled("localPass"));
-        Assert.True(r.Effective.General.LocalPass);
+        Assert.False(r.Effective.General.LocalPass);
+        Assert.False(CompatRules.Evaluate(Mode(CaptureMode.Tun)).IsDisabled("localPass"));
+    }
+
+    [Fact]
+    public void Lan_port_is_editable_only_when_lan_allowed()
+    {
+        Assert.True(CompatRules.Evaluate(Defaults).IsDisabled("lanPort"));
+        var lan = Defaults with { Connection = Defaults.Connection with { LanAllow = true } };
+        Assert.False(CompatRules.Evaluate(lan).IsDisabled("lanPort"));
     }
 
     [Fact]

@@ -47,7 +47,9 @@ public sealed record ConnectionSettings
     public bool LanBypass { get; init; } = true;
     public string SysBypass { get; init; } = "localhost;127.*;10.*;172.16.*;192.168.*;*.local";
     /// <summary>Порт mixed-inbound (SOCKS5 и HTTP на одном порту).</summary>
-    public int SocksPort { get; init; } = 10808;
+    public int SocksPort { get; init; } = 10880;
+    /// <summary>Отдельный порт для устройств в локальной сети, всегда с паролем.</summary>
+    public int LanPort { get; init; } = 10881;
     public bool RandomPorts { get; init; }
     public bool LanAllow { get; init; }
     public bool AutoSelect { get; init; } = true;

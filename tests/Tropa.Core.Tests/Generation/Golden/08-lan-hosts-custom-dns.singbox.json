@@ -58,8 +58,14 @@
     {
       "type": "mixed",
       "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 20808
+    },
+    {
+      "type": "mixed",
+      "tag": "lan-in",
       "listen": "0.0.0.0",
-      "listen_port": 20808,
+      "listen_port": 10881,
       "users": [
         {
           "username": "tropa-user",

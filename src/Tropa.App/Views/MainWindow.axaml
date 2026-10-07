@@ -1,24 +1,130 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Tropa.App.ViewModels"
+        xmlns:v="using:Tropa.App.Views"
         x:Class="Tropa.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
         Title="Тропа"
-        Width="1180" Height="760" MinWidth="900" MinHeight="600"
-        Background="#0F1215">
-  <!-- Каркас по макету: боковое меню + содержимое. Экраны появятся на этапе 2. -->
-  <Grid ColumnDefinitions="232,*">
-    <Border Grid.Column="0" Background="#14181C" BorderBrush="#232930" BorderThickness="0,0,1,0" Padding="14,20">
-      <StackPanel Spacing="4">
-        <TextBlock Text="Тропа" FontSize="18" FontWeight="Bold" Foreground="#E6EAEE" Margin="10,4,10,20" />
-        <TextBlock Text="Главная" Foreground="#E6EAEE" Margin="12,10" />
-        <TextBlock Text="Серверы" Foreground="#A3ADB7" Margin="12,10" />
-        <TextBlock Text="Правила" Foreground="#A3ADB7" Margin="12,10" />
-        <TextBlock Text="Диагностика" Foreground="#A3ADB7" Margin="12,10" />
-        <TextBlock Text="Настройки" Foreground="#A3ADB7" Margin="12,10" />
-      </StackPanel>
+        Icon="/Assets/tropa.ico"
+        Width="1180" Height="780" MinWidth="900" MinHeight="620"
+        WindowStartupLocation="CenterScreen">
+  <Window.DataTemplates>
+    <DataTemplate DataType="vm:HomeViewModel"><v:HomeView /></DataTemplate>
+    <DataTemplate DataType="vm:ServersViewModel"><v:ServersView /></DataTemplate>
+    <DataTemplate DataType="vm:PlaceholderViewModel"><v:PlaceholderView /></DataTemplate>
+  </Window.DataTemplates>
+
+  <Panel>
+    <Grid ColumnDefinitions="232,*">
+      <!-- Боковое меню -->
+      <Border Grid.Column="0" Background="{StaticResource Side}" BorderBrush="#232930" BorderThickness="0,0,1,0" Padding="14,20">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="10,4,10,20">
+              <Image Source="/Assets/logo.png" Width="28" Height="28" />
+              <TextBlock Text="Тропа" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+            </StackPanel>
+            <Button Classes="nav" Classes.on="{Binding IsHome}" Content="Главная" Command="{Binding NavigateCommand}" CommandParameter="home" />
+            <Button Classes="nav" Classes.on="{Binding IsServers}" Content="Серверы" Command="{Binding NavigateCommand}" CommandParameter="servers" />
+            <Button Classes="nav" Classes.on="{Binding IsRules}" Content="Правила" Command="{Binding NavigateCommand}" CommandParameter="rules" />
+            <Button Classes="nav" Classes.on="{Binding IsDiagnostics}" Content="Диагностика" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" />
+            <Button Classes="nav" Classes.on="{Binding IsSettings}" Content="Настройки" Command="{Binding NavigateCommand}" CommandParameter="settings" />
+          </StackPanel>
+          <Border DockPanel.Dock="Bottom" VerticalAlignment="Bottom" Background="#1A1F24" CornerRadius="12" Padding="12">
+            <StackPanel Spacing="4">
+              <TextBlock Text="{Binding FooterStatus}" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding CoreVersions}" Classes="muted" />
+            </StackPanel>
+          </Border>
+        </DockPanel>
+      </Border>
+
+      <!-- Содержимое -->
+      <DockPanel Grid.Column="1">
+        <Border DockPanel.Dock="Top" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}"
+                Background="{StaticResource WarnBg}" Padding="16,10" Margin="36,20,36,0" CornerRadius="12">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Понятно" Command="{Binding DismissWarningCommand}" />
+            <TextBlock Text="{Binding Warning}" Foreground="{StaticResource WarnFg}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
+          </DockPanel>
+        </Border>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <ContentControl Content="{Binding CurrentPage}" Margin="36,28" />
+        </ScrollViewer>
+      </DockPanel>
+    </Grid>
+
+    <!-- Окно «Добавить серверы» -->
+    <Border IsVisible="{Binding Import.IsOpen}" Background="#BB050709">
+      <Border Classes="card" Width="680" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24">
+        <StackPanel Spacing="14">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="✕" Width="40" Command="{Binding Import.CloseCommand}" ToolTip.Tip="Закрыть" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="Добавить серверы" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding Import.ShowInfoCommand}" CommandParameter="importMethods" ToolTip.Tip="Что можно вставить" />
+            </StackPanel>
+          </DockPanel>
+          <TextBlock Classes="muted" Text="Вставьте адрес подписки (https://…) или одну или несколько ссылок vless://, vmess://, trojan://. Ctrl+V в любом месте окна тоже работает." />
+          <TextBox Text="{Binding Import.Text}" AcceptsReturn="True" TextWrapping="Wrap" Height="140" FontFamily="{StaticResource Mono}" PlaceholderText="https://… или vless://…" />
+          <StackPanel Spacing="6" IsVisible="{Binding Import.LooksLikeSubscription}">
+            <TextBlock Text="Название подписки (необязательно)" Classes="lbl" />
+            <TextBox Text="{Binding Import.Name}" PlaceholderText="Например, «Провайдер»" />
+          </StackPanel>
+          <Border IsVisible="{Binding Import.HasResult}" Background="{StaticResource InfoBg}" CornerRadius="12" Padding="12">
+            <TextBlock Text="{Binding Import.Result}" Foreground="{StaticResource InfoFg}" TextWrapping="Wrap" />
+          </Border>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding Import.IsBusy}" />
+            <Button Content="Отмена" Command="{Binding Import.CloseCommand}" />
+            <Button Classes="primary" Content="Добавить" Command="{Binding Import.ImportCommand}" IsEnabled="{Binding !Import.IsBusy}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
     </Border>
-    <StackPanel Grid.Column="1" Margin="36,28" Spacing="8">
-      <TextBlock Text="Главная" FontSize="26" FontWeight="Bold" Foreground="#E6EAEE" />
-      <TextBlock Text="Каркас приложения. Подключение появится на этапе 2." Foreground="#9AA4AE" />
-    </StackPanel>
-  </Grid>
+
+    <!-- Справка по кнопке «i» -->
+    <Border IsVisible="{Binding Info.IsOpen}" Background="#BB050709" PointerPressed="OnInfoBackdropPressed">
+      <Border Classes="card" Width="580" MaxHeight="640" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24" PointerPressed="OnInfoCardPressed">
+        <DockPanel>
+          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button DockPanel.Dock="Right" Content="✕" Width="40" Command="{Binding Info.CloseCommand}" ToolTip.Tip="Закрыть" />
+            <TextBlock Text="{Binding Info.Title}" FontSize="21" FontWeight="Bold" TextWrapping="Wrap" />
+          </DockPanel>
+          <Button DockPanel.Dock="Bottom" HorizontalAlignment="Right" Content="Понятно" Margin="0,16,0,0" Command="{Binding Info.CloseCommand}" />
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="6" Margin="0,0,16,0">
+              <Border IsVisible="{Binding Info.Now, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{StaticResource WarnBg}" CornerRadius="12" Padding="12,10">
+                <TextBlock Text="{Binding Info.Now}" Foreground="{StaticResource WarnFg}" TextWrapping="Wrap" />
+              </Border>
+              <StackPanel IsVisible="{Binding Info.What, Converter={x:Static ObjectConverters.IsNotNull}}" Spacing="4" Margin="0,8,0,0">
+                <TextBlock Classes="lbl" Text="ЧТО ЭТО" />
+                <TextBlock Text="{Binding Info.What}" TextWrapping="Wrap" LineHeight="22" />
+              </StackPanel>
+              <StackPanel IsVisible="{Binding Info.Why, Converter={x:Static ObjectConverters.IsNotNull}}" Spacing="4" Margin="0,8,0,0">
+                <TextBlock Classes="lbl" Text="ЗАЧЕМ НУЖНО" />
+                <TextBlock Text="{Binding Info.Why}" TextWrapping="Wrap" LineHeight="22" />
+              </StackPanel>
+              <Border IsVisible="{Binding Info.Dpi, Converter={x:Static ObjectConverters.IsNotNull}}" Background="#132A20" CornerRadius="12" Padding="14,10" Margin="0,10,0,0">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="lbl" Foreground="{StaticResource OkFg}" Text="КАК ПОМОГАЕТ ПРОТИВ БЛОКИРОВОК" />
+                  <TextBlock Text="{Binding Info.Dpi}" TextWrapping="Wrap" LineHeight="22" />
+                </StackPanel>
+              </Border>
+              <StackPanel IsVisible="{Binding Info.Risk, Converter={x:Static ObjectConverters.IsNotNull}}" Spacing="4" Margin="0,8,0,0">
+                <TextBlock Classes="lbl" Text="ПОДВОДНЫЕ КАМНИ" />
+                <TextBlock Text="{Binding Info.Risk}" TextWrapping="Wrap" LineHeight="22" />
+              </StackPanel>
+              <Border IsVisible="{Binding Info.Conf, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{StaticResource InfoBg}" CornerRadius="12" Padding="14,10" Margin="0,10,0,0">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="lbl" Foreground="{StaticResource InfoFg}" Text="СОВМЕСТИМОСТЬ" />
+                  <TextBlock Text="{Binding Info.Conf}" TextWrapping="Wrap" LineHeight="22" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Border>
+  </Panel>
 </Window>
