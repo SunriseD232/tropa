@@ -2,8 +2,6 @@
   <!-- Интерфейс (Avalonia). Работает с правами пользователя, администратора не запрашивает. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <!-- Выпуск — самодостаточный win-x64 (друзьям не нужно ставить .NET); RID в lock-файле для восстановления в режиме locked-mode. -->
-    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <OutputType>WinExe</OutputType>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\tropa.ico</ApplicationIcon>
