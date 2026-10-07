@@ -3,8 +3,14 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
+  # Сборка выпуска — только вручную (Actions → CI → Run workflow): выпуск, созданный через сайт,
+  # не должен запускать сборку, которая подменит установщик с подписанным хэшем.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег выпуска, например v0.2.0 (черновик создаётся на текущем main)'
+        required: true
 
 # Минимальные права токена (docs/02-security.md, §3.9)
 permissions:
@@ -44,13 +50,13 @@ jobs:
       - name: Test
         run: dotnet test Tropa.slnx --no-build -c Release
 
-  # Выпуск по тегу v*: самодостаточная программа, установщик (Inno Setup есть в образе windows-latest)
+  # Выпуск вручную: самодостаточная программа, установщик (Inno Setup есть в образе windows-latest)
   # и SHA256SUMS — в черновик выпуска на GitHub. Права на запись — только у этой задачи.
   # Манифест обновлений здесь НЕ подписывается: закрытый ключ только у владельца (docs/10-release.md).
   # Владелец прикладывает manifest.json и manifest.json.sig к черновику и публикует его.
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     permissions:
       contents: write
@@ -77,7 +83,9 @@ jobs:
       - name: Draft GitHub release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          tag_name: ${{ inputs.tag }}
           draft: true
+          overwrite_files: false
           fail_on_unmatched_files: true
           files: |
             out/Tropa-*-setup.exe

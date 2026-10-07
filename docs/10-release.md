@@ -24,8 +24,9 @@ dotnet run --project tools/Tropa.Release -- keygen --out "$env:USERPROFILE\Tropa
 1. Поднять `Version` в `Directory.Build.props`.
 2. Номер манифеста `N` = предыдущий + 1. Записать его в `tools/update.config.json` → `bundledSequence`
    (установщик с этим номером не будет брать более старые обновления).
-3. Собрать: тег `vX.Y.Z` → CI соберёт установщик и `SHA256SUMS.txt` и положит их в **черновик** выпуска
-   на GitHub. Локально: `powershell -ExecutionPolicy Bypass -File tools/build-release.ps1` (нужен Inno Setup 6).
+3. Собрать локально: `powershell -ExecutionPolicy Bypass -File tools/build-release.ps1` (нужен Inno Setup 6).
+   Или в GitHub: Actions → CI → Run workflow, указать тег — установщик и `SHA256SUMS.txt` попадут в **черновик**
+   выпуска. Манифест подписывать для того установщика, который будет в выпуске (хэш входит в манифест).
 4. Пройти ручной чек-лист (§4).
 5. Создать выпуск на GitHub, приложить `Tropa-X.Y.Z-setup.exe`.
 6. Манифест и подпись:
