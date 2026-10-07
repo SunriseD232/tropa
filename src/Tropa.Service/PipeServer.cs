@@ -138,8 +138,9 @@ internal sealed partial class PipeServer(ServiceOptions options, ILogger<PipeSer
                 if (hello.Protocol != IpcProtocol.Version)
                     return new Reply(hello.Id, false, $"Версии не совпадают: интерфейс {hello.Protocol}, служба {IpcProtocol.Version}. Обновите Тропу.");
                 session.Greeted = true;
+                var locations = _supervisor!.Locations;
                 return new HelloReply(hello.Id, IpcProtocol.Version, Version, options.Privileged, options.GeoDirectory,
-                    Infrastructure.Cores.CoreProcess.ExecutablePath(options.Cores, "xray"));
+                    Infrastructure.Cores.CoreProcess.ExecutablePath(locations, "xray"), locations.Versions, locations.Sequence);
 
             case StatusRequest status:
                 await session.SendAsync(_supervisor!.Status, ct).ConfigureAwait(false);
@@ -162,6 +163,10 @@ internal sealed partial class PipeServer(ServiceOptions options, ILogger<PipeSer
                 await _supervisor!.StopAsync().ConfigureAwait(false);
                 _controller = null;
                 return new Reply(stop.Id, true, null);
+
+            case InstallUpdateRequest install:
+                var installError = await _supervisor!.InstallUpdateAsync(install).ConfigureAwait(false);
+                return new Reply(install.Id, installError is null, installError);
 
             case RollbackAllRequest rollback:
                 // Аварийный откат доступен любому проверенному клиенту: это «красная кнопка».

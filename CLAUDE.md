@@ -14,7 +14,8 @@
    - `docs/05-config-generation.md` — как настройки превращаются в конфиги sing-box и Xray;
    - `docs/06-features.md` — экраны и функции, полный список настроек и зависимостей;
    - `docs/07-testing-diagnostics.md` — алгоритмы тестов серверов и диагностики;
-   - `docs/09-decisions.md` — журнал принятых решений (ADR). Новые решения дописывать туда.
+   - `docs/09-decisions.md` — журнал принятых решений (ADR). Новые решения дописывать туда;
+   - `docs/10-release.md` — ключ подписи, выпуск, манифест, ручной чек-лист.
 5. `docs/info.ru.json` — тексты справки для кнопок «i» (105 статей). Это ресурс приложения, не только документация.
 
 ## Дизайн
@@ -45,6 +46,8 @@ powershell -ExecutionPolicy Bypass -File tools/fetch-cores.ps1   # ядра по
 powershell -ExecutionPolicy Bypass -File tools/fetch-geo.ps1     # наборы правил .srs по lock-файлу
 dotnet build Tropa.slnx
 dotnet test Tropa.slnx
+powershell -ExecutionPolicy Bypass -File tools/build-release.ps1   # выпуск: out\publish, установщик (если есть Inno Setup 6), SHA256SUMS
+dotnet run --project tools/Tropa.Release -- <keygen|manifest|sign|verify>   # манифест обновлений, см. docs/10-release.md
 ```
 
 Новая версия ядра: прочитать changelog, затем `tools/update-cores-lock.ps1 -SingBox X -Xray Y`, проверить diff lock-файла, прогнать тесты.

@@ -36,6 +36,11 @@ public sealed partial class ServiceClient : IAsyncDisposable
     /// <summary>Путь к xray.exe службы (для правила против зацикливания в TUN).</summary>
     public string? XrayPath { get; private set; }
 
+    /// <summary>Версии ядер, которые запускает служба, и номер установленного обновления.</summary>
+    public string? CoreVersions { get; private set; }
+
+    public long UpdateSequence { get; private set; }
+
     public event EventHandler<StatusEvent>? Status;
 
     public event EventHandler<string>? Log;
@@ -87,6 +92,8 @@ public sealed partial class ServiceClient : IAsyncDisposable
         client.RuleSetDirectory = info.RuleSetDirectory;
         client.ServiceVersion = info.ServiceVersion;
         client.XrayPath = info.XrayPath;
+        client.CoreVersions = info.CoreVersions;
+        client.UpdateSequence = info.UpdateSequence;
         return client;
     }
 

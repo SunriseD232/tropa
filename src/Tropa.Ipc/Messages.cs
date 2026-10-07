@@ -16,6 +16,7 @@ public enum ServiceState { Idle, Starting, Running, Stopping, Failed }
 [JsonDerivedType(typeof(StopRequest), "stop")]
 [JsonDerivedType(typeof(StatusRequest), "status")]
 [JsonDerivedType(typeof(RollbackAllRequest), "rollbackAll")]
+[JsonDerivedType(typeof(InstallUpdateRequest), "installUpdate")]
 public abstract record Request
 {
     /// <summary>Номер запроса: ответ приходит с тем же номером.</summary>
@@ -50,6 +51,13 @@ public sealed record StatusRequest : Request;
 /// </summary>
 public sealed record RollbackAllRequest : Request;
 
+/// <summary>
+/// Установить обновление ядер и наборов правил (ADR-023). Интерфейс скачал файлы в
+/// <paramref name="FilesDirectory"/>; служба заново проверяет подпись манифеста и хэш каждого файла
+/// и ничего не скачивает и не распаковывает сама.
+/// </summary>
+public sealed record InstallUpdateRequest(string ManifestBase64, string SignatureBase64, string FilesDirectory) : Request;
+
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Reply), "reply")]
 [JsonDerivedType(typeof(HelloReply), "helloReply")]
@@ -61,7 +69,10 @@ public record ServerMessage;
 public record Reply(int Id, bool Ok, string? Error) : ServerMessage;
 
 /// <param name="XrayPath">Путь к xray.exe службы: интерфейс ставит правило, чтобы трафик Xray не зацикливался в TUN.</param>
-public sealed record HelloReply(int Id, int Protocol, string ServiceVersion, bool TunSupported, string RuleSetDirectory, string? XrayPath = null)
+/// <param name="CoreVersions">Версии ядер, которые служба сейчас запускает.</param>
+/// <param name="UpdateSequence">Номер установленного манифеста обновлений (0 — файлы установщика).</param>
+public sealed record HelloReply(int Id, int Protocol, string ServiceVersion, bool TunSupported, string RuleSetDirectory, string? XrayPath = null,
+    string? CoreVersions = null, long UpdateSequence = 0)
     : Reply(Id, true, null);
 
 /// <param name="Blocking">Kill switch держит блокировку: ядро не работает, но интернет мимо туннеля закрыт.</param>

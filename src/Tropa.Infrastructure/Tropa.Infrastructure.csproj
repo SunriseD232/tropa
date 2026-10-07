@@ -15,6 +15,8 @@
     <!-- Lock-файлы вшиты в сборку: хэши ядер и баз нельзя подменить, положив рядом другой файл. -->
     <EmbeddedResource Include="..\..\tools\cores.lock.json" LogicalName="Tropa.cores.lock.json" />
     <EmbeddedResource Include="..\..\tools\geo.lock.json" LogicalName="Tropa.geo.lock.json" />
+    <!-- Адрес манифеста, публичный ключ подписи и номер выпуска, с которым собран установщик (ADR-023). -->
+    <EmbeddedResource Include="..\..\tools\update.config.json" LogicalName="Tropa.update.config.json" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Tropa.Infrastructure.Tests" />

@@ -2,6 +2,8 @@
   <!-- Служба Windows (LocalSystem): ядра, TUN, системные изменения. Принимает команды только от Tropa.exe. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- Выпуск — самодостаточный win-x64 (друзьям не нужно ставить .NET); RID в lock-файле для восстановления в режиме locked-mode. -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <OutputType>Exe</OutputType>
     <RootNamespace>Tropa.Service</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

@@ -14,6 +14,9 @@ if (args.Contains("--rollback-all"))
     var o = ServiceOptions.Production();
     if (o.DnsRegistry is { } registry)
         new DnsClientPolicy(registry, new ChangeJournal(o.JournalPath)).Restore();
+    if (o.LoopbackStore is { } loopback)
+        new LoopbackExemption(loopback, new ChangeJournal(o.JournalPath)).Restore();
+    // Фильтры kill switch откатывать не нужно: они исчезли вместе с процессом службы (ADR-021).
     Console.WriteLine("Системные настройки, изменённые службой Тропы, восстановлены.");
     return 0;
 }
@@ -54,10 +57,28 @@ internal static class ServiceInstaller
             return Sc("start", IpcProtocol.ServiceName);
         }
 
-        Sc("stop", IpcProtocol.ServiceName);
+        StopAndWait();
         using (var rollback = Process.Start(new ProcessStartInfo(exe, "--rollback-all") { UseShellExecute = false }))
             rollback?.WaitForExit(30_000);
         return Sc("delete", IpcProtocol.ServiceName);
+    }
+
+    /// <summary>Останавливает службу и ждёт остановки: иначе установщик не сможет заменить её файлы.</summary>
+    private static void StopAndWait()
+    {
+        try
+        {
+            using var sc = new System.ServiceProcess.ServiceController(IpcProtocol.ServiceName);
+            if (sc.Status != System.ServiceProcess.ServiceControllerStatus.Stopped)
+            {
+                sc.Stop();
+                sc.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ServiceProcess.TimeoutException or System.ComponentModel.Win32Exception)
+        {
+            // Службы нет или она не остановилась — дальше sc delete пометит её на удаление.
+        }
     }
 
     private static int Sc(params string[] args)

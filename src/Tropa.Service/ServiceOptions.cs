@@ -38,6 +38,10 @@ internal sealed record ServiceOptions
     public string GeoDirectory => Path.Combine(DataDirectory, "geo");
     public string RunDirectory => Path.Combine(DataDirectory, "run");
     public string JournalPath => Path.Combine(DataDirectory, "journal.json");
+    public string UpdatesDirectory => Path.Combine(DataDirectory, "updates");
+
+    /// <summary>Настройки обновлений (в тестах — свой ключ).</summary>
+    public Infrastructure.Updates.UpdateConfig Updates { get; init; } = Infrastructure.Updates.UpdateConfig.Embedded;
 
     public static bool IsPrivileged()
     {

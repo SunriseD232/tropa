@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Инструмент владельца: ключ подписи, сборка и подпись манифеста обновлений. В программу не входит. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>tropa-release</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Tropa.Core/Tropa.Core.csproj" />
+  </ItemGroup>
+</Project>

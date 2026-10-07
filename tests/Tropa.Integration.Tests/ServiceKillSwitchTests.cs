@@ -36,6 +36,7 @@ public sealed class ServiceKillSwitchTests : IAsyncLifetime
     private readonly string _pipe = "Tropa.Test." + Guid.NewGuid().ToString("N");
     private readonly CancellationTokenSource _cts = new();
     private readonly List<FakeKillSwitch> _switches = [];
+    private readonly System.Security.Cryptography.ECDsa _updateKey = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
     private PipeServer? _server;
 
     private static string Self => Environment.ProcessPath!;
@@ -78,6 +79,8 @@ public sealed class ServiceKillSwitchTests : IAsyncLifetime
                 return ks;
             },
             FindTunLuid = _ => Task.FromResult<ulong?>(42),
+            Updates = new Infrastructure.Updates.UpdateConfig("https://updates.example/manifest.json",
+                Convert.ToBase64String(_updateKey.ExportSubjectPublicKeyInfo()), 0),
         }, NullLogger<PipeServer>.Instance);
         await _server.StartAsync(_cts.Token);
     }
@@ -92,12 +95,14 @@ public sealed class ServiceKillSwitchTests : IAsyncLifetime
         }
 
         _cts.Dispose();
+        _updateKey.Dispose();
         try
         {
             _work.Delete(recursive: true);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // Ядро ещё завершается и держит свой exe — временный каталог уберёт система.
         }
     }
 
@@ -191,6 +196,48 @@ public sealed class ServiceKillSwitchTests : IAsyncLifetime
         Assert.True((await client.SendAsync(Start(client, FreePort(), killSwitch: false), ct)).Ok);
         Assert.Empty(_switches);
         await client.SendAsync(new StopRequest(), ct);
+    }
+
+    [Fact]
+    public async Task Signed_update_is_installed_and_used_for_next_start()
+    {
+        if (!CoresPresent)
+            Assert.Skip("Ядра не скачаны");
+        var ct = TestContext.Current.CancellationToken;
+        var tools = Path.Combine(RepoRoot(), "tools");
+        var now = DateTimeOffset.UtcNow;
+        var manifest = System.Text.Encoding.UTF8.GetBytes(new System.Text.Json.Nodes.JsonObject
+        {
+            ["schema"] = 1,
+            ["sequence"] = 3,
+            ["issued"] = now.ToString("o"),
+            ["expires"] = now.AddDays(30).ToString("o"),
+            ["cores"] = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(tools, "cores.lock.json"))),
+            ["geo"] = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(tools, "geo.lock.json"))),
+        }.ToJsonString());
+        var sig = Core.Updates.ManifestSignature.Sign(manifest, _updateKey);
+        var empty = Directory.CreateDirectory(Path.Combine(_work.FullName, "download")).FullName;
+
+        await using (var client = (await Connect())!)
+        {
+            Assert.Equal(0, client.UpdateSequence);
+            // Подделка: подпись от другого ключа.
+            using var evil = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+            var bad = await client.SendAsync(new InstallUpdateRequest(Convert.ToBase64String(manifest),
+                Convert.ToBase64String(Core.Updates.ManifestSignature.Sign(manifest, evil)), empty), ct);
+            Assert.False(bad.Ok);
+            Assert.Contains("Подпись", bad.Error, StringComparison.Ordinal);
+
+            var ok = await client.SendAsync(new InstallUpdateRequest(Convert.ToBase64String(manifest), Convert.ToBase64String(sig), empty), ct);
+            Assert.True(ok.Ok, ok.Error);
+        }
+
+        await using var again = (await Connect())!;
+        Assert.Equal(3, again.UpdateSequence);
+        Assert.Contains(Path.Combine("updates", "3", "cores"), again.XrayPath, StringComparison.OrdinalIgnoreCase);
+        var reply = await again.SendAsync(Start(again, FreePort(), killSwitch: false), ct);
+        Assert.True(reply.Ok, reply.Error);
+        await again.SendAsync(new StopRequest(), ct);
     }
 
     [Fact]

@@ -202,7 +202,7 @@ internal sealed partial class DiagnosticsViewModel : ObservableObject
         var input = new ReportInput
         {
             AppVersion = typeof(DiagnosticsViewModel).Assembly.GetName().Version?.ToString(3) ?? "?",
-            CoreVersions = $"sing-box {PinnedFiles.Cores.Get("sing-box").Version}, Xray {PinnedFiles.Cores.Get("xray").Version}",
+            CoreVersions = _engine.CoreVersions,
             WindowsVersion = Environment.OSVersion.VersionString,
             Settings = _engine.State.Settings,
             Profiles = _engine.State.Profiles.Select(p => p.Profile).ToList(),

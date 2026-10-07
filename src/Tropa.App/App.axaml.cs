@@ -21,6 +21,9 @@ internal sealed partial class App : Application
 
     public static bool StartMinimized { get; set; }
 
+    /// <summary>Запуск из автозагрузки Windows: окно по настройке startMin, подключение по autoconnect.</summary>
+    public static bool FromAutostart { get; set; }
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
@@ -39,8 +42,12 @@ internal sealed partial class App : Application
             desktop.ShutdownRequested += (_, _) => ShutdownEngine();
             AppDomain.CurrentDomain.ProcessExit += (_, _) => ShutdownEngine();
 
-            if (!StartMinimized)
+            SyncAutostart();
+            var settings = _engine.State.Settings.General;
+            if (!(StartMinimized || (FromAutostart && settings.StartMin)))
                 _window.Show();
+            if (FromAutostart && settings.Autoconnect && _engine.State.ActiveProfile is not null)
+                _ = AutoconnectAsync(_engine, settings.WaitNet);
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -98,6 +105,34 @@ internal sealed partial class App : Application
             ConnectionState.Error => (LoadIcon("tray-error.ico"), "Тропа — ошибка подключения", "Подключить"),
             _ => (LoadIcon("tray-off.ico"), "Тропа — отключено", "Подключить"),
         };
+    }
+
+    /// <summary>Автозагрузка следует настройке autostart; только у установленной копии.</summary>
+    private void SyncAutostart()
+    {
+        var exe = Environment.ProcessPath;
+        if (_engine is null || exe is null || !Infrastructure.SystemIntegration.Autostart.IsInstalledCopy(exe))
+            return;
+        try
+        {
+            new Infrastructure.SystemIntegration.Autostart(new Infrastructure.SystemIntegration.RegistryRunKey()).Sync(_engine.State.Settings.General.Autostart, exe);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+        }
+    }
+
+    /// <summary>После входа в Windows сеть появляется не сразу: ждём её до 30 секунд (waitNet), затем подключаемся.</summary>
+    private static async Task AutoconnectAsync(TropaEngine engine, bool waitNet)
+    {
+        if (waitNet)
+        {
+            for (var i = 0; i < 30 && !System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable(); i++)
+                await Task.Delay(1000);
+        }
+
+        await engine.AttachServiceAsync();
+        await engine.ConnectAsync();
     }
 
     private void ShowWindow()

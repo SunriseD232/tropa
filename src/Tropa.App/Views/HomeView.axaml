@@ -130,7 +130,30 @@
           <StackPanel Spacing="8">
             <TextBlock Classes="lbl" Text="КАК ЭТО РАБОТАЕТ СЕЙЧАС" />
             <TextBlock Classes="muted" Text="{Binding HowItWorks}" />
-            <TextBlock Classes="muted" Text="Ключи серверов хранятся зашифрованными, ядро sing-box запускается только после проверки его контрольной суммы." />
+            <TextBlock Classes="muted" Text="Ключи серверов хранятся зашифрованными, ядра запускаются только после проверки их контрольной суммы." />
+          </StackPanel>
+        </Border>
+        <Border Classes="card" DataContext="{Binding Updates}" x:DataType="vm:UpdatesViewModel">
+          <StackPanel Spacing="8">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Проверить" Command="{Binding CheckCommand}" IsVisible="{Binding Enabled}" />
+              <TextBlock Classes="lbl" Text="ВЕРСИИ И ОБНОВЛЕНИЯ" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Classes="muted" Text="{Binding Versions}" TextWrapping="Wrap" />
+            <DockPanel IsVisible="{Binding CoresOffer, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <Button DockPanel.Dock="Right" Classes="primary" Content="Обновить" Command="{Binding InstallCoresCommand}" Margin="8,0,0,0" />
+              <TextBlock Text="{Binding CoresOffer}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+            <DockPanel IsVisible="{Binding AppOffer, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <Button DockPanel.Dock="Right" Classes="primary" Content="Установить" Command="{Binding InstallAppCommand}" Margin="8,0,0,0" />
+              <TextBlock Text="{Binding AppOffer}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Classes="muted" Classes.err="{Binding StatusIsError}"
+                       IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <TextBlock.Styles>
+                <Style Selector="TextBlock.err"><Setter Property="Foreground" Value="{StaticResource BadFg}" /></Style>
+              </TextBlock.Styles>
+            </TextBlock>
           </StackPanel>
         </Border>
       </StackPanel>

@@ -104,6 +104,11 @@ public sealed record CoreSettings
     public bool GeoViaProxy { get; init; } = true;
     public string AppChannel { get; init; } = "stable";
     public bool AppCheck { get; init; } = true;
+
+    /// <summary>Самый новый номер манифеста обновлений, который Тропа уже видела (защита от отката).</summary>
+    public long LastManifestSequence { get; init; }
+
+    public DateTimeOffset? LastUpdateCheck { get; init; }
 }
 
 public sealed record ExpertSettings

@@ -21,6 +21,7 @@ internal sealed partial class HomeViewModel : ObservableObject
     {
         _engine = engine;
         _info = info;
+        Updates = new UpdatesViewModel(engine);
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateClock());
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => OnStatus(s));
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(Refresh);
@@ -36,6 +37,8 @@ internal sealed partial class HomeViewModel : ObservableObject
         Refresh();
         OnStatus(engine.Status);
     }
+
+    public UpdatesViewModel Updates { get; }
 
     [ObservableProperty]
     public partial string StateText { get; set; } = "Подключить";

@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 # Минимальные права токена (docs/02-security.md, §3.9)
@@ -42,3 +43,20 @@ jobs:
 
       - name: Test
         run: dotnet test Tropa.slnx --no-build -c Release
+
+      # Выпуск по тегу v*: самодостаточная программа, установщик (Inno Setup есть в образе windows-latest)
+      # и SHA256SUMS. Манифест обновлений здесь НЕ подписывается: закрытый ключ только у владельца (docs/10-release.md).
+      - name: Build release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: powershell
+        run: ./tools/build-release.ps1 -SkipTests
+
+      - name: Upload release artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tropa-release
+          path: |
+            out/Tropa-*-setup.exe
+            out/SHA256SUMS.txt
+          if-no-files-found: error

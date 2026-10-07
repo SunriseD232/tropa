@@ -14,8 +14,12 @@ internal sealed class PlaceholderViewModel(string title, string text)
 
 internal sealed partial class MainWindowViewModel : ObservableObject
 {
+    private readonly TropaEngine _engine;
+
     public MainWindowViewModel(TropaEngine engine)
     {
+        _engine = engine;
+        engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(CoreVersions)));
         Info = new InfoViewModel();
         Import = new ImportViewModel(engine, Info);
         Home = new HomeViewModel(engine, Info);
@@ -54,8 +58,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public bool IsDiagnostics => CurrentPage == Diagnostics;
     public bool IsSettings => CurrentPage == Settings;
 
-    public static string CoreVersions =>
-        $"sing-box {Infrastructure.Cores.PinnedFiles.Cores.Get("sing-box").Version} · Xray {Infrastructure.Cores.PinnedFiles.Cores.Get("xray").Version}";
+    public string CoreVersions => _engine.CoreVersions;
 
     [RelayCommand]
     private void Navigate(string page) => CurrentPage = page switch

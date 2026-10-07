@@ -14,6 +14,8 @@ using Tropa.Infrastructure.Service;
 using Tropa.Infrastructure.Storage;
 using Tropa.Infrastructure.SystemIntegration;
 using Tropa.Infrastructure.Testing;
+using Tropa.Infrastructure.Updates;
+using Tropa.Core.Updates;
 
 namespace Tropa.Infrastructure;
 
@@ -33,6 +35,7 @@ public sealed record EnginePaths(string Roaming, string Local)
     public string RunDirectory => Path.Combine(Local, "run");
     public string JournalPath => Path.Combine(Local, "journal.json");
     public string LogDirectory => Path.Combine(Local, "logs");
+    public string UpdatesDirectory => Path.Combine(Local, "updates");
 }
 
 /// <summary>
@@ -45,7 +48,7 @@ public sealed class TropaEngine : IAsyncDisposable
     private readonly StateStore _store;
     private readonly SecretStore _secrets;
     private readonly SystemProxy _systemProxy;
-    private readonly CoreLocations _locations;
+    private CoreLocations _locations;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Func<DateTimeOffset> _now;
 
@@ -183,7 +186,9 @@ public sealed class TropaEngine : IAsyncDisposable
         var loaded = store.Load();
         var journal = new ChangeJournal(paths.JournalPath);
         var systemProxy = new SystemProxy(proxyStore ?? new RegistryProxySettingsStore(), journal);
-        var engine = new TropaEngine(paths, store, loaded, systemProxy, locations ?? CoreLocations.Default(), now ?? (() => DateTimeOffset.Now),
+        // Установленное обновление ядер (если есть и подпись верна) новее файлов программы.
+        var effectiveLocations = locations ?? new UpdateStore(paths.UpdatesDirectory, UpdateConfig.Embedded).Load(CoreLocations.Default());
+        var engine = new TropaEngine(paths, store, loaded, systemProxy, effectiveLocations, now ?? (() => DateTimeOffset.Now),
             connectService ?? (_ => Task.FromResult<ServiceClient?>(null)));
 
         // Откат после сбоя: если в журнале остались наши изменения, возвращаем систему в исходное состояние.
@@ -439,6 +444,116 @@ public sealed class TropaEngine : IAsyncDisposable
         }
     }
 
+    // ---------------- Обновления ----------------
+
+    /// <summary>Версии ядер, которые реально запускаются: у службы свои файлы.</summary>
+    public string CoreVersions => _service is { IsConnected: true, CoreVersions: { } v } ? v : _locations.Versions;
+
+    public static Version AppVersion => typeof(TropaEngine).Assembly.GetName().Version ?? new Version(0, 1, 0);
+
+    public UpdateConfig Updates { get; init; } = UpdateConfig.Embedded;
+
+    /// <summary>
+    /// Через подключение, если оно есть и так задано в настройках (geoViaProxy): сервер обновлений
+    /// на GitHub в России может открываться плохо. Иначе напрямую.
+    /// </summary>
+    private HttpClient UpdateHttp()
+    {
+        var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(15) };
+        if (Status.State == ConnectionState.Connected && State.Settings.Cores.GeoViaProxy && _mixedPort > 0)
+        {
+            handler.UseProxy = true;
+            handler.Proxy = new WebProxy($"socks5://127.0.0.1:{_mixedPort}") { Credentials = new NetworkCredential(Auth.Username, Auth.Password) };
+        }
+        else
+        {
+            handler.UseProxy = false;
+        }
+
+        var http = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(5) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Tropa/" + AppVersion.ToString(3));
+        return http;
+    }
+
+    private CoreLocations CurrentLocations => _service is { IsConnected: true } service
+        ? _locations with { Sequence = service.UpdateSequence }
+        : _locations;
+
+    /// <summary>Проверка обновлений по подписанному манифесту. Ничего не скачивает, кроме манифеста.</summary>
+    public async Task<UpdateCheck> CheckUpdatesAsync(CancellationToken ct = default)
+    {
+        using var http = UpdateHttp();
+        var check = await new UpdateClient(http, Updates).CheckAsync(CurrentLocations, AppVersion,
+            State.Settings.Cores.LastManifestSequence, _now(), ct).ConfigureAwait(false);
+        UpdateSettings(s => s with { Cores = s.Cores with { LastManifestSequence = check.Manifest.Manifest.Sequence, LastUpdateCheck = _now() } });
+        return check;
+    }
+
+    /// <summary>
+    /// Скачивает и устанавливает новые ядра и наборы правил. Со службой — её каталог (она проверяет всё
+    /// заново), без службы — свой. Новые версии начинают работать со следующего подключения.
+    /// </summary>
+    public async Task InstallCoreUpdateAsync(UpdateCheck check, IProgress<string>? progress, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(check);
+        var m = check.Manifest;
+        var work = Path.Combine(_paths.Local, "update-download", m.Manifest.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        try
+        {
+            if (Directory.Exists(work))
+                Directory.Delete(work, recursive: true);
+            using (var http = UpdateHttp())
+                await new UpdateClient(http, Updates).DownloadFilesAsync(m.Manifest, CurrentLocations, work, progress, ct).ConfigureAwait(false);
+
+            progress?.Report("Устанавливаю…");
+            await AttachServiceAsync(ct).ConfigureAwait(false);
+            if (_service is { IsConnected: true } service)
+            {
+                var reply = await service.SendAsync(new Ipc.InstallUpdateRequest(Convert.ToBase64String(m.Bytes), Convert.ToBase64String(m.Signature), work), ct).ConfigureAwait(false);
+                if (!reply.Ok)
+                    throw new ServiceException(reply.Error ?? "Служба не установила обновление.");
+                // Версии у службы поменялись — переподключаемся к ней, чтобы узнать новые.
+                await ReattachServiceAsync(ct).ConfigureAwait(false);
+            }
+
+            // Свой каталог обновляем всегда: без службы (или если её удалят) работают эти файлы.
+            if (m.Manifest.Sequence > _locations.Sequence)
+                _locations = new UpdateStore(_paths.UpdatesDirectory, Updates).Install(m.Bytes, m.Signature, work, _locations);
+            Log?.Invoke(this, "Обновление установлено: " + CoreVersions);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(work))
+                    Directory.Delete(work, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+
+        ServiceChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private async Task ReattachServiceAsync(CancellationToken ct)
+    {
+        if (_runningViaService || _service is null)
+            return; // во время подключения связь не рвём: новые версии узнаем при следующем запуске
+        var old = _service;
+        old.Disconnected -= OnServiceDisconnected;
+        _service = null;
+        await old.DisposeAsync().ConfigureAwait(false);
+        await AttachServiceAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Скачивает установщик новой версии (SHA-256 сверяется с манифестом) и возвращает путь к нему.</summary>
+    public async Task<string> DownloadAppUpdateAsync(AppRelease app, CancellationToken ct = default)
+    {
+        using var http = UpdateHttp();
+        return await new UpdateClient(http, Updates).DownloadInstallerAsync(app, Path.Combine(_paths.Local, "update-download"), ct).ConfigureAwait(false);
+    }
+
     // ---------------- Диагностика ----------------
 
     private DiagnosticsInput DiagnosticsInputNow() => new()
@@ -570,8 +685,8 @@ public sealed class TropaEngine : IAsyncDisposable
         var ruleSetDirectory = service?.RuleSetDirectory ?? _paths.GeoDirectory;
         if (service is null)
         {
-            PinnedFiles.EnsureGeoInstalled(_locations.GeoSourceDirectory, _paths.GeoDirectory);
-            PinnedFiles.VerifyGeo(_paths.GeoDirectory);
+            PinnedFiles.EnsureGeoInstalled(_locations.Geo, _locations.GeoSourceDirectory, _paths.GeoDirectory);
+            PinnedFiles.VerifyGeo(_locations.Geo, _paths.GeoDirectory);
         }
 
         var clashPort = ServerTester.FreePort();
@@ -853,6 +968,26 @@ public sealed class TropaEngine : IAsyncDisposable
         {
             Blocking = status.Blocking;
             ServiceChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        if (status.State == Ipc.ServiceState.Idle && _runningViaService && status.Message is not null)
+        {
+            // Службу остановили извне (аварийный откат из меню «Пуск»): мы тоже отключены.
+            _ = Task.Run(async () =>
+            {
+                await _gate.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    _runningViaService = false;
+                    await StopCoreAsync(sendStop: false).ConfigureAwait(false);
+                    SetStatus(new ConnectionStatus(ConnectionState.Disconnected, status.Message));
+                }
+                finally
+                {
+                    _gate.Release();
+                }
+            });
+            return;
         }
 
         if (status.State != Ipc.ServiceState.Failed || !_runningViaService)

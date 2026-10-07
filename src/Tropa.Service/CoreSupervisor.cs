@@ -25,8 +25,38 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
     private DnsClientPolicy? _dnsPolicy;
     private LoopbackExemption? _loopback;
     private IKillSwitch? _killSwitch;
+    private List<string> _killSwitchApps = [];
 
     public StatusEvent Status { get; private set; } = new(ServiceState.Idle, null, null);
+
+    private CoreLocations? _locations;
+
+    /// <summary>Файлы ядер и правил: последнее установленное обновление или файлы установщика.</summary>
+    public CoreLocations Locations => _locations ??= new Infrastructure.Updates.UpdateStore(options.UpdatesDirectory, options.Updates).Load(options.Cores);
+
+    /// <summary>Устанавливает обновление ядер и правил. Применяется при следующем подключении.</summary>
+    public async Task<string?> InstallUpdateAsync(InstallUpdateRequest request)
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (!Path.IsPathFullyQualified(request.FilesDirectory) || !Directory.Exists(request.FilesDirectory))
+                return "Каталог с файлами обновления не найден.";
+            PrepareDirectories();
+            _locations = new Infrastructure.Updates.UpdateStore(options.UpdatesDirectory, options.Updates).Install(
+                Convert.FromBase64String(request.ManifestBase64), Convert.FromBase64String(request.SignatureBase64), request.FilesDirectory, Locations);
+            onLog($"Установлено обновление №{_locations.Sequence}: {_locations.Versions}. Применится при следующем подключении.");
+            return null;
+        }
+        catch (Exception ex) when (ex is IntegrityException or InvalidDataException or IOException or UnauthorizedAccessException or FormatException or InvalidOperationException)
+        {
+            return ex.Message;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 
     /// <summary>Откат изменений, оставшихся после аварийного завершения службы.</summary>
     public void RecoverAfterCrash()
@@ -82,15 +112,25 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
 
             SetStatus(new StatusEvent(ServiceState.Starting, null, null));
             PrepareDirectories();
-            PinnedFiles.EnsureGeoInstalled(options.Cores.GeoSourceDirectory, options.GeoDirectory);
-            PinnedFiles.VerifyGeo(options.GeoDirectory);
+            PinnedFiles.EnsureGeoInstalled(Locations.Geo, Locations.GeoSourceDirectory, options.GeoDirectory);
+            PinnedFiles.VerifyGeo(Locations.Geo, options.GeoDirectory);
 
             _request = request;
             _scrubber = new SecretScrubber(ExtractSecrets(request.SingBoxConfig).Concat(request.XrayConfig is { } xc ? ExtractSecrets(xc) : []));
             _restarts.Clear();
             // Блокировка включается ДО запуска ядра: ядра в ней разрешены по пути к exe.
             if (wantKillSwitch)
-                _killSwitch ??= options.KillSwitchFactory!(AllowedApps(), request.KillSwitchAllowLan);
+            {
+                // Пути к ядрам могли смениться после обновления: новую блокировку ставим раньше, чем снимаем старую.
+                var apps = AllowedApps();
+                if (_killSwitch is null || !apps.SequenceEqual(_killSwitchApps))
+                {
+                    var fresh = options.KillSwitchFactory!(apps, request.KillSwitchAllowLan);
+                    _killSwitch?.Dispose();
+                    _killSwitch = fresh;
+                    _killSwitchApps = apps;
+                }
+            }
             else
                 DisposeKillSwitch();
             await LaunchAsync(ct).ConfigureAwait(false);
@@ -165,7 +205,7 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
     }
 
     private List<string> AllowedApps() =>
-        [CoreProcess.ExecutablePath(options.Cores, "sing-box"), CoreProcess.ExecutablePath(options.Cores, "xray")];
+        [CoreProcess.ExecutablePath(Locations, "sing-box"), CoreProcess.ExecutablePath(Locations, "xray")];
 
     private void DisposeKillSwitch()
     {
@@ -188,12 +228,12 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         // Xray первым: sing-box сразу отправляет в него трафик гибридных серверов.
         if (request.XrayConfig is { } xrayConfig)
         {
-            _xray = await CoreProcess.StartXrayAsync(options.Cores, xrayConfig, request.XrayReadinessPort,
+            _xray = await CoreProcess.StartXrayAsync(Locations, xrayConfig, request.XrayReadinessPort,
                 options.RunDirectory, _scrubber, onLog, ct).ConfigureAwait(false);
             _xray.Exited += OnCoreExited;
         }
 
-        _core = await CoreProcess.StartSingBoxAsync(options.Cores, request.SingBoxConfig, request.ReadinessPort,
+        _core = await CoreProcess.StartSingBoxAsync(Locations, request.SingBoxConfig, request.ReadinessPort,
             options.RunDirectory, _scrubber, onLog, ct).ConfigureAwait(false);
         _core.Exited += OnCoreExited;
 
