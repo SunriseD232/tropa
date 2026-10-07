@@ -131,6 +131,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
 
     private SettingsSection General() => new("general", "Общие", null,
     [
+        new ActionRow("Автонастройка", "autoSetup", "Включает рекомендуемые значения всех базовых пунктов. Правила, серверы, тема и горячая клавиша не меняются.",
+            ("Включить рекомендуемые", new RelayCommand(ApplyRecommended))),
         new ToggleRow("Запускать вместе с Windows", "autostart", s => s.General.Autostart, (s, v) =>
         {
             SyncAutostart(v);
@@ -293,6 +295,13 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new ActionRow("Сбросить экспертные настройки", "genConfig", null,
             ("Сбросить", new RelayCommand(() => Commit(s => s with { Expert = new ExpertSettings() })))),
     ]);
+
+    private void ApplyRecommended()
+    {
+        Commit(RecommendedSettings.Apply);
+        SyncAutostart(true);
+        Report("Включены рекомендуемые настройки." + (_engine.Status.State == ConnectionState.Connected ? " Нажмите «Применить сейчас», чтобы они заработали." : ""));
+    }
 
     private void ShowConfig()
     {

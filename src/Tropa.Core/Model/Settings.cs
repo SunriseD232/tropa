@@ -39,6 +39,9 @@ public sealed record GeneralSettings
 
     /// <summary>Мастер первого запуска пройден или пропущен.</summary>
     public bool OnboardingDone { get; init; }
+
+    /// <summary>Вопрос «Настроить автоматически?» уже задан при запуске.</summary>
+    public bool AutoSetupAsked { get; init; }
 }
 
 public sealed record ConnectionSettings

@@ -8,8 +8,9 @@ using Tropa.Infrastructure.Testing;
 namespace Tropa.App.ViewModels;
 
 /// <summary>
-/// Первый запуск (docs/06-features.md, §1): шаг 1 — подписка, шаг 2 — режим и автозапуск,
-/// шаг 3 — проверка серверов и подключение к лучшему. Можно пропустить на любом шаге.
+/// Первый запуск (docs/06-features.md, §1). Шаг 0 — «Настроить автоматически?»: при согласии
+/// включаются рекомендуемые настройки, и после вставки ссылки Тропа сама проверяет серверы и
+/// подключается. Иначе: шаг 1 — подписка, шаг 2 — режим и автозапуск, шаг 3 — подключение.
 /// </summary>
 internal sealed partial class OnboardingViewModel : ObservableObject
 {
@@ -20,17 +21,21 @@ internal sealed partial class OnboardingViewModel : ObservableObject
     {
         _engine = engine;
         _info = info;
-        IsOpen = engine.State.Profiles.Count == 0 && !engine.State.Settings.General.OnboardingDone;
-        Autostart = engine.State.Settings.General.Autostart;
+        var g = engine.State.Settings.General;
+        // Об автонастройке спрашиваем при запуске всегда, пока не ответили; мастер — пока нет серверов.
+        IsOpen = !g.AutoSetupAsked || (engine.State.Profiles.Count == 0 && !g.OnboardingDone);
+        Step = g.AutoSetupAsked ? 1 : 0;
+        Autostart = g.Autostart;
     }
 
     [ObservableProperty]
     public partial bool IsOpen { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsStep1), nameof(IsStep2), nameof(IsStep3))]
+    [NotifyPropertyChangedFor(nameof(IsStep0), nameof(IsStep1), nameof(IsStep2), nameof(IsStep3))]
     public partial int Step { get; set; } = 1;
 
+    public bool IsStep0 => Step == 0;
     public bool IsStep1 => Step == 1;
     public bool IsStep2 => Step == 2;
     public bool IsStep3 => Step == 3;
@@ -52,6 +57,48 @@ internal sealed partial class OnboardingViewModel : ObservableObject
     public partial bool Autostart { get; set; }
 
     public bool TunAvailable => _engine.TunAvailable;
+
+    /// <summary>Выбрана автонастройка: после ссылки сразу подключаемся, без шага 2.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Subtitle), nameof(AddLabel))]
+    public partial bool Auto { get; set; }
+
+    public string Subtitle => Auto
+        ? "Настройки включены. Осталось вставить ссылку — Тропа сама найдёт быстрый сервер и подключится."
+        : "Три шага — и всё работает. Все настройки потом можно поменять.";
+
+    public string AddLabel => Auto ? "Добавить и подключиться" : "Добавить";
+
+    [RelayCommand]
+    private void ChooseAuto()
+    {
+        Auto = true;
+        _engine.UpdateSettings(s =>
+        {
+            var r = RecommendedSettings.Apply(s);
+            return r with { General = r.General with { AutoSetupAsked = true } };
+        });
+        SettingsViewModel.SyncAutostart(true);
+        if (_engine.State.Profiles.Count > 0)
+        {
+            Message = null;
+            Finish();
+            return;
+        }
+
+        Step = 1;
+    }
+
+    [RelayCommand]
+    private void ChooseManual()
+    {
+        Auto = false;
+        _engine.UpdateSettings(s => s with { General = s.General with { AutoSetupAsked = true } });
+        if (_engine.State.Profiles.Count > 0)
+            Finish();
+        else
+            Step = 1;
+    }
 
     public string ModeNote => _engine.TunAvailable
         ? "Рекомендуется: через Тропу идут все программы, включая игры и голос Discord."
@@ -90,6 +137,15 @@ internal sealed partial class OnboardingViewModel : ObservableObject
             ModeTun = _engine.TunAvailable;
             OnPropertyChanged(nameof(TunAvailable));
             OnPropertyChanged(nameof(ModeNote));
+            if (Auto)
+            {
+                // Автонастройка: всё уже включено — проверяем серверы и подключаемся.
+                Step = 3;
+                Busy = false;
+                await ConnectAsync();
+                return;
+            }
+
             Step = 2;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or IOException or InvalidDataException)
@@ -148,7 +204,7 @@ internal sealed partial class OnboardingViewModel : ObservableObject
     [RelayCommand]
     private void Finish()
     {
-        _engine.UpdateSettings(s => s with { General = s.General with { OnboardingDone = true } });
+        _engine.UpdateSettings(s => s with { General = s.General with { OnboardingDone = true, AutoSetupAsked = true } });
         IsOpen = false;
     }
 

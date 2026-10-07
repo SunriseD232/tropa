@@ -65,19 +65,32 @@
             <Button DockPanel.Dock="Right" Content="Пропустить" Command="{Binding Onboarding.FinishCommand}" />
             <StackPanel Spacing="4">
               <TextBlock Classes="h1" Text="Добро пожаловать в Тропу" />
-              <TextBlock Classes="muted" Text="Три шага — и всё работает. Все настройки потом можно поменять." />
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding Onboarding.Subtitle}" />
             </StackPanel>
           </DockPanel>
+
+          <StackPanel Spacing="12" IsVisible="{Binding Onboarding.IsStep0}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Настроить Тропу автоматически?" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding Onboarding.ShowInfoCommand}" CommandParameter="autoSetup" />
+            </StackPanel>
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Тропа включит рекомендуемые настройки: весь компьютер через Тропу, запуск вместе с Windows и автоподключение, выбор самого быстрого сервера, российские сайты напрямую, защита DNS и мягкий обход замедления YouTube. Вам останется только вставить ссылку от продавца VPN. Всё можно поменять потом в «Настройках»." />
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Content="Нет, настрою сам" Command="{Binding Onboarding.ChooseManualCommand}" />
+              <Button Classes="primary" Content="Да, настроить автоматически" Command="{Binding Onboarding.ChooseAutoCommand}" />
+            </StackPanel>
+          </StackPanel>
 
           <StackPanel Spacing="10" IsVisible="{Binding Onboarding.IsStep1}">
             <StackPanel Orientation="Horizontal" Spacing="8">
               <TextBlock Text="1. Ссылка подписки" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" />
               <Button Classes="info" Command="{Binding Onboarding.ShowInfoCommand}" CommandParameter="subscription" />
             </StackPanel>
-            <TextBlock Classes="muted" Text="Её даёт продавец VPN: адрес https://… или ссылки vless://, vmess://, trojan://." />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="Её даёт продавец VPN: адрес https://… или ссылки vless://, vmess://, trojan://, ss://, hysteria2://." />
             <TextBox Text="{Binding Onboarding.Text}" AcceptsReturn="True" TextWrapping="Wrap" Height="90"
                      FontFamily="{StaticResource Mono}" PlaceholderText="https://… или vless://…" />
-            <Button Classes="primary" Content="Добавить" Command="{Binding Onboarding.ImportCommand}" HorizontalAlignment="Right" />
+            <Button Classes="primary" Content="{Binding Onboarding.AddLabel}" Command="{Binding Onboarding.ImportCommand}" HorizontalAlignment="Right" />
           </StackPanel>
 
           <StackPanel Spacing="10" IsVisible="{Binding Onboarding.IsStep2}">

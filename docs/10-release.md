@@ -13,9 +13,9 @@ dotnet run --project tools/Tropa.Release -- keygen --out "$env:USERPROFILE\Tropa
 - Программа спросит пароль (не короче 12 символов). Ключ сохраняется зашифрованным (PKCS#8, AES-256, 600 000 итераций).
 - Сделайте копию файла и пароля на флешку или в менеджер паролей. **Без ключа нельзя выпустить обновление**, а новый ключ старые копии Тропы не примут: тогда друзьям придётся вручную поставить новую версию.
 - Напечатанный публичный ключ вставьте в `tools/update.config.json` → `publicKey`.
-- В `manifestUrl` укажите постоянный адрес манифеста, например
-  `https://github.com/<владелец>/<репозиторий>/releases/latest/download/manifest.json`.
-  Подпись лежит рядом: тот же адрес + `.sig`.
+- `manifestUrl` уже указан: `https://github.com/sunrised23292/tropa/releases/latest/download/manifest.json`.
+  Подпись лежит рядом: тот же адрес + `.sig`. **Выпуски должны быть доступны без входа в GitHub**
+  (публичный репозиторий): иначе Тропа у друзей не сможет скачать ни манифест, ни установщик.
 
 Пока `publicKey` или `manifestUrl` пустые, обновления в сборке выключены (карточка на главной так и пишет).
 
@@ -24,8 +24,8 @@ dotnet run --project tools/Tropa.Release -- keygen --out "$env:USERPROFILE\Tropa
 1. Поднять `Version` в `Directory.Build.props`.
 2. Номер манифеста `N` = предыдущий + 1. Записать его в `tools/update.config.json` → `bundledSequence`
    (установщик с этим номером не будет брать более старые обновления).
-3. Собрать: `powershell -ExecutionPolicy Bypass -File tools/build-release.ps1`
-   (или тег `vX.Y.Z` → CI соберёт установщик и `SHA256SUMS.txt`).
+3. Собрать: тег `vX.Y.Z` → CI соберёт установщик и `SHA256SUMS.txt` и положит их в **черновик** выпуска
+   на GitHub. Локально: `powershell -ExecutionPolicy Bypass -File tools/build-release.ps1` (нужен Inno Setup 6).
 4. Пройти ручной чек-лист (§4).
 5. Создать выпуск на GitHub, приложить `Tropa-X.Y.Z-setup.exe`.
 6. Манифест и подпись:
@@ -36,7 +36,8 @@ dotnet run --project tools/Tropa.Release -- keygen --out "$env:USERPROFILE\Tropa
    dotnet run --project tools/Tropa.Release -- sign --key "$env:USERPROFILE\TropaKeys\manifest-signing.pem" --in out\manifest.json
    ```
    `sign` сразу проверяет подпись публичным ключом из `tools/update.config.json`.
-7. Приложить к выпуску `manifest.json` и `manifest.json.sig`.
+7. Приложить к черновику выпуска `manifest.json` и `manifest.json.sig` и опубликовать его.
+   Ссылку на установщик из выпуска можно передавать друзьям.
 
 Только новые ядра или списки сайтов, без новой версии Тропы: обновить lock-файлы (`update-cores-lock.ps1`,
 `update-geo-lock.ps1`), прогнать тесты, выпустить манифест с новым номером без `--app-version`.
@@ -46,8 +47,11 @@ dotnet run --project tools/Tropa.Release -- keygen --out "$env:USERPROFILE\Tropa
 
 ## 3. Подпись кода (Authenticode)
 
-Пока не подписываем (ADR-025). Следствие: при первом запуске установщика Windows SmartScreen показывает
-«Windows защитила ваш компьютер» → «Подробнее» → «Выполнить в любом случае». Друзьям это нужно объяснить.
+Пока не подписываем (ADR-025, владелец согласен оставить так). Следствие: при запуске установщика,
+скачанного браузером, Windows SmartScreen показывает «Windows защитила ваш компьютер» → «Подробнее» →
+«Выполнить в любом случае». Это бывает при ручной установке (каждой новой версии, скачанной браузером);
+обновления, которые Тропа скачивает сама кнопкой «Установить», браузерной пометки не имеют и обычно
+предупреждения не вызывают. Друзьям это нужно объяснить один раз.
 Целостность обновлений от этого не страдает: их проверяет подпись манифеста.
 
 Варианты на будущее: SignPath Foundation (бесплатно для открытых проектов, нужен публичный репозиторий),

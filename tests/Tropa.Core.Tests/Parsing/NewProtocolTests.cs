@@ -211,3 +211,36 @@ public sealed class SettingsBackupTests
     public void Foreign_files_are_refused(string json) =>
         Assert.Throws<InvalidDataException>(() => SettingsBackup.Import(json, new AppSettings(), new HashSet<Guid>()));
 }
+
+public sealed class RecommendedSettingsTests
+{
+    [Fact]
+    public void Turns_on_basics_and_keeps_user_choices()
+    {
+        var rule = new Rule { Match = new RuleMatch { Processes = ["Discord.exe"] }, Tcp = RuleAction.Proxy, Udp = RuleAction.Proxy };
+        var user = new AppSettings
+        {
+            General = new GeneralSettings { Autostart = false, Autoconnect = false, Hotkey = "Ctrl+Alt+K", Theme = AppTheme.Light, KillSwitch = true },
+            Connection = new ConnectionSettings { Mode = CaptureMode.SystemProxy, AutoSelect = false, UwpLoopback = ["S-1-15-2-1"] },
+            Dns = new DnsSettings { DnsHijack = false, Hosts = "nas.lan 10.0.0.2" },
+            Routing = new RoutingSettings { Preset = RoutePreset.All, BlockQuic = false, Rules = [rule] },
+            Cores = new CoreSettings { LastManifestSequence = 7 },
+        };
+        var r = RecommendedSettings.Apply(user);
+        Assert.True(r.General.Autostart && r.General.Autoconnect && r.General.Reconnect);
+        Assert.Equal(CaptureMode.Tun, r.Connection.Mode);
+        Assert.True(r.Connection.AutoSelect);
+        Assert.True(r.Dns.DnsHijack);
+        Assert.Equal(RoutePreset.ExceptRu, r.Routing.Preset);
+        Assert.True(r.Routing.BlockQuic);
+        Assert.Equal(DpiPreset.Soft, r.Dpi.DpiPreset);
+        // Своё не трогаем.
+        Assert.Equal("Ctrl+Alt+K", r.General.Hotkey);
+        Assert.Equal(AppTheme.Light, r.General.Theme);
+        Assert.True(r.General.KillSwitch);
+        Assert.Equal(["S-1-15-2-1"], r.Connection.UwpLoopback);
+        Assert.Equal("nas.lan 10.0.0.2", r.Dns.Hosts);
+        Assert.Single(r.Routing.Rules);
+        Assert.Equal(7, r.Cores.LastManifestSequence);
+    }
+}

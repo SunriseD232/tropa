@@ -44,19 +44,41 @@ jobs:
       - name: Test
         run: dotnet test Tropa.slnx --no-build -c Release
 
-      # Выпуск по тегу v*: самодостаточная программа, установщик (Inno Setup есть в образе windows-latest)
-      # и SHA256SUMS. Манифест обновлений здесь НЕ подписывается: закрытый ключ только у владельца (docs/10-release.md).
+  # Выпуск по тегу v*: самодостаточная программа, установщик (Inno Setup есть в образе windows-latest)
+  # и SHA256SUMS — в черновик выпуска на GitHub. Права на запись — только у этой задачи.
+  # Манифест обновлений здесь НЕ подписывается: закрытый ключ только у владельца (docs/10-release.md).
+  # Владелец прикладывает manifest.json и manifest.json.sig к черновику и публикует его.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      CI: true
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore (locked)
+        run: dotnet restore Tropa.slnx --locked-mode
+
       - name: Build release
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: powershell
         run: ./tools/build-release.ps1 -SkipTests
 
-      - name: Upload release artifacts
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Draft GitHub release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          name: tropa-release
-          path: |
+          draft: true
+          fail_on_unmatched_files: true
+          files: |
             out/Tropa-*-setup.exe
             out/SHA256SUMS.txt
-          if-no-files-found: error
