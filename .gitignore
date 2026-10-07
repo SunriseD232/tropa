@@ -1,0 +1,12 @@
+# сборка
+bin/
+obj/
+artifacts/
+*.user
+.vs/
+.idea/
+TestResults/
+# ядра качаются tools/fetch-cores.ps1 по lock-файлу и не хранятся в git
+cores/
+# временные файлы генераторов макета
+design/canvas-src/__pycache__/

@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Tropa.App.Views.MainWindow"
+        Title="Тропа"
+        Width="1180" Height="760" MinWidth="900" MinHeight="600"
+        Background="#0F1215">
+  <!-- Каркас по макету: боковое меню + содержимое. Экраны появятся на этапе 2. -->
+  <Grid ColumnDefinitions="232,*">
+    <Border Grid.Column="0" Background="#14181C" BorderBrush="#232930" BorderThickness="0,0,1,0" Padding="14,20">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Тропа" FontSize="18" FontWeight="Bold" Foreground="#E6EAEE" Margin="10,4,10,20" />
+        <TextBlock Text="Главная" Foreground="#E6EAEE" Margin="12,10" />
+        <TextBlock Text="Серверы" Foreground="#A3ADB7" Margin="12,10" />
+        <TextBlock Text="Правила" Foreground="#A3ADB7" Margin="12,10" />
+        <TextBlock Text="Диагностика" Foreground="#A3ADB7" Margin="12,10" />
+        <TextBlock Text="Настройки" Foreground="#A3ADB7" Margin="12,10" />
+      </StackPanel>
+    </Border>
+    <StackPanel Grid.Column="1" Margin="36,28" Spacing="8">
+      <TextBlock Text="Главная" FontSize="26" FontWeight="Bold" Foreground="#E6EAEE" />
+      <TextBlock Text="Каркас приложения. Подключение появится на этапе 2." Foreground="#9AA4AE" />
+    </StackPanel>
+  </Grid>
+</Window>

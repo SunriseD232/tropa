@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Интерфейс (Avalonia). Работает с правами пользователя, администратора не запрашивает. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AssemblyName>Tropa</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Tropa.Core\Tropa.Core.csproj" />
+    <ProjectReference Include="..\Tropa.Infrastructure\Tropa.Infrastructure.csproj" />
+    <ProjectReference Include="..\Tropa.Ipc\Tropa.Ipc.csproj" />
+  </ItemGroup>
+</Project>

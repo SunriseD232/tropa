@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Главная</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1215}
+a{color:#7FB6FF}a:hover{color:#A9CEFF}
+.app{font-family:'Onest',system-ui,sans-serif;color:#E6EAEE;background:#0F1215;display:grid;grid-template-columns:232px 1fr;min-height:820px}
+.side{background:#14181C;border-right:1px solid #232930;padding:20px 14px;display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px;font-weight:700;font-size:18px}
+.nav{display:flex;align-items:center;gap:12px;height:44px;padding:0 12px;border-radius:10px;color:#A3ADB7;font-size:15px;border:0;background:none;font-family:inherit;text-align:left;width:100%;cursor:pointer}
+.nav:hover{background:#1C2126;color:#E6EAEE}
+.nav.on{background:#1E2A25;color:#E6EAEE}
+.side-foot{margin-top:auto;padding:12px;border-radius:12px;background:#1A1F24;font-size:13px;color:#A3ADB7;display:flex;flex-direction:column;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:#3DDC97;display:inline-block}
+.main{padding:28px 36px;display:flex;flex-direction:column;gap:20px;min-width:0}
+.h1{font-size:26px;font-weight:700;margin:0;letter-spacing:-0.01em}
+.sub{color:#9AA4AE;font-size:14px;margin:4px 0 0}
+.card{background:#171B20;border:1px solid #242A31;border-radius:16px;padding:20px}
+.lbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#8E99A4;font-weight:600;margin:0 0 10px}
+.btn{height:40px;padding:0 16px;border-radius:10px;border:1px solid #2C333B;background:#1E242A;color:#E6EAEE;font-family:inherit;font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.btn:hover{background:#252C33}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.ok{background:#173A2B;color:#7BE8B5}
+.warn{background:#3A2E14;color:#F5C76A}
+.bad{background:#3D1C1F;color:#FF9C9C}
+.info{background:#1A2A40;color:#9CC4FF}
+.seg{display:flex;background:#0F1215;border:1px solid #262C33;border-radius:12px;padding:4px;gap:4px}
+.seg button{flex:1;min-height:44px;border:0;border-radius:9px;background:none;color:#A3ADB7;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;padding:6px 10px}
+.seg button.on{background:#262E35;color:#E6EAEE}
+.cc{width:28px;height:20px;border-radius:4px;background:#2A323A;color:#C9D1D8;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.row{display:flex;align-items:center;gap:12px}
+.check{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #222830;font-size:14px}
+.check:first-of-type{border-top:0}
+select{height:44px;border-radius:10px;border:1px solid #2C333B;background:#0F1215;color:#E6EAEE;font-family:inherit;font-size:15px;padding:0 12px;width:100%}
+@media (max-width:760px){.app{grid-template-columns:1fr}.side{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid #232930;padding:10px}.brand,.side-foot{display:none}.nav{width:auto;flex:none}.main{padding:20px 16px}.cols{grid-template-columns:1fr !important}}
+</style>
+</helmet>
+<div class="app">
+  <nav class="side" aria-label="Разделы">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#3DDC97" stroke-width="2.2" stroke-linecap="round"><path d="M5 23c4-1 6-4 7-9s3-8 11-9"/><circle cx="5" cy="23" r="2" fill="#3DDC97"/><circle cx="23" cy="5" r="2" fill="#3DDC97"/></svg>
+      Тропа
+    </div>
+    <button class="nav on" aria-current="page"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Главная</button>
+    <button class="nav"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Серверы</button>
+    <button class="nav"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v6a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v6"/><path d="M6 21v-6"/><circle cx="6" cy="12" r="0.5"/></svg>Правила</button>
+    <button class="nav"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Диагностика</button>
+    <button class="nav"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Настройки</button>
+    <div class="side-foot">
+      <div class="row" style="gap: 8px; color: #E6EAEE; font-weight: 600"><span class="dot"></span>Подключено</div>
+      <div>sing-box 1.12 · Xray 25.9</div>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="row" style="justify-content: space-between; flex-wrap: wrap">
+      <div>
+        <h1 class="h1">Главная</h1>
+        <p class="sub">Подписка «[ИМЯ ПОДПИСКИ]» · осталось 62 ГБ · до 12 ноября</p>
+      </div>
+      <span class="pill ok"><span class="dot"></span>Авто-выбор включён · резерв: Frankfurt-2</span>
+    </div>
+
+    <div class="cols" style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px">
+      <div style="display: flex; flex-direction: column; gap: 20px">
+        <section class="card" style="display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 32px 24px">
+          <button aria-label="Отключиться" style="width: 172px; height: 172px; border-radius: 50%; border: 0; background: {{accent}}; color: #0B1A13; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: 0 0 0 10px #173A2B, 0 0 0 11px #24563F; font-family: inherit">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 7.2a8 8 0 1 0 11.4 0"/></svg>
+            <span style="font-size: 16px; font-weight: 700">Подключено</span>
+          </button>
+          <div class="mono" style="font-size: 15px; color: #9AA4AE">01:24:07</div>
+
+          <button class="btn" style="width: 100%; height: 64px; justify-content: space-between; padding: 0 16px; border-radius: 12px">
+            <span class="row"><span class="cc">NL</span><span style="text-align: left"><span style="display: block; font-size: 15px; font-weight: 600">Amsterdam-1</span><span style="display: block; font-size: 13px; color: #9AA4AE">VLESS · Reality · Vision · Xray</span></span></span>
+            <span class="row" style="gap: 10px"><span class="mono" style="color: #7BE8B5">42 мс</span><span style="color: #9AA4AE; font-size: 13px">Сменить</span></span>
+          </button>
+        </section>
+
+        <section class="card">
+          <p class="lbl">Что пускать через Тропу</p>
+          <div class="seg" role="radiogroup" aria-label="Режим перехвата">
+            <button class="on" role="radio" aria-checked="true">Весь компьютер<br><span style="font-size: 12px; color: #9AA4AE">TUN · игры, Discord, UDP</span></button>
+            <button role="radio" aria-checked="false">Только браузеры<br><span style="font-size: 12px; color: #9AA4AE">системный прокси</span></button>
+          </div>
+          <label for="route" class="lbl" style="display: block; margin-top: 18px">Маршрут</label>
+          <select id="route">
+            <option>Всё, кроме российского (рекомендуется)</option>
+            <option>Только заблокированное</option>
+            <option>Всё через прокси</option>
+            <option>Свои правила</option>
+          </select>
+          <p class="sub" style="font-size: 13px">Госуслуги, банки и .ru-сайты идут напрямую, остальное через сервер.</p>
+        </section>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 20px">
+        <section class="card">
+          <p class="lbl">Трафик</p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
+            <div><div style="font-size: 13px; color: #9AA4AE">Загрузка</div><div class="mono" style="font-size: 26px; margin-top: 4px">3.2 <span style="font-size: 14px; color: #9AA4AE">МБ/с</span></div><div style="font-size: 12px; color: #8E99A4; margin-top: 2px">за сеанс 1.8 ГБ</div></div>
+            <div><div style="font-size: 13px; color: #9AA4AE">Отдача</div><div class="mono" style="font-size: 26px; margin-top: 4px">118 <span style="font-size: 14px; color: #9AA4AE">КБ/с</span></div><div style="font-size: 12px; color: #8E99A4; margin-top: 2px">за сеанс 96 МБ</div></div>
+          </div>
+          <svg viewBox="0 0 400 60" width="100%" height="60" preserveAspectRatio="none" style="margin-top: 14px; display: block" aria-hidden="true"><polyline fill="none" stroke="#3DDC97" stroke-width="2" points="0,48 30,44 60,46 90,30 120,34 150,20 180,26 210,14 240,22 270,18 300,30 330,24 360,12 400,16"/><polyline fill="none" stroke="#6AA9FF" stroke-width="1.5" points="0,56 40,55 80,54 120,55 160,52 200,54 240,53 280,55 320,52 360,54 400,53"/></svg>
+        </section>
+
+        <section class="card">
+          <p class="lbl">Сейчас через сервер</p>
+          <div class="check"><span class="cc" style="width: 32px">DC</span><span style="flex: 1">Discord.exe</span><span class="pill info">TCP</span><span class="pill info">UDP</span></div>
+          <div class="check"><span class="cc" style="width: 32px">CH</span><span style="flex: 1">chrome.exe</span><span class="pill info">TCP</span></div>
+          <div class="check"><span class="cc" style="width: 32px">TG</span><span style="flex: 1">Telegram.exe</span><span class="pill info">TCP</span></div>
+        </section>
+
+        <section class="card">
+          <div class="row" style="justify-content: space-between; margin-bottom: 4px"><p class="lbl" style="margin: 0">Проверки</p><span style="font-size: 12px; color: #8E99A4">2 мин назад</span></div>
+          <div class="check"><span class="pill ok">ОК</span><span>DNS идёт через туннель</span></div>
+          <div class="check"><span class="pill ok">ОК</span><span>UDP работает (голос Discord)</span></div>
+          <div class="check"><span class="pill warn">!</span><span style="flex: 1">IPv6 есть у провайдера — заблокирован, чтобы не утекал</span></div>
+          <button class="btn" style="margin-top: 10px">Проверить всё</button>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#3DDC97"},"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#3DDC97' };
+  }
+}
+</script>
+</body>
+</html>

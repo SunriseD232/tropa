@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <!-- Служба Windows (LocalSystem): ядра, TUN, системные изменения, тесты серверов. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Tropa.Service</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Tropa.Core\Tropa.Core.csproj" />
+    <ProjectReference Include="..\Tropa.Ipc\Tropa.Ipc.csproj" />
+  </ItemGroup>
+</Project>

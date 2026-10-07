@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Tropa.App/Tropa.App.csproj" />
+    <Project Path="src/Tropa.Core/Tropa.Core.csproj" />
+    <Project Path="src/Tropa.Infrastructure/Tropa.Infrastructure.csproj" />
+    <Project Path="src/Tropa.Ipc/Tropa.Ipc.csproj" />
+    <Project Path="src/Tropa.Service/Tropa.Service.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tropa.Core.Tests/Tropa.Core.Tests.csproj" />
+    <Project Path="tests/Tropa.Integration.Tests/Tropa.Integration.Tests.csproj" />
+  </Folder>
+</Solution>

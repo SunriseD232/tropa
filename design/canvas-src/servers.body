@@ -1,0 +1,73 @@
+  <main class="main">
+    <div class="row" style="justify-content: space-between; flex-wrap: wrap; gap: 12px">
+      <div>
+        <h1 class="h1">Серверы</h1>
+        <p class="sub">14 серверов из 2 подписок · обновлено сегодня в 09:12</p>
+      </div>
+      <div class="row" style="flex-wrap: wrap; gap: 8px">
+        <button class="btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Обновить подписки</button>
+        <button class="btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Тест всех</button>
+        <button class="btn" style="background: #3DDC97; color: #0B1A13; border-color: #3DDC97; font-weight: 600"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Добавить</button>
+      </div>
+    </div>
+
+    <div class="row" style="flex-wrap: wrap; gap: 8px" role="tablist" aria-label="Подписки">
+      <button class="chip on" role="tab" aria-selected="true">Все · 14</button>
+      <button class="chip" role="tab" aria-selected="false">[Подписка A] · 9</button>
+      <button class="chip" role="tab" aria-selected="false">[Подписка B] · 4</button>
+      <button class="chip" role="tab" aria-selected="false">Мои · 1</button>
+      <span style="flex: 1"></span>
+      <label class="row" style="gap: 8px; font-size: 14px; color: #A3ADB7"><input type="checkbox" class="sw" checked>Авто-выбор лучшего</label>
+    </div>
+
+    <div class="cols" style="display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start">
+      <section class="card scroll" style="padding: 16px 8px 4px">
+        <table class="tbl">
+          <thead><tr><th>Сервер</th><th>Протокол</th><th>Транспорт</th><th>Задержка</th><th>Скорость</th><th>Статус</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td><span class="row" style="gap: 10px"><span class="cc">NL</span><b style="font-weight: 600">Amsterdam-1</b></span></td><td>VLESS</td><td>TCP · Reality</td><td class="mono" style="color: #7BE8B5">42 мс</td><td class="mono">86 Мбит/с</td><td><span class="pill ok">Активен</span></td></tr>
+            <tr><td><span class="row" style="gap: 10px"><span class="cc">DE</span>Frankfurt-2</span></td><td>VLESS</td><td>XHTTP · Reality</td><td class="mono" style="color: #7BE8B5">51 мс</td><td class="mono">64 Мбит/с</td><td><span class="pill ok">Работает</span></td></tr>
+            <tr><td><span class="row" style="gap: 10px"><span class="cc">FI</span>Helsinki</span></td><td>Trojan</td><td>TCP · TLS</td><td class="mono" style="color: #7BE8B5">38 мс</td><td class="mono">71 Мбит/с</td><td><span class="pill ok">Работает</span></td></tr>
+            <tr><td><span class="row" style="gap: 10px"><span class="cc">PL</span>Warsaw</span></td><td>VLESS</td><td>TCP · Reality</td><td class="mono" style="color: #7BE8B5">47 мс</td><td class="mono" style="color: #FF9C9C">0</td><td><span class="pill bad">Данные не идут</span></td></tr>
+            <tr><td><span class="row" style="gap: 10px"><span class="cc">SE</span>Stockholm</span></td><td>VMess</td><td>WS · TLS</td><td class="mono" style="color: #F5C76A">180 мс</td><td class="mono">12 Мбит/с</td><td><span class="pill warn">Медленно</span></td></tr>
+            <tr><td><span class="row" style="gap: 10px"><span class="cc">RU</span>Relay → Riga</span></td><td>VLESS</td><td>цепочка</td><td class="mono" style="color: #7BE8B5">64 мс</td><td class="mono">40 Мбит/с</td><td><span class="pill ok">Работает</span></td></tr>
+            <tr><td><span class="row" style="gap: 10px"><span class="cc">US</span>New York</span></td><td>VLESS</td><td>gRPC · TLS</td><td class="mono" style="color: #9AA4AE">—</td><td class="mono" style="color: #9AA4AE">—</td><td><span class="pill bad">Нет ответа</span></td></tr>
+          </tbody>
+        </table>
+        <p style="font-size: 13px; color: #9AA4AE; margin: 14px 12px">«Данные не идут»: сервер отвечает на пинг, но загрузка замирает. Похоже на блокировку IP хостинга, пинг тут не помогает.</p>
+      </section>
+
+      <aside class="card" style="display: flex; flex-direction: column; gap: 18px">
+        <div class="row"><span class="cc">NL</span><div><div style="font-weight: 600; font-size: 17px">Amsterdam-1</div><div style="font-size: 13px; color: #9AA4AE">[Подписка A]</div></div></div>
+
+        <div>
+          <p class="lbl">Последний тест</p>
+          <dl class="kv">
+            <dt>TCP-пинг</dt><dd class="mono">38 мс</dd>
+            <dt>Реальная</dt><dd class="mono">42 мс</dd>
+            <dt>Скорость</dt><dd class="mono">86 Мбит/с (10 МБ)</dd>
+            <dt>UDP</dt><dd><span class="pill ok">работает</span></dd>
+            <dt>Стабильность</dt><dd class="mono">0% потерь · ±6 мс</dd>
+          </dl>
+        </div>
+
+        <div>
+          <p class="lbl">Параметры</p>
+          <dl class="kv">
+            <dt>Адрес</dt><dd class="mono">nl1.[домен]:443</dd>
+            <dt>UUID</dt><dd class="mono">••••-••••-7f3a</dd>
+            <dt>Безопасность</dt><dd>Reality · SNI [сайт-маска]</dd>
+            <dt>Отпечаток</dt><dd>chrome</dd>
+            <dt>Flow</dt><dd>xtls-rprx-vision</dd>
+            <dt>Ядро</dt><dd>sing-box (авто)</dd>
+          </dl>
+        </div>
+
+        <div class="row" style="flex-wrap: wrap; gap: 8px">
+          <button class="btn">Тест</button>
+          <button class="btn">Изменить</button>
+          <button class="btn">QR / ссылка</button>
+        </div>
+      </aside>
+    </div>
+  </main>

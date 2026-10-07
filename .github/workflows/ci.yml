@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Минимальные права токена (docs/02-security.md, §3.9)
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      CI: true
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      # Actions закреплены по хэшу коммита, а не по тегу: тег можно перевесить.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore (locked)
+        run: dotnet restore Tropa.slnx --locked-mode
+
+      - name: Build
+        run: dotnet build Tropa.slnx --no-restore -c Release
+
+      - name: Fetch cores (hash-verified)
+        shell: powershell
+        run: ./tools/fetch-cores.ps1
+
+      - name: Test
+        run: dotnet test Tropa.slnx --no-build -c Release

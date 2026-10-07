@@ -1,0 +1,36 @@
+{
+    "schema":  1,
+    "updated":  "2026-10-07",
+    "cores":  [
+                  {
+                      "name":  "sing-box",
+                      "version":  "1.14.2",
+                      "source":  "https://github.com/SagerNet/sing-box",
+                      "license":  "GPL-3.0-or-later",
+                      "url":  "https://github.com/SagerNet/sing-box/releases/download/v1.14.2/sing-box-1.14.2-windows-amd64.zip",
+                      "archiveSha256":  "c2d8bfff918755808781dfdeeb8581b6c91eb3a243d9a7b55483cfc0c0684d32",
+                      "files":  [
+                                    {
+                                        "entry":  "sing-box-1.14.2-windows-amd64/sing-box.exe",
+                                        "target":  "sing-box.exe",
+                                        "sha256":  "7bbef1dea9189ee12799ae834ea4b4658355da25c47a21ad8804904c0ccd9410"
+                                    }
+                                ]
+                  },
+                  {
+                      "name":  "xray",
+                      "version":  "26.9.30",
+                      "source":  "https://github.com/XTLS/Xray-core",
+                      "license":  "MPL-2.0",
+                      "url":  "https://github.com/XTLS/Xray-core/releases/download/v26.9.30/Xray-windows-64.zip",
+                      "archiveSha256":  "b17a619343c11b89d8faf36278298856749b15c52277d875d32051b33dcda617",
+                      "files":  [
+                                    {
+                                        "entry":  "xray.exe",
+                                        "target":  "xray.exe",
+                                        "sha256":  "43fa465275a8a64ddce4a27c3317ae3e99f0c264fec1962e04c3fadda83adc79"
+                                    }
+                                ]
+                  }
+              ]
+}
