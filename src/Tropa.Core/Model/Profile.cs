@@ -2,7 +2,7 @@ using Tropa.Core.Security;
 
 namespace Tropa.Core.Model;
 
-public enum Protocol { Vless, Vmess, Trojan }
+public enum Protocol { Vless, Vmess, Trojan, Shadowsocks, Hysteria2 }
 
 public enum TransportType { Tcp, Xhttp, Ws, Grpc, HttpUpgrade }
 
@@ -76,13 +76,19 @@ public sealed record Profile
 
     public required int Port { get; init; }
 
-    /// <summary>UUID для VLESS/VMess, пароль для Trojan.</summary>
+    /// <summary>UUID для VLESS/VMess, пароль для Trojan, Shadowsocks и Hysteria2.</summary>
     public required Secret Credential { get; init; }
 
     public VlessFlow Flow { get; init; } = VlessFlow.None;
 
     /// <summary>Шифр VMess: auto, aes-128-gcm, chacha20-poly1305, none, zero.</summary>
     public string VmessCipher { get; init; } = "auto";
+
+    /// <summary>Метод Shadowsocks (2022-blake3-… или AEAD). Только для Shadowsocks.</summary>
+    public string? SsMethod { get; init; }
+
+    /// <summary>Пароль маскировки Salamander для Hysteria2; null — без маскировки.</summary>
+    public Secret? Obfs { get; init; }
 
     public TransportSettings Transport { get; init; } = TransportSettings.Tcp;
 

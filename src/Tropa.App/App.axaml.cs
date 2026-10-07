@@ -24,6 +24,28 @@ internal sealed partial class App : Application
     /// <summary>Запуск из автозагрузки Windows: окно по настройке startMin, подключение по autoconnect.</summary>
     public static bool FromAutostart { get; set; }
 
+    private static App? Instance => Current as App;
+
+    private Services.GlobalHotkey? _hotkey;
+    private DispatcherTimer? _subscriptionTimer;
+
+    /// <summary>Тема меняется сразу: палитра подключена через DynamicResource (App.axaml).</summary>
+    public static void ApplyTheme(Core.Model.AppTheme theme)
+    {
+        if (Current is { } app)
+        {
+            app.RequestedThemeVariant = theme switch
+            {
+                Core.Model.AppTheme.Light => Avalonia.Styling.ThemeVariant.Light,
+                Core.Model.AppTheme.System => Avalonia.Styling.ThemeVariant.Default,
+                _ => Avalonia.Styling.ThemeVariant.Dark,
+            };
+        }
+    }
+
+    /// <summary>Регистрирует глобальную горячую клавишу. null — успешно.</summary>
+    public static string? RegisterHotkey(string? spec) => Instance?._hotkey?.Register(spec);
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
@@ -35,7 +57,19 @@ internal sealed partial class App : Application
             _ = _engine.AttachServiceAsync();
             var vm = new MainWindowViewModel(_engine);
             _window = new MainWindow { DataContext = vm };
+            ApplyTheme(_engine.State.Settings.General.Theme);
             CreateTray();
+            _hotkey = new Services.GlobalHotkey(_window, () => Dispatcher.UIThread.Post(() => _ = ToggleAsync()));
+            _hotkey.Register(_engine.State.Settings.General.Hotkey);
+            _engine.StartNetworkWatch();
+            // Автообновление подписок (subUpdate): первая проверка через минуту, потом раз в 15 минут.
+            _subscriptionTimer = new DispatcherTimer(TimeSpan.FromMinutes(1), DispatcherPriority.Background, async (_, _) =>
+            {
+                _subscriptionTimer!.Interval = TimeSpan.FromMinutes(15);
+                if (_engine is { } e)
+                    await e.UpdateDueSubscriptionsAsync();
+            });
+            _subscriptionTimer.Start();
             _engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => UpdateTray(s));
 
             // Выход из Windows или завершение сеанса: вернуть прокси до того, как процесс убьют.
@@ -135,6 +169,16 @@ internal sealed partial class App : Application
         await engine.ConnectAsync();
     }
 
+    private async Task ToggleAsync()
+    {
+        if (_engine is not { } engine)
+            return;
+        if (engine.Status.State == ConnectionState.Connected)
+            await engine.DisconnectAsync();
+        else if (engine.Status.State is ConnectionState.Disconnected or ConnectionState.Error)
+            await engine.ConnectAsync();
+    }
+
     private void ShowWindow()
     {
         if (_window is null)
@@ -149,6 +193,8 @@ internal sealed partial class App : Application
         if (_exiting)
             return;
         _exiting = true;
+        _subscriptionTimer?.Stop();
+        _hotkey?.Dispose();
         if (_engine is not null)
             await _engine.DisposeAsync();
         _engine = null;

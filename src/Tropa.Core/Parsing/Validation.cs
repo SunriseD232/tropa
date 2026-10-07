@@ -79,6 +79,49 @@ internal static partial class Validation
         return value;
     }
 
+    /// <summary>Методы Shadowsocks: 2022 и AEAD. Потоковые шифры и «none» небезопасны — не принимаем.</summary>
+    public static readonly FrozenSet<string> SsMethods = new[]
+    {
+        "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305",
+        "aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305", "xchacha20-ietf-poly1305",
+    }.ToFrozenSet(StringComparer.Ordinal);
+
+    public static string SsMethod(string? raw)
+    {
+        var value = Text(raw, "метод шифрования").ToLowerInvariant();
+        if (value is "chacha20-poly1305")
+            value = "chacha20-ietf-poly1305";
+        if (!SsMethods.Contains(value))
+            throw new LinkFormatException($"Метод Shadowsocks «{value}» не поддерживается: он устарел или небезопасен.");
+        return value;
+    }
+
+    /// <summary>Для методов 2022 пароль — ключ base64 нужной длины (или «ключ сервера:ключ пользователя»).</summary>
+    public static string SsPassword(string method, string? raw)
+    {
+        var value = Text(raw, "пароль");
+        if (!method.StartsWith("2022-", StringComparison.Ordinal))
+            return value;
+        var keyBytes = method.Contains("128", StringComparison.Ordinal) ? 16 : 32;
+        foreach (var part in value.Split(':'))
+        {
+            byte[] key;
+            try
+            {
+                key = Convert.FromBase64String(part);
+            }
+            catch (FormatException)
+            {
+                throw new LinkFormatException("Для Shadowsocks-2022 пароль должен быть ключом base64.");
+            }
+
+            if (key.Length != keyBytes)
+                throw new LinkFormatException($"Для метода {method} ключ должен быть {keyBytes} байт.");
+        }
+
+        return value;
+    }
+
     public static string? Sni(string? raw)
     {
         if (string.IsNullOrEmpty(raw))

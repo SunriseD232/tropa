@@ -126,7 +126,7 @@ public sealed class ShareLinkTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("hello")]
-    [InlineData("ss://YWVzLTI1Ni1nY206cGFzcw@1.2.3.4:8388#ss")]
+    [InlineData("ss://cmM0LW1kNTpwYXNz@1.2.3.4:8388#rc4")] // устаревший потоковый шифр
     [InlineData("vless://not-a-uuid@a.example.com:443?security=none")]
     [InlineData("vless://" + Uuid + "@a.example.com:0?security=none")]
     [InlineData("vless://" + Uuid + "@a.example.com:70000?security=none")]

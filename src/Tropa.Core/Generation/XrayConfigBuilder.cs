@@ -132,6 +132,21 @@ public static class XrayConfigBuilder
                 ob["protocol"] = "vmess";
                 ob["settings"] = Vnext(p, new JsonObject { ["id"] = p.Credential.Reveal(), ["security"] = p.VmessCipher, ["alterId"] = 0 });
                 break;
+            case Protocol.Shadowsocks:
+                ob["protocol"] = "shadowsocks";
+                ob["settings"] = new JsonObject
+                {
+                    ["servers"] = new JsonArray((JsonNode)new JsonObject
+                    {
+                        ["address"] = p.Address,
+                        ["port"] = p.Port,
+                        ["method"] = p.SsMethod,
+                        ["password"] = p.Credential.Reveal(),
+                    }),
+                };
+                break;
+            case Protocol.Hysteria2:
+                throw new UnsupportedProfileException($"Сервер «{p.Name}» (Hysteria2) работает только через sing-box.");
             default:
                 ob["protocol"] = "trojan";
                 ob["settings"] = new JsonObject

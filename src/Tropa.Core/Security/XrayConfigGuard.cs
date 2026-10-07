@@ -12,7 +12,7 @@ public static class XrayConfigGuard
 {
     private static readonly FrozenSet<string> RootKeys = new[] { "log", "inbounds", "outbounds", "routing" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> LogKeys = new[] { "loglevel" }.ToFrozenSet(StringComparer.Ordinal);
-    private static readonly FrozenSet<string> OutboundProtocols = new[] { "vless", "vmess", "trojan", "freedom", "blackhole" }.ToFrozenSet(StringComparer.Ordinal);
+    private static readonly FrozenSet<string> OutboundProtocols = new[] { "vless", "vmess", "trojan", "shadowsocks", "freedom", "blackhole" }.ToFrozenSet(StringComparer.Ordinal);
 
     // Поля, через которые Xray читает или пишет файлы, или выполняет что-то вне сети.
     private static readonly FrozenSet<string> ForbiddenKeys = new[]

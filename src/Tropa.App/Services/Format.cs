@@ -61,6 +61,8 @@ internal static class Format
     {
         Core.Model.Protocol.Vless => "VLESS",
         Core.Model.Protocol.Vmess => "VMess",
+        Core.Model.Protocol.Shadowsocks => "Shadowsocks",
+        Core.Model.Protocol.Hysteria2 => "Hysteria2",
         _ => "Trojan",
     };
 

@@ -6,14 +6,17 @@
   <StackPanel Spacing="20">
     <StackPanel Spacing="4">
       <TextBlock Classes="h1" Text="Главная" />
-      <TextBlock Classes="muted" Text="{Binding SubscriptionLine}" IsVisible="{Binding SubscriptionLine, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding SubscriptionLine, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Classes="muted" Text="{Binding SubscriptionLine}" VerticalAlignment="Center" />
+        <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="subInfo" />
+      </StackPanel>
     </StackPanel>
 
-    <Border Background="{StaticResource BadBg}" CornerRadius="12" Padding="14,12" IsVisible="{Binding Blocking}">
+    <Border Background="{DynamicResource BadBg}" CornerRadius="12" Padding="14,12" IsVisible="{Binding Blocking}">
       <DockPanel>
         <Button DockPanel.Dock="Right" Classes="primary" Content="Снять блокировку" Command="{Binding ReleaseBlockingCommand}" Margin="12,0,0,0" />
         <StackPanel Spacing="2">
-          <TextBlock Text="Интернет заблокирован аварийной блокировкой" FontWeight="SemiBold" Foreground="{StaticResource BadFg}" />
+          <TextBlock Text="Интернет заблокирован аварийной блокировкой" FontWeight="SemiBold" Foreground="{DynamicResource BadFg}" />
           <TextBlock Classes="muted" TextWrapping="Wrap"
                      Text="Подключение оборвалось, и kill switch не пускает трафик мимо туннеля. Подключитесь снова или снимите блокировку." />
         </StackPanel>
@@ -27,13 +30,13 @@
           <StackPanel Spacing="18" HorizontalAlignment="Stretch">
             <Button HorizontalAlignment="Center" Width="172" Height="172" CornerRadius="86"
                     Command="{Binding ToggleCommand}" IsEnabled="{Binding !IsBusy}"
-                    Background="#232A31" Foreground="{StaticResource Text}"
+                    Background="{DynamicResource PowerOff}" Foreground="{DynamicResource Text}"
                     Classes.connected="{Binding IsConnected}"
                     ToolTip.Tip="Подключить или отключить (Ctrl+Alt+P — в следующей версии)">
               <Button.Styles>
                 <Style Selector="Button.connected">
-                  <Setter Property="Background" Value="{StaticResource Accent}" />
-                  <Setter Property="Foreground" Value="{StaticResource AccentDark}" />
+                  <Setter Property="Background" Value="{DynamicResource Accent}" />
+                  <Setter Property="Foreground" Value="{DynamicResource AccentDark}" />
                 </Style>
               </Button.Styles>
               <StackPanel Spacing="8" HorizontalAlignment="Center">
@@ -41,17 +44,17 @@
                 <TextBlock Text="{Binding StateText}" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" />
               </StackPanel>
             </Button>
-            <TextBlock Text="{Binding SessionTime}" Classes="mono" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding SessionTime}" Classes="mono" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" />
             <Border IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" CornerRadius="12" Padding="12,10"
-                    Background="{StaticResource InfoBg}" Classes.err="{Binding IsError}">
+                    Background="{DynamicResource InfoBg}" Classes.err="{Binding IsError}">
               <Border.Styles>
-                <Style Selector="Border.err"><Setter Property="Background" Value="{StaticResource BadBg}" /></Style>
+                <Style Selector="Border.err"><Setter Property="Background" Value="{DynamicResource BadBg}" /></Style>
               </Border.Styles>
               <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
             </Border>
-            <Border Background="{StaticResource Card2}" CornerRadius="12" Padding="16,12">
+            <Border Background="{DynamicResource Card2}" CornerRadius="12" Padding="16,12">
               <DockPanel>
-                <Border DockPanel.Dock="Left" Background="#2A323A" CornerRadius="4" Width="34" Height="22" Margin="0,0,12,0" VerticalAlignment="Center">
+                <Border DockPanel.Dock="Left" Background="{DynamicResource Chip}" CornerRadius="4" Width="34" Height="22" Margin="0,0,12,0" VerticalAlignment="Center">
                   <TextBlock Text="{Binding CountryCode}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel>
@@ -84,7 +87,7 @@
                 </StackPanel>
               </RadioButton>
             </UniformGrid>
-            <TextBlock Classes="muted" Text="{Binding ModeNote}" Foreground="{StaticResource WarnFg}" IsVisible="{Binding !TunAvailable}" />
+            <TextBlock Classes="muted" Text="{Binding ModeNote}" Foreground="{DynamicResource WarnFg}" IsVisible="{Binding !TunAvailable}" />
 
             <DockPanel Margin="0,8,0,0">
               <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding KillSwitch}" IsEnabled="{Binding KillSwitchEnabled}" OnContent="" OffContent="" />
@@ -151,7 +154,7 @@
             <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Classes="muted" Classes.err="{Binding StatusIsError}"
                        IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}">
               <TextBlock.Styles>
-                <Style Selector="TextBlock.err"><Setter Property="Foreground" Value="{StaticResource BadFg}" /></Style>
+                <Style Selector="TextBlock.err"><Setter Property="Foreground" Value="{DynamicResource BadFg}" /></Style>
               </TextBlock.Styles>
             </TextBlock>
           </StackPanel>

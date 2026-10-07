@@ -1,0 +1,131 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Tropa.App.ViewModels"
+             x:Class="Tropa.App.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.note">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+    </Style>
+    <Style Selector="TextBlock.note.warn">
+      <Setter Property="Foreground" Value="{DynamicResource WarnFg}" />
+    </Style>
+    <Style Selector="Button.tab">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource NavFg}" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="12,0" />
+    </Style>
+    <Style Selector="Button.tab.on">
+      <Setter Property="Background" Value="{DynamicResource NavOnBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
+    </Style>
+  </UserControl.Styles>
+
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="vm:ToggleRow">
+      <DockPanel Margin="0,8">
+        <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding Value}" OnContent="" OffContent="" IsEnabled="{Binding IsAvailable}" />
+        <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding InfoCommand}" />
+        <StackPanel VerticalAlignment="Center" Spacing="2">
+          <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" />
+          <TextBlock Classes="note" Classes.warn="{Binding NoteIsWarning}" Text="{Binding Note}" IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+      </DockPanel>
+    </DataTemplate>
+    <DataTemplate DataType="vm:ChoiceRow">
+      <DockPanel Margin="0,8">
+        <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" />
+        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding Options}" SelectedIndex="{Binding Index}" MinWidth="260" VerticalAlignment="Center" IsEnabled="{Binding IsAvailable}" />
+        <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,12,0">
+          <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" />
+          <TextBlock Classes="note" Classes.warn="{Binding NoteIsWarning}" Text="{Binding Note}" IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+      </DockPanel>
+    </DataTemplate>
+    <DataTemplate DataType="vm:TextRow">
+      <StackPanel Margin="0,8" Spacing="6">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" />
+          <TextBox DockPanel.Dock="Right" Width="320" VerticalAlignment="Center" IsVisible="{Binding !Multiline}" IsEnabled="{Binding IsAvailable}"
+                   Text="{Binding Value, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding Placeholder}" />
+          <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,12,0">
+            <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" />
+            <TextBlock Classes="note" Classes.warn="{Binding NoteIsWarning}" Text="{Binding Note}" IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+        </DockPanel>
+        <TextBox IsVisible="{Binding Multiline}" IsEnabled="{Binding IsAvailable}" AcceptsReturn="True" TextWrapping="NoWrap" Height="120"
+                 FontFamily="{StaticResource Mono}" Text="{Binding Value, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding Placeholder}" />
+      </StackPanel>
+    </DataTemplate>
+    <DataTemplate DataType="vm:ActionRow">
+      <DockPanel Margin="0,8">
+        <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" />
+        <Button DockPanel.Dock="Right" Content="{Binding SecondLabel}" Command="{Binding SecondCommand}" IsVisible="{Binding HasSecond}" Margin="8,0,0,0" />
+        <Button DockPanel.Dock="Right" Content="{Binding FirstLabel}" Command="{Binding FirstCommand}" />
+        <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,12,0">
+          <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" />
+          <TextBlock Classes="note" Text="{Binding Note}" IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+      </DockPanel>
+    </DataTemplate>
+    <DataTemplate DataType="vm:LabelRow">
+      <DockPanel Margin="0,8">
+        <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" />
+        <TextBlock DockPanel.Dock="Right" Text="{Binding Text}" Classes="muted" VerticalAlignment="Center" />
+        <TextBlock Text="{Binding Title}" FontSize="15" VerticalAlignment="Center" />
+      </DockPanel>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <StackPanel Spacing="18">
+    <TextBlock Classes="h1" Text="Настройки" />
+
+    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding NeedsApply}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="primary" Content="Применить сейчас" Command="{Binding ApplyCommand}" />
+        <TextBlock Foreground="{DynamicResource InfoFg}" VerticalAlignment="Center" TextWrapping="Wrap"
+                   Text="Настройки сохранены. Чтобы они заработали, подключение переподключится на секунду." />
+      </DockPanel>
+    </Border>
+
+    <Border CornerRadius="12" Padding="12" Background="{DynamicResource OkBg}" Classes.err="{Binding MessageIsError}"
+            IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Border.Styles>
+        <Style Selector="Border.err"><Setter Property="Background" Value="{DynamicResource WarnBg}" /></Style>
+      </Border.Styles>
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+    </Border>
+
+    <Grid ColumnDefinitions="210,20,*">
+      <Border Grid.Column="0" Classes="card" Padding="8" VerticalAlignment="Top">
+        <ItemsControl ItemsSource="{Binding Sections}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SettingsSection">
+              <Button Classes="tab" Classes.on="{Binding IsCurrent}" Content="{Binding Title}"
+                      Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).SelectCommand}" CommandParameter="{Binding}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Border>
+
+      <StackPanel Grid.Column="2" Spacing="14">
+        <Border Classes="card" Padding="20,10">
+          <StackPanel>
+            <TextBlock Text="{Binding Current.Title}" FontSize="20" FontWeight="SemiBold" Margin="0,8,0,4" />
+            <TextBlock Classes="muted" Text="{Binding Current.Description}" Margin="0,0,0,6"
+                       IsVisible="{Binding Current.Description, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <ItemsControl ItemsSource="{Binding Current.Rows}" />
+          </StackPanel>
+        </Border>
+        <Border Classes="card" IsVisible="{Binding ConfigPreview, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <TextBox Text="{Binding ConfigPreview}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" Height="360"
+                   FontFamily="{StaticResource Mono}" FontSize="11" />
+        </Border>
+      </StackPanel>
+    </Grid>
+  </StackPanel>
+</UserControl>

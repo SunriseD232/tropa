@@ -104,6 +104,7 @@ public sealed class StateStore(string directory)
                 if (dto is null)
                     continue;
                 keys.UnionWith(dto.Profiles.Select(p => CredentialKey(p.Id)));
+                keys.UnionWith(dto.Profiles.Select(p => ObfsKey(p.Id)));
                 keys.UnionWith(dto.Subscriptions.Select(s => SubscriptionUrlKey(s.Id)));
             }
             catch (JsonException)
@@ -144,13 +145,19 @@ public sealed class StateStore(string directory)
 
     public static string CredentialKey(Guid profileId) => "cred:" + profileId.ToString("N");
 
+    public static string ObfsKey(Guid profileId) => "obfs:" + profileId.ToString("N");
+
     public static string SubscriptionUrlKey(Guid subscriptionId) => "sub:" + subscriptionId.ToString("N");
 
     private static HashSet<string> ReferencedSecretKeys(AppState state)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal) { LocalUserKey, LocalPasswordKey };
         foreach (var p in state.Profiles)
+        {
             keys.Add(CredentialKey(p.Profile.Id));
+            if (p.Profile.Obfs is not null)
+                keys.Add(ObfsKey(p.Profile.Id));
+        }
         foreach (var s in state.Subscriptions)
             keys.Add(SubscriptionUrlKey(s.Id));
         return keys;
@@ -161,7 +168,11 @@ public sealed class StateStore(string directory)
     private static StateDto ToDto(AppState state, SecretStore secrets)
     {
         foreach (var p in state.Profiles)
+        {
             secrets.Set(CredentialKey(p.Profile.Id), p.Profile.Credential.Reveal());
+            if (p.Profile.Obfs is { } obfs)
+                secrets.Set(ObfsKey(p.Profile.Id), obfs.Reveal());
+        }
         foreach (var s in state.Subscriptions)
             secrets.Set(SubscriptionUrlKey(s.Id), s.Url.Reveal());
 
@@ -193,6 +204,7 @@ public sealed class StateStore(string directory)
                 Port = sp.Profile.Port,
                 Flow = sp.Profile.Flow,
                 VmessCipher = sp.Profile.VmessCipher,
+                SsMethod = sp.Profile.SsMethod,
                 Transport = sp.Profile.Transport,
                 Security = sp.Profile.Security,
                 ChainVia = sp.Profile.ChainVia,
@@ -246,6 +258,8 @@ public sealed class StateStore(string directory)
                     Credential = new Secret(credential),
                     Flow = p.Flow,
                     VmessCipher = p.VmessCipher,
+                    SsMethod = p.SsMethod,
+                    Obfs = secrets.Get(ObfsKey(p.Id)) is { } obfs ? new Secret(obfs) : null,
                     Transport = p.Transport,
                     Security = p.Security,
                     ChainVia = p.ChainVia,
@@ -295,6 +309,7 @@ internal sealed record StoredProfileDto
     public int Port { get; init; }
     public VlessFlow Flow { get; init; }
     public string VmessCipher { get; init; } = "auto";
+    public string? SsMethod { get; init; }
     public TransportSettings Transport { get; init; } = TransportSettings.Tcp;
     public SecuritySettings Security { get; init; } = SecuritySettings.None;
     public Guid? ChainVia { get; init; }

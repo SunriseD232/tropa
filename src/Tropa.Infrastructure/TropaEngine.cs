@@ -329,6 +329,28 @@ public sealed class TropaEngine : IAsyncDisposable
         return await UpdateSubscriptionAsync(sub.Id, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Автообновление подписок (subUpdate): обновляет те, что старше заданного интервала. 0 — только вручную.
+    /// Ошибка одной подписки не мешает остальным.
+    /// </summary>
+    public async Task UpdateDueSubscriptionsAsync(CancellationToken ct = default)
+    {
+        var hours = State.Settings.Subscriptions.UpdateHours;
+        if (hours <= 0)
+            return;
+        foreach (var sub in State.Subscriptions.Where(s => s.LastUpdated is null || _now() - s.LastUpdated > TimeSpan.FromHours(hours)).ToList())
+        {
+            try
+            {
+                await UpdateSubscriptionAsync(sub.Id, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or IOException or InvalidDataException)
+            {
+                Log?.Invoke(this, $"Автообновление подписки «{sub.Name}» не удалось: " + Scrubber.Scrub(ex.Message));
+            }
+        }
+    }
+
     public async Task<ImportReport> UpdateSubscriptionAsync(Guid subscriptionId, CancellationToken ct = default)
     {
         var sub = State.Subscriptions.FirstOrDefault(s => s.Id == subscriptionId)
@@ -554,6 +576,100 @@ public sealed class TropaEngine : IAsyncDisposable
         return await new UpdateClient(http, Updates).DownloadInstallerAsync(app, Path.Combine(_paths.Local, "update-download"), ct).ConfigureAwait(false);
     }
 
+    // ---------------- Переподключение после сна и смены сети ----------------
+
+    private Timer? _watchTimer;
+    private DateTimeOffset _lastTick;
+    private string? _networkSignature;
+    private int _watchBusy;
+
+    /// <summary>
+    /// reconnect: раз в 5 секунд смотрим, не было ли сна (часы прыгнули вперёд) и не сменилась ли
+    /// физическая сеть (адаптеры со шлюзом, кроме нашего TUN). Если подключено — переподключаемся.
+    /// </summary>
+    public void StartNetworkWatch()
+    {
+        _lastTick = _now();
+        _networkSignature = NetworkSignature();
+        _watchTimer ??= new Timer(_ => _ = WatchTickAsync(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+    }
+
+    private async Task WatchTickAsync()
+    {
+        if (Interlocked.Exchange(ref _watchBusy, 1) == 1)
+            return;
+        try
+        {
+            var now = _now();
+            var slept = now - _lastTick > TimeSpan.FromSeconds(30);
+            _lastTick = now;
+            var signature = NetworkSignature();
+            var changed = signature != _networkSignature;
+            _networkSignature = signature;
+            if (!(slept || changed) || !State.Settings.General.Reconnect || Status.State != ConnectionState.Connected)
+                return;
+            // Сеть после пробуждения поднимается не сразу.
+            await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+            Log?.Invoke(this, slept ? "Компьютер проснулся — переподключаюсь." : "Сеть сменилась — переподключаюсь.");
+            await ApplyIfConnectedAsync().ConfigureAwait(false);
+            _networkSignature = NetworkSignature();
+        }
+        catch (Exception ex) when (ex is System.Net.NetworkInformation.NetworkInformationException or InvalidOperationException or ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            Volatile.Write(ref _watchBusy, 0);
+        }
+    }
+
+    internal static string NetworkSignature()
+    {
+        var parts = new List<string>();
+        foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+                continue;
+            var props = ni.GetIPProperties();
+            var gateways = props.GatewayAddresses.Select(g => g.Address).Where(a => !a.Equals(IPAddress.Any) && !a.Equals(IPAddress.IPv6Any)).ToList();
+            var addresses = props.UnicastAddresses.Select(u => u.Address).ToList();
+            if (gateways.Count == 0 || addresses.Contains(Diagnosis.OwnTunAddress))
+                continue;
+            parts.Add(ni.Id + "=" + string.Join(",", addresses.Where(a => a.AddressFamily == AddressFamily.InterNetwork).OrderBy(a => a.ToString(), StringComparer.Ordinal))
+                + "@" + string.Join(",", gateways.OrderBy(a => a.ToString(), StringComparer.Ordinal)));
+        }
+
+        parts.Sort(StringComparer.Ordinal);
+        return string.Join(";", parts);
+    }
+
+    // ---------------- Просмотр конфига ----------------
+
+    /// <summary>
+    /// Конфиг sing-box для текущего сервера, как его увидит ядро, но без ключей (genConfig).
+    /// Порты статистики и Xray — условные: настоящие выбираются при подключении.
+    /// </summary>
+    public string PreviewConfig()
+    {
+        var active = State.ActiveProfile ?? throw new InvalidOperationException("Сначала выберите сервер.");
+        var settings = State.Settings with
+        {
+            Connection = State.Settings.Connection with { Mode = !TunAvailable && State.Settings.Connection.Mode == CaptureMode.Tun ? CaptureMode.SystemProxy : State.Settings.Connection.Mode },
+        };
+        var config = SingBoxConfigBuilder.Build(new SingBoxInput
+        {
+            Settings = settings,
+            Active = active,
+            Profiles = State.Profiles.Select(p => p.Profile).ToList(),
+            RuleSetDirectory = _service?.RuleSetDirectory ?? _paths.GeoDirectory,
+            LocalAuth = Auth,
+            ClashApiPort = 9090,
+            ClashApiSecret = "secret",
+        });
+        var scrubber = new SecretScrubber(_secrets.Values.Concat([Auth.Username, Auth.Password]));
+        return scrubber.Scrub(config);
+    }
+
     // ---------------- Диагностика ----------------
 
     private DiagnosticsInput DiagnosticsInputNow() => new()
@@ -671,12 +787,13 @@ public sealed class TropaEngine : IAsyncDisposable
         {
             Connection = State.Settings.Connection with
             {
-                Mode = TunAvailable ? State.Settings.Connection.Mode : CaptureMode.SystemProxy,
+                Mode = !TunAvailable && State.Settings.Connection.Mode == CaptureMode.Tun ? CaptureMode.SystemProxy : State.Settings.Connection.Mode,
             },
         };
         var effective = CompatRules.Evaluate(settings, active).Effective;
 
-        _mixedPort = effective.Connection.SocksPort;
+        // randomPorts: свободный случайный порт при каждом подключении — фиксированный легко найти сканированием.
+        _mixedPort = effective.Connection.RandomPorts ? ServerTester.FreePort() : effective.Connection.SocksPort;
         if (!PortIsFree(_mixedPort))
             throw new InvalidOperationException($"Порт {_mixedPort} занят другой программой. Закройте её или выберите другой порт в настройках.");
 
@@ -696,7 +813,9 @@ public sealed class TropaEngine : IAsyncDisposable
                     && ProfileCompat.Issues(p.Profile).Count == 0
                     && !(p.Profile.Transport.Type == TransportType.Xhttp && p.Profile.ChainVia is not null)
                     // urltest видит только задержку и «заморозку» не замечает — такие серверы убираем сами.
-                    && !ServerHealth.ShouldExclude(p.LastTest, _now()))
+                    && !ServerHealth.ShouldExclude(p.LastTest, _now())
+                    // allowInsecureWarn: сервер без проверки сертификата — только если вы выбрали его сами.
+                    && !(effective.Dpi.AllowInsecureWarn && p.Profile.Security.AllowInsecure && p.Profile.Id != active.Id))
                 .Select(p => p.Profile).ToList()
             : [];
 
@@ -848,7 +967,8 @@ public sealed class TropaEngine : IAsyncDisposable
                 var name = active.Name;
                 var replacement = State.Settings.Connection.AutoSelect
                     ? ServerHealth.PickReplacement(
-                        State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null)
+                        State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null
+                                && !(State.Settings.Dpi.AllowInsecureWarn && p.Profile.Security.AllowInsecure))
                             .Select(p => (p.Profile.Id, p.LastTest)), activeId, _now())
                     : null;
 
@@ -1061,6 +1181,8 @@ public sealed class TropaEngine : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_watchTimer is not null)
+            await _watchTimer.DisposeAsync().ConfigureAwait(false);
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {

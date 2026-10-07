@@ -27,7 +27,8 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Servers = new ServersViewModel(engine, Info, () => Import.Open(), Edit);
         Rules = new RulesViewModel(engine, Info);
         Diagnostics = new DiagnosticsViewModel(engine, Info);
-        Settings = new PlaceholderViewModel("Настройки", "Полный экран настроек — в одной из следующих версий. Сейчас настройки хранятся с безопасными значениями по умолчанию.");
+        Settings = new SettingsViewModel(engine, Info, page => Navigate(page));
+        Onboarding = new OnboardingViewModel(engine, Info);
         CurrentPage = Home;
         Warning = engine.StartupWarning;
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => FooterStatus = s.State == ConnectionState.Connected ? "Подключено" : "Отключено");
@@ -40,7 +41,8 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public ServersViewModel Servers { get; }
     public RulesViewModel Rules { get; }
     public DiagnosticsViewModel Diagnostics { get; }
-    public PlaceholderViewModel Settings { get; }
+    public SettingsViewModel Settings { get; }
+    public OnboardingViewModel Onboarding { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsHome), nameof(IsServers), nameof(IsRules), nameof(IsDiagnostics), nameof(IsSettings))]

@@ -518,6 +518,8 @@ public static class SingBoxConfigBuilder
                 Protocol.Vless => "vless",
                 Protocol.Vmess => "vmess",
                 Protocol.Trojan => "trojan",
+                Protocol.Shadowsocks => "shadowsocks",
+                Protocol.Hysteria2 => "hysteria2",
                 _ => throw new UnsupportedProfileException("Неизвестный протокол."),
             },
             ["tag"] = tag,
@@ -542,6 +544,15 @@ public static class SingBoxConfigBuilder
             case Protocol.Trojan:
                 ob["password"] = p.Credential.Reveal();
                 break;
+            case Protocol.Shadowsocks:
+                ob["method"] = p.SsMethod;
+                ob["password"] = p.Credential.Reveal();
+                break;
+            case Protocol.Hysteria2:
+                ob["password"] = p.Credential.Reveal();
+                if (p.Obfs is { } obfs)
+                    ob["obfs"] = new JsonObject { ["type"] = "salamander", ["password"] = obfs.Reveal() };
+                break;
         }
 
         if (Tls(ctx, p) is { } tls)
@@ -550,7 +561,8 @@ public static class SingBoxConfigBuilder
             ob["transport"] = transport;
         if (p.ChainVia is { } via)
             ob["detour"] = ctx.TagFor(ctx.FindProfile(via));
-        if (ctx.S.Dpi.Mux)
+        // Mux не для Vision, XHTTP и QUIC (Hysteria2): там он несовместим или уже встроен.
+        if (ctx.S.Dpi.Mux && p.Flow != VlessFlow.XtlsRprxVision && p.Protocol != Protocol.Hysteria2)
         {
             ob["multiplex"] = new JsonObject
             {
@@ -578,11 +590,15 @@ public static class SingBoxConfigBuilder
             tls["insecure"] = true;
         if (sec.Alpn is { } alpn)
             tls["alpn"] = StrArray(alpn.Split(','));
-        tls["utls"] = new JsonObject
+        // uTLS — подделка TLS поверх TCP; у QUIC (Hysteria2) его нет.
+        if (p.Protocol != Protocol.Hysteria2)
         {
-            ["enabled"] = true,
-            ["fingerprint"] = sec.Fingerprint ?? ctx.S.Dpi.Utls,
-        };
+            tls["utls"] = new JsonObject
+            {
+                ["enabled"] = true,
+                ["fingerprint"] = sec.Fingerprint ?? ctx.S.Dpi.Utls,
+            };
+        }
         if (sec.Type == SecurityType.Reality)
         {
             var r = sec.Reality!;

@@ -29,6 +29,9 @@ public sealed class SingBoxGoldenTests
     internal static readonly Profile Xhttp = WithId(Ok($"vless://{Uuid}@de.example.com:443?type=xhttp&path=%2Fx&mode=packet-up&security=reality&sni=www.example.org&fp=firefox&pbk={Pbk}&sid=a1b2#DE%20XHTTP"), 6);
     private static readonly LocalAuth XrayAuth = new("xray-user", "xray-pass");
 
+    internal static readonly Profile Ss2022 = WithId(Ok("ss://2022-blake3-aes-128-gcm:AAECAwQFBgcICQoLDA0ODw%3D%3D@ss.example.com:8388#SS-2022"), 14);
+    internal static readonly Profile Hy2 = WithId(Ok("hysteria2://hy2pass@hy.example.com:443?sni=hy.example.com&obfs=salamander&obfs-password=obfspw#HY2"), 15);
+
     private static readonly AppSettings Defaults = new();
 
     public static TheoryData<string> Scenarios => new(All.Keys);
@@ -36,6 +39,10 @@ public sealed class SingBoxGoldenTests
     private static readonly Dictionary<string, Func<SingBoxInput>> All = new()
     {
         ["01-reality-vision-tun-except-ru"] = () => Input(Defaults, Reality),
+
+        // Shadowsocks-2022 активный, Hysteria2 в группе авто-выбора; Mux включён — у Hysteria2 его быть не должно.
+        ["12-shadowsocks-hysteria2"] = () => Input(
+            Defaults with { Dpi = Defaults.Dpi with { Mux = true } }, Ss2022, [Ss2022, Hy2], [Ss2022, Hy2]),
 
         ["02-reality-vision-system-proxy"] = () => Input(
             Defaults with { Connection = Defaults.Connection with { Mode = CaptureMode.SystemProxy } }, Reality),

@@ -7,7 +7,7 @@ record Profile(
     Guid Id,
     string Name,                     // очищено NameSanitizer, ≤ 64 символов
     Guid? SubscriptionId,            // null = добавлен вручную
-    Protocol Protocol,               // Vless | Vmess | Trojan  (позже Shadowsocks, Hysteria2)
+    Protocol Protocol,               // Vless | Vmess | Trojan | Shadowsocks | Hysteria2 (ADR-026)
     string Address, int Port,
     SecretRef Credential,            // UUID или пароль; хранится в SecretStore
     VlessOptions? Vless,             // Flow: None | XtlsRprxVision; Encryption = "none"

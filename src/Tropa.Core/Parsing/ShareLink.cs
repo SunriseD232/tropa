@@ -37,6 +37,8 @@ public static class ShareLink
                 "vless" => ParseVless(rest, warnings),
                 "trojan" => ParseTrojan(rest, warnings),
                 "vmess" => ParseVmess(rest, warnings),
+                "ss" => ParseShadowsocks(rest, warnings),
+                "hysteria2" or "hy2" => ParseHysteria2(rest, warnings),
                 _ => throw new LinkFormatException($"Протокол «{scheme}» пока не поддерживается."),
             };
             return ParseResult.Ok(profile, warnings);
@@ -92,6 +94,89 @@ public static class ShareLink
         "xtls-rprx-vision" or "xtls-rprx-vision-udp443" => VlessFlow.XtlsRprxVision,
         _ => throw new LinkFormatException($"Flow «{flow}» не поддерживается."),
     };
+
+    // ---------------- Shadowsocks (SIP002 и старый формат) ----------------
+
+    private static Profile ParseShadowsocks(string rest, List<string> warnings)
+    {
+        // Старый формат: всё до «#» — base64 от «метод:пароль@адрес:порт».
+        var hash = rest.IndexOf('#', StringComparison.Ordinal);
+        var body = hash >= 0 ? rest[..hash] : rest;
+        if (!body.Contains('@', StringComparison.Ordinal) && Base64Text.Decode(body.TrimEnd('/')) is { } decoded)
+            rest = decoded + (hash >= 0 ? rest[hash..] : "");
+
+        var url = UrlParts.Split(rest);
+        if (url.Query.ContainsKey("plugin"))
+            throw new LinkFormatException("Плагины Shadowsocks (obfs, v2ray-plugin) не поддерживаются.");
+
+        // SIP002: userinfo — base64url(«метод:пароль») или, для 2022, «метод:пароль» в процентной кодировке.
+        var userInfo = url.UserInfo;
+        if (!userInfo.Contains(':', StringComparison.Ordinal) && Base64Text.Decode(userInfo) is { } u)
+            userInfo = u;
+        var colon = userInfo.IndexOf(':', StringComparison.Ordinal);
+        if (colon <= 0)
+            throw new LinkFormatException("В ссылке Shadowsocks нет метода и пароля.");
+        var method = Validation.SsMethod(userInfo[..colon]);
+        var password = Validation.SsPassword(method, userInfo[(colon + 1)..]);
+
+        var address = Validation.Address(url.Host);
+        var port = Validation.Port(url.Port);
+        _ = warnings;
+        return new Profile
+        {
+            Name = NameSanitizer.Sanitize(url.Fragment, $"{address}:{port}"),
+            Protocol = Protocol.Shadowsocks,
+            Address = address,
+            Port = port,
+            Credential = new Secret(password),
+            SsMethod = method,
+        };
+    }
+
+    // ---------------- Hysteria2 ----------------
+
+    private static Profile ParseHysteria2(string rest, List<string> warnings)
+    {
+        var url = UrlParts.Split(rest);
+        var q = url.Query;
+        var address = Validation.Address(url.Host);
+        // Диапазон портов (port hopping) Тропа пока не использует: берём первый.
+        var portText = url.Port.Split(',')[0].Split('-')[0];
+        if (portText != url.Port)
+            warnings.Add("Диапазон портов не поддерживается, используется первый порт.");
+        var port = Validation.Port(portText);
+
+        Secret? obfs = null;
+        if (q.GetValueOrDefault("obfs") is { Length: > 0 } obfsType)
+        {
+            if (obfsType != "salamander")
+                throw new LinkFormatException($"Маскировка Hysteria2 «{obfsType}» не поддерживается.");
+            obfs = new Secret(Validation.Password(q.GetValueOrDefault("obfs-password")));
+        }
+
+        if (q.ContainsKey("pinSHA256"))
+            warnings.Add("Закрепление сертификата (pinSHA256) не поддерживается и пропущено.");
+        var insecure = q.GetValueOrDefault("insecure") is "1" or "true";
+        if (insecure)
+            warnings.Add("Сервер отключает проверку сертификата (insecure).");
+
+        return new Profile
+        {
+            Name = NameSanitizer.Sanitize(url.Fragment, $"{address}:{port}"),
+            Protocol = Protocol.Hysteria2,
+            Address = address,
+            Port = port,
+            Credential = new Secret(Validation.Password(url.UserInfo)),
+            Obfs = obfs,
+            Security = new SecuritySettings
+            {
+                Type = SecurityType.Tls,
+                Sni = Validation.Sni(q.GetValueOrDefault("sni")),
+                Alpn = "h3",
+                AllowInsecure = insecure,
+            },
+        };
+    }
 
     // ---------------- Trojan ----------------
 
@@ -290,8 +375,33 @@ public static class ShareLink
             Protocol.Vless => BuildUrl("vless", profile, VlessQuery(profile)),
             Protocol.Trojan => BuildUrl("trojan", profile, CommonQuery(profile)),
             Protocol.Vmess => BuildVmess(profile),
+            Protocol.Shadowsocks => BuildShadowsocks(profile),
+            Protocol.Hysteria2 => BuildUrl("hysteria2", profile, Hysteria2Query(profile)),
             _ => throw new ArgumentOutOfRangeException(nameof(profile)),
         };
+    }
+
+    private static string BuildShadowsocks(Profile p)
+    {
+        var userInfo = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{p.SsMethod}:{p.Credential.Reveal()}"))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var host = p.Address.Contains(':', StringComparison.Ordinal) ? $"[{p.Address}]" : p.Address;
+        return $"ss://{userInfo}@{host}:{p.Port}#{Uri.EscapeDataString(p.Name)}";
+    }
+
+    private static List<KeyValuePair<string, string>> Hysteria2Query(Profile p)
+    {
+        var q = new List<KeyValuePair<string, string>>();
+        AddPair(q, "sni", p.Security.Sni);
+        if (p.Obfs is { } obfs)
+        {
+            q.Add(new("obfs", "salamander"));
+            q.Add(new("obfs-password", obfs.Reveal()));
+        }
+
+        if (p.Security.AllowInsecure)
+            q.Add(new("insecure", "1"));
+        return q;
     }
 
     private static List<KeyValuePair<string, string>> VlessQuery(Profile p)

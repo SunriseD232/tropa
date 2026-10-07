@@ -1,0 +1,58 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "tag": "in-srv-0000000e",
+      "listen": "127.0.0.1",
+      "port": 31220,
+      "protocol": "socks",
+      "settings": {
+        "auth": "password",
+        "accounts": [
+          {
+            "user": "xray-user",
+            "pass": "xray-pass"
+          }
+        ],
+        "udp": true
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "srv-0000000e",
+      "protocol": "shadowsocks",
+      "settings": {
+        "servers": [
+          {
+            "address": "ss.example.com",
+            "port": 8388,
+            "method": "2022-blake3-aes-128-gcm",
+            "password": "AAECAwQFBgcICQoLDA0ODw=="
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "raw",
+        "security": "none"
+      }
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": [
+          "in-srv-0000000e"
+        ],
+        "outboundTag": "srv-0000000e"
+      }
+    ]
+  }
+}

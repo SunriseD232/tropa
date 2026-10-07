@@ -203,7 +203,8 @@ public static partial class ServerTester
         var r = new ServerTestResult { At = o.Time.GetUtcNow() };
 
         // 1. TCP-пинг до сервера напрямую. Для цепочек пропускаем: напрямую сервер может быть недоступен по замыслу.
-        if (kinds.HasFlag(TestKinds.Tcp) && t.Profile.ChainVia is null)
+        // Hysteria2 работает по UDP (QUIC): TCP-порта у него нет, доступность покажет реальная задержка.
+        if (kinds.HasFlag(TestKinds.Tcp) && t.Profile.ChainVia is null && t.Profile.Protocol != Protocol.Hysteria2)
         {
             var (tcp, error) = await TcpPingAsync(pingPort, auth, t.Profile.Address, t.Profile.Port, o, ct).ConfigureAwait(false);
             r = r with { TcpMs = tcp };

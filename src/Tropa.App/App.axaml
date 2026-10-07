@@ -3,50 +3,99 @@
              x:Class="Tropa.App.App"
              RequestedThemeVariant="Dark">
   <Application.Resources>
-    <!-- Палитра из макета (design/canvas-src/helmet.part) -->
-    <Color x:Key="BgColor">#0F1215</Color>
-    <Color x:Key="SideColor">#14181C</Color>
-    <Color x:Key="CardColor">#171B20</Color>
-    <Color x:Key="Card2Color">#1E242A</Color>
-    <Color x:Key="BorderColor">#242A31</Color>
-    <Color x:Key="TextColor">#E6EAEE</Color>
-    <Color x:Key="MutedColor">#9AA4AE</Color>
-    <Color x:Key="AccentColor">#3DDC97</Color>
-    <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}" />
-    <SolidColorBrush x:Key="Side" Color="{StaticResource SideColor}" />
-    <SolidColorBrush x:Key="Card" Color="{StaticResource CardColor}" />
-    <SolidColorBrush x:Key="Card2" Color="{StaticResource Card2Color}" />
-    <SolidColorBrush x:Key="Line" Color="{StaticResource BorderColor}" />
-    <SolidColorBrush x:Key="Text" Color="{StaticResource TextColor}" />
-    <SolidColorBrush x:Key="Muted" Color="{StaticResource MutedColor}" />
-    <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}" />
-    <SolidColorBrush x:Key="AccentDark" Color="#0B1A13" />
-    <SolidColorBrush x:Key="OkBg" Color="#173A2B" />
-    <SolidColorBrush x:Key="OkFg" Color="#7BE8B5" />
-    <SolidColorBrush x:Key="WarnBg" Color="#3A2E14" />
-    <SolidColorBrush x:Key="WarnFg" Color="#F5C76A" />
-    <SolidColorBrush x:Key="BadBg" Color="#3D1C1F" />
-    <SolidColorBrush x:Key="BadFg" Color="#FF9C9C" />
-    <SolidColorBrush x:Key="InfoBg" Color="#152233" />
-    <SolidColorBrush x:Key="InfoFg" Color="#9CC4FF" />
-    <FontFamily x:Key="Mono">Cascadia Mono, Consolas, monospace</FontFamily>
-    <!-- Переключатели в цвете макета: включённое состояние должно читаться сразу -->
-    <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#3DDC97" />
-    <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#5BE6A8" />
-    <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#2FBF80" />
-    <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#0B1A13" />
-    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#0B1A13" />
-    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#0B1A13" />
-    <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#2C333B" />
-    <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#3A424B" />
+    <ResourceDictionary>
+      <!-- Палитры тёмной и светлой темы (design/canvas-src). Ключи одинаковые: виды берут их через
+           DynamicResource, поэтому тема меняется сразу, без перезапуска. -->
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="Bg" Color="#0F1215" />
+          <SolidColorBrush x:Key="Side" Color="#14181C" />
+          <SolidColorBrush x:Key="Card" Color="#171B20" />
+          <SolidColorBrush x:Key="Card2" Color="#1E242A" />
+          <SolidColorBrush x:Key="Line" Color="#242A31" />
+          <SolidColorBrush x:Key="Text" Color="#E6EAEE" />
+          <SolidColorBrush x:Key="Muted" Color="#9AA4AE" />
+          <SolidColorBrush x:Key="Accent" Color="#3DDC97" />
+          <SolidColorBrush x:Key="AccentDark" Color="#0B1A13" />
+          <SolidColorBrush x:Key="AccentHover" Color="#5BE6A8" />
+          <SolidColorBrush x:Key="OkBg" Color="#173A2B" />
+          <SolidColorBrush x:Key="OkFg" Color="#7BE8B5" />
+          <SolidColorBrush x:Key="WarnBg" Color="#3A2E14" />
+          <SolidColorBrush x:Key="WarnFg" Color="#F5C76A" />
+          <SolidColorBrush x:Key="BadBg" Color="#3D1C1F" />
+          <SolidColorBrush x:Key="BadFg" Color="#FF9C9C" />
+          <SolidColorBrush x:Key="InfoBg" Color="#152233" />
+          <SolidColorBrush x:Key="InfoFg" Color="#9CC4FF" />
+          <SolidColorBrush x:Key="DpiBg" Color="#132A20" />
+          <SolidColorBrush x:Key="Label" Color="#8E99A4" />
+          <SolidColorBrush x:Key="NavFg" Color="#A3ADB7" />
+          <SolidColorBrush x:Key="NavOnBg" Color="#1E2A25" />
+          <SolidColorBrush x:Key="FieldBorder" Color="#2C333B" />
+          <SolidColorBrush x:Key="InfoBorder" Color="#3A424B" />
+          <SolidColorBrush x:Key="Overlay" Color="#BB050709" />
+          <SolidColorBrush x:Key="SideLine" Color="#232930" />
+          <SolidColorBrush x:Key="SideFooter" Color="#1A1F24" />
+          <SolidColorBrush x:Key="Chip" Color="#2A323A" />
+          <SolidColorBrush x:Key="PowerOff" Color="#232A31" />
+          <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#3DDC97" />
+          <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#5BE6A8" />
+          <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#2FBF80" />
+          <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#0B1A13" />
+          <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#0B1A13" />
+          <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#0B1A13" />
+          <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#2C333B" />
+          <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#3A424B" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="Bg" Color="#F3F5F7" />
+          <SolidColorBrush x:Key="Side" Color="#E9EDF1" />
+          <SolidColorBrush x:Key="Card" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="Card2" Color="#EEF1F4" />
+          <SolidColorBrush x:Key="Line" Color="#DCE2E8" />
+          <SolidColorBrush x:Key="Text" Color="#161B20" />
+          <SolidColorBrush x:Key="Muted" Color="#55616C" />
+          <SolidColorBrush x:Key="Accent" Color="#15A066" />
+          <SolidColorBrush x:Key="AccentDark" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="AccentHover" Color="#1DB876" />
+          <SolidColorBrush x:Key="OkBg" Color="#DDF4E8" />
+          <SolidColorBrush x:Key="OkFg" Color="#0F6B43" />
+          <SolidColorBrush x:Key="WarnBg" Color="#FFF1D2" />
+          <SolidColorBrush x:Key="WarnFg" Color="#7A4E00" />
+          <SolidColorBrush x:Key="BadBg" Color="#FDE2E2" />
+          <SolidColorBrush x:Key="BadFg" Color="#A3201A" />
+          <SolidColorBrush x:Key="InfoBg" Color="#E2ECFB" />
+          <SolidColorBrush x:Key="InfoFg" Color="#1B4F9C" />
+          <SolidColorBrush x:Key="DpiBg" Color="#DDF4E8" />
+          <SolidColorBrush x:Key="Label" Color="#5F6B77" />
+          <SolidColorBrush x:Key="NavFg" Color="#45515C" />
+          <SolidColorBrush x:Key="NavOnBg" Color="#D7EEE2" />
+          <SolidColorBrush x:Key="FieldBorder" Color="#C6CED6" />
+          <SolidColorBrush x:Key="InfoBorder" Color="#B3BDC7" />
+          <SolidColorBrush x:Key="Overlay" Color="#88101418" />
+          <SolidColorBrush x:Key="SideLine" Color="#D6DCE2" />
+          <SolidColorBrush x:Key="SideFooter" Color="#DFE4E9" />
+          <SolidColorBrush x:Key="Chip" Color="#DDE3E8" />
+          <SolidColorBrush x:Key="PowerOff" Color="#E3E8ED" />
+          <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#15A066" />
+          <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#1DB876" />
+          <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#118A57" />
+          <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#C9D1D9" />
+          <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#AEB8C2" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <FontFamily x:Key="Mono">Cascadia Mono, Consolas, monospace</FontFamily>
+    </ResourceDictionary>
   </Application.Resources>
 
   <Application.Styles>
     <FluentTheme />
 
     <Style Selector="Window">
-      <Setter Property="Background" Value="{StaticResource Bg}" />
-      <Setter Property="Foreground" Value="{StaticResource Text}" />
+      <Setter Property="Background" Value="{DynamicResource Bg}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
       <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
     </Style>
 
@@ -55,12 +104,12 @@
       <Setter Property="FontWeight" Value="Bold" />
     </Style>
     <Style Selector="TextBlock.muted">
-      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+      <Setter Property="Foreground" Value="{DynamicResource Muted}" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
     <Style Selector="TextBlock.lbl">
-      <Setter Property="Foreground" Value="#8E99A4" />
+      <Setter Property="Foreground" Value="{DynamicResource Label}" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
@@ -69,8 +118,8 @@
     </Style>
 
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="{StaticResource Card}" />
-      <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+      <Setter Property="Background" Value="{DynamicResource Card}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="16" />
       <Setter Property="Padding" Value="20" />
@@ -79,7 +128,7 @@
     <!-- Боковое меню -->
     <Style Selector="Button.nav">
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#A3ADB7" />
+      <Setter Property="Foreground" Value="{DynamicResource NavFg}" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -89,8 +138,8 @@
       <Setter Property="FontSize" Value="15" />
     </Style>
     <Style Selector="Button.nav.on">
-      <Setter Property="Background" Value="#1E2A25" />
-      <Setter Property="Foreground" Value="{StaticResource Text}" />
+      <Setter Property="Background" Value="{DynamicResource NavOnBg}" />
+      <Setter Property="Foreground" Value="{DynamicResource Text}" />
     </Style>
 
     <Style Selector="Button">
@@ -99,26 +148,26 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBox">
-      <Setter Property="Background" Value="{StaticResource Bg}" />
-      <Setter Property="BorderBrush" Value="#2C333B" />
+      <Setter Property="Background" Value="{DynamicResource Bg}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource FieldBorder}" />
       <Setter Property="CornerRadius" Value="10" />
     </Style>
     <Style Selector="ComboBox">
-      <Setter Property="Background" Value="{StaticResource Bg}" />
-      <Setter Property="BorderBrush" Value="#2C333B" />
+      <Setter Property="Background" Value="{DynamicResource Bg}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource FieldBorder}" />
       <Setter Property="CornerRadius" Value="10" />
     </Style>
     <Style Selector="ToggleButton">
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.primary">
-      <Setter Property="Background" Value="{StaticResource Accent}" />
-      <Setter Property="Foreground" Value="{StaticResource AccentDark}" />
+      <Setter Property="Background" Value="{DynamicResource Accent}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentDark}" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#5BE6A8" />
-      <Setter Property="Foreground" Value="{StaticResource AccentDark}" />
+      <Setter Property="Background" Value="{DynamicResource AccentHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentDark}" />
     </Style>
 
     <!-- Кнопка «i» -->
@@ -129,9 +178,9 @@
       <Setter Property="Padding" Value="0" />
       <Setter Property="CornerRadius" Value="13" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="#3A424B" />
+      <Setter Property="BorderBrush" Value="{DynamicResource InfoBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="Foreground" Value="#A3ADB7" />
+      <Setter Property="Foreground" Value="{DynamicResource NavFg}" />
       <Setter Property="FontStyle" Value="Italic" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="FontSize" Value="13" />

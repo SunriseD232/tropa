@@ -4,9 +4,9 @@
              x:Class="Tropa.App.Views.ServersView"
              x:DataType="vm:ServersViewModel">
   <UserControl.Styles>
-    <Style Selector="Border.status.ok"><Setter Property="Background" Value="{StaticResource OkBg}" /></Style>
-    <Style Selector="Border.status.warn"><Setter Property="Background" Value="{StaticResource WarnBg}" /></Style>
-    <Style Selector="Border.status.bad"><Setter Property="Background" Value="{StaticResource BadBg}" /></Style>
+    <Style Selector="Border.status.ok"><Setter Property="Background" Value="{DynamicResource OkBg}" /></Style>
+    <Style Selector="Border.status.warn"><Setter Property="Background" Value="{DynamicResource WarnBg}" /></Style>
+    <Style Selector="Border.status.bad"><Setter Property="Background" Value="{DynamicResource BadBg}" /></Style>
     <Style Selector="ListBoxItem">
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
       <Setter Property="CornerRadius" Value="10" />
@@ -81,7 +81,7 @@
               <DataTemplate x:DataType="vm:ServerItemViewModel">
                 <Grid ColumnDefinitions="2*,84,104,1.1*,1.5*" Height="40">
                   <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <Border Background="#2A323A" CornerRadius="4" Width="30" Height="20">
+                    <Border Background="{DynamicResource Chip}" CornerRadius="4" Width="30" Height="20">
                       <TextBlock Text="{Binding Country}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -133,7 +133,7 @@
             </StackPanel>
             <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Selected.Stability}" />
           </Grid>
-          <Border CornerRadius="10" Padding="10,8" Background="{StaticResource Card2}">
+          <Border CornerRadius="10" Padding="10,8" Background="{DynamicResource Card2}">
             <TextBlock Text="{Binding Selected.Explanation}" TextWrapping="Wrap" />
           </Border>
           <TextBlock Classes="muted" Text="{Binding Selected.Checked}" />
@@ -151,8 +151,8 @@
       </Border>
     </Grid>
 
-    <Border Background="{StaticResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}">
-      <TextBlock Text="{Binding Message}" Foreground="{StaticResource InfoFg}" TextWrapping="Wrap" />
+    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding Message}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
     </Border>
   </StackPanel>
 </UserControl>

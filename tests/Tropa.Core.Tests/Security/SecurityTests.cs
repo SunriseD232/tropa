@@ -116,7 +116,7 @@ public sealed class ConfigGuardTests
         { "API без секрета", With("\"route\":", """ "experimental": { "clash_api": { "external_controller": "127.0.0.1:9090" } }, "route": """) },
         { "v2ray api", With("\"route\":", """ "experimental": { "v2ray_api": {} }, "route": """) },
         { "путь к сертификату", With(DirectOutbound, """{ "type": "trojan", "tag": "t", "server": "a", "server_port": 1, "password": "p", "tls": { "enabled": true, "certificate_path": "C:\\x.pem" } }, """ + DirectOutbound) },
-        { "неизвестный outbound", With("\"type\": \"direct\"", "\"type\": \"shadowsocks\"") },
+        { "неизвестный outbound", With("\"type\": \"direct\"", "\"type\": \"tor\"") },
         { "ссылка в никуда", With("\"final\": \"direct\"", "\"final\": \"proxy\"") },
         { "socks на чужой сервер", With(DirectOutbound, """{ "type": "socks", "tag": "s", "server": "evil.example", "server_port": 1080 }, """ + DirectOutbound) },
         { "чтение hosts-файла", With(LocalDns, LocalDns + """, { "type": "hosts", "tag": "h", "path": ["C:\\Windows\\System32\\drivers\\etc\\hosts"] }""") },

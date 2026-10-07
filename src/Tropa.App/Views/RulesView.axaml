@@ -19,14 +19,18 @@
           <TextBlock Classes="h1" Text="Правила" />
           <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruleOrder" />
         </StackPanel>
-        <TextBlock Classes="muted" Text="Правила проверяются сверху вниз, срабатывает первое подходящее. Госуслуги и банки всегда идут напрямую." />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="muted" Text="Правила проверяются сверху вниз, срабатывает первое подходящее. Госуслуги и банки всегда идут напрямую." VerticalAlignment="Center" />
+          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruServices" />
+          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="finalRule" ToolTip.Tip="Что, если ни одно правило не подошло" />
+        </StackPanel>
       </StackPanel>
     </DockPanel>
 
-    <Border Background="{StaticResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding NeedsApply}">
+    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding NeedsApply}">
       <DockPanel>
         <Button DockPanel.Dock="Right" Classes="primary" Content="Применить сейчас" Command="{Binding ApplyCommand}" />
-        <TextBlock Foreground="{StaticResource InfoFg}" VerticalAlignment="Center" TextWrapping="Wrap"
+        <TextBlock Foreground="{DynamicResource InfoFg}" VerticalAlignment="Center" TextWrapping="Wrap"
                    Text="Правила изменены. Чтобы они заработали, подключение переподключится на секунду." />
       </DockPanel>
     </Border>
@@ -79,8 +83,8 @@
           <TextBlock Text="Приложения" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
           <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="appRules" />
         </StackPanel>
-        <Border Background="{StaticResource WarnBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding AppRulesNote, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <TextBlock Text="{Binding AppRulesNote}" Foreground="{StaticResource WarnFg}" TextWrapping="Wrap" />
+        <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding AppRulesNote, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <TextBlock Text="{Binding AppRulesNote}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" />
         </Border>
         <DockPanel>
           <Button DockPanel.Dock="Right" Content="Добавить" Command="{Binding AddAppCommand}" Margin="8,0,0,0" />
@@ -165,8 +169,8 @@
       </StackPanel>
     </Border>
 
-    <Border Background="{StaticResource BadBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}">
-      <TextBlock Text="{Binding Error}" Foreground="{StaticResource BadFg}" TextWrapping="Wrap" />
+    <Border Background="{DynamicResource BadBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding Error}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" />
     </Border>
   </StackPanel>
 </UserControl>

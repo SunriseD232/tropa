@@ -71,3 +71,64 @@ internal sealed partial class DiagnosticsView : UserControl
         ReportNote.Text = "Отчёт сохранён: " + file.Name;
     }
 }
+
+internal sealed partial class SettingsView : UserControl
+{
+    public SettingsView()
+    {
+        InitializeComponent();
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is SettingsViewModel vm)
+            {
+                vm.ExportRequested -= OnExport;
+                vm.ImportRequested -= OnImport;
+                vm.ExportRequested += OnExport;
+                vm.ImportRequested += OnImport;
+            }
+        };
+    }
+
+    // Файл выбирает только пользователь в диалоге (docs/02-security.md, §3.7).
+    private async void OnExport(object? sender, EventArgs e)
+    {
+        if (DataContext is not SettingsViewModel vm || TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+            return;
+        var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Сохранить настройки Тропы",
+            SuggestedFileName = $"tropa-settings-{DateTime.Now:yyyyMMdd}.json",
+            DefaultExtension = "json",
+            FileTypeChoices = [new FilePickerFileType("Настройки Тропы") { Patterns = ["*.json"] }],
+        });
+        if (file is null)
+            return;
+        await using (var stream = await file.OpenWriteAsync())
+        await using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false)))
+            await writer.WriteAsync(vm.ExportText());
+        vm.ReportExported(file.Name);
+    }
+
+    private async void OnImport(object? sender, EventArgs e)
+    {
+        if (DataContext is not SettingsViewModel vm || TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+            return;
+        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Загрузить настройки Тропы",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("Настройки Тропы") { Patterns = ["*.json"] }],
+        });
+        if (files.Count == 0)
+            return;
+        await using var stream = await files[0].OpenReadAsync();
+        if (stream.CanSeek && stream.Length > 2 * 1024 * 1024)
+        {
+            vm.ImportText("");
+            return;
+        }
+
+        using var reader = new StreamReader(stream);
+        vm.ImportText(await reader.ReadToEndAsync());
+    }
+}

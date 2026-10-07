@@ -21,7 +21,8 @@ public sealed record CorePlan(IReadOnlyList<Profile> XrayProfiles, bool XrayDire
 
         List<Profile> viaXray = s.Cores.CoreChoice switch
         {
-            CoreChoice.Xray => profiles,
+            // Hysteria2 Тропа запускает только в sing-box, даже при «Всегда Xray».
+            CoreChoice.Xray => profiles.Where(p => p.Protocol != Protocol.Hysteria2).ToList(),
             _ => profiles.Where(p => p.Transport.Type == TransportType.Xhttp).ToList(),
         };
 

@@ -57,7 +57,10 @@ internal sealed partial class EditServerViewModel : ObservableObject
             };
     }
 
-    public ObservableCollection<OptionItem> Protocols { get; } = [new("vless", "VLESS"), new("vmess", "VMess"), new("trojan", "Trojan")];
+    public ObservableCollection<OptionItem> Protocols { get; } =
+        [new("vless", "VLESS"), new("vmess", "VMess"), new("trojan", "Trojan"), new("shadowsocks", "Shadowsocks"), new("hysteria2", "Hysteria2")];
+    public IReadOnlyList<string> SsMethods { get; } =
+        ["2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305", "aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305"];
     public ObservableCollection<OptionItem> Transports { get; } = [new("tcp", "TCP"), new("xhttp", "XHTTP"), new("ws", "WS"), new("grpc", "gRPC"), new("httpupgrade", "HTTPUpgrade")];
     public ObservableCollection<OptionItem> Securities { get; } = [new("none", "Нет"), new("tls", "TLS"), new("reality", "Reality")];
     public IReadOnlyList<string> Fingerprints { get; } = ["chrome", "firefox", "edge", "safari", "random"];
@@ -86,6 +89,8 @@ internal sealed partial class EditServerViewModel : ObservableObject
     [ObservableProperty] public partial string ShortId { get; set; } = "";
     [ObservableProperty] public partial string SpiderX { get; set; } = "/";
     [ObservableProperty] public partial ChainChoice? Chain { get; set; }
+    [ObservableProperty] public partial string SsMethod { get; set; } = "2022-blake3-aes-128-gcm";
+    [ObservableProperty] public partial string ObfsPassword { get; set; } = "";
     [ObservableProperty] public partial string Link { get; set; } = "";
     [ObservableProperty] public partial string? Error { get; set; }
     [ObservableProperty] public partial string CoreNote { get; set; } = "";
@@ -102,7 +107,18 @@ internal sealed partial class EditServerViewModel : ObservableObject
     public bool HasPath => Transport is "ws" or "xhttp" or "httpupgrade";
     public bool IsGrpc => Transport == "grpc";
     public bool IsXhttp => Transport == "xhttp";
-    public string CredentialLabel => Protocol == "trojan" ? "Пароль" : "UUID";
+    public bool IsShadowsocks => Protocol == "shadowsocks";
+    public bool IsHysteria2 => Protocol == "hysteria2";
+    public bool HasTransport => !IsShadowsocks && !IsHysteria2;
+    public bool ShowAlpn => IsTls && !IsHysteria2;
+    public bool ShowFingerprint => !IsNone && !IsHysteria2;
+    public bool ShowPlainWarning => IsNone && !IsShadowsocks;
+    public string CredentialLabel => Protocol switch
+    {
+        "trojan" or "hysteria2" => "Пароль",
+        "shadowsocks" => SsMethod.StartsWith("2022-", StringComparison.Ordinal) ? "Ключ (base64)" : "Пароль",
+        _ => "UUID",
+    };
 
     public void OpenNew()
     {
@@ -142,8 +158,17 @@ internal sealed partial class EditServerViewModel : ObservableObject
         PublicKey = p?.Security.Reality?.PublicKey ?? "";
         ShortId = p?.Security.Reality?.ShortId ?? "";
         SpiderX = p?.Security.Reality?.SpiderX ?? "/";
+        SsMethod = p?.SsMethod ?? "2022-blake3-aes-128-gcm";
+        ObfsPassword = p?.Obfs?.Reveal() ?? "";
 
-        Check(Protocols, p?.Protocol switch { Core.Model.Protocol.Vmess => "vmess", Core.Model.Protocol.Trojan => "trojan", _ => "vless" });
+        Check(Protocols, p?.Protocol switch
+        {
+            Core.Model.Protocol.Vmess => "vmess",
+            Core.Model.Protocol.Trojan => "trojan",
+            Core.Model.Protocol.Shadowsocks => "shadowsocks",
+            Core.Model.Protocol.Hysteria2 => "hysteria2",
+            _ => "vless",
+        });
         Check(Transports, p?.Transport.Type switch
         {
             TransportType.Xhttp => "xhttp",
@@ -175,6 +200,15 @@ internal sealed partial class EditServerViewModel : ObservableObject
         var group = Protocols.Contains(o) ? Protocols : Transports.Contains(o) ? Transports : Securities;
         foreach (var other in group.Where(x => x != o))
             other.IsChecked = false;
+        // У Shadowsocks и Hysteria2 безопасность и транспорт заданы протоколом — выставляем сами.
+        if (group == Protocols && !_loading && o.Key is "shadowsocks" or "hysteria2")
+        {
+            var wasLoading = _loading;
+            _loading = true;
+            Check(Transports, "tcp");
+            Check(Securities, o.Key == "shadowsocks" ? "none" : "tls");
+            _loading = wasLoading;
+        }
         if (!_loading)
             Recompute();
     }
@@ -213,6 +247,12 @@ internal sealed partial class EditServerViewModel : ObservableObject
         OnPropertyChanged(nameof(IsGrpc));
         OnPropertyChanged(nameof(IsXhttp));
         OnPropertyChanged(nameof(CredentialLabel));
+        OnPropertyChanged(nameof(IsShadowsocks));
+        OnPropertyChanged(nameof(IsHysteria2));
+        OnPropertyChanged(nameof(HasTransport));
+        OnPropertyChanged(nameof(ShowAlpn));
+        OnPropertyChanged(nameof(ShowFingerprint));
+        OnPropertyChanged(nameof(ShowPlainWarning));
 
         // Недоступные варианты — по тому же ProfileCompat, что и проверка перед запуском.
         var probe = ProbeProfile();
@@ -232,12 +272,16 @@ internal sealed partial class EditServerViewModel : ObservableObject
         Mark(Securities, "security");
         VisionReason = disabled.GetValueOrDefault("flow");
         var titles = Protocols.Concat(Transports).Concat(Securities).ToDictionary(o => o.Key, o => o.Title);
-        DisabledNotes = disabled.Count == 0 ? null : string.Join("\n", disabled
-            .Where(kv => kv.Key != "flow")
-            .Select(kv => $"«{titles.GetValueOrDefault(kv.Key[(kv.Key.IndexOf('.') + 1)..], kv.Key)}» недоступен: {kv.Value}."));
+        var notes = disabled
+            .Where(kv => kv.Key != "flow" && (HasTransport || !kv.Key.StartsWith("transport.", StringComparison.Ordinal)))
+            .Select(kv => $"«{titles.GetValueOrDefault(kv.Key[(kv.Key.IndexOf('.') + 1)..], kv.Key)}» недоступен: {kv.Value}.")
+            .ToList();
+        DisabledNotes = notes.Count == 0 ? null : string.Join("\n", notes);
         VisionEnabled = VisionReason is null;
 
-        CoreNote = Transport == "xhttp" ? "Ядро: Xray (XHTTP есть только в Xray)" : "Ядро: sing-box (авто)";
+        CoreNote = Transport == "xhttp" ? "Ядро: Xray (XHTTP есть только в Xray)"
+            : IsHysteria2 ? "Ядро: sing-box (Hysteria2 есть только в sing-box)"
+            : "Ядро: sing-box (авто)";
 
         var (profile, error) = Build();
         Error = error;
@@ -248,7 +292,15 @@ internal sealed partial class EditServerViewModel : ObservableObject
     private Profile ProbeProfile() => new()
     {
         Name = "probe",
-        Protocol = Protocol switch { "vmess" => Core.Model.Protocol.Vmess, "trojan" => Core.Model.Protocol.Trojan, _ => Core.Model.Protocol.Vless },
+        Protocol = Protocol switch
+        {
+            "vmess" => Core.Model.Protocol.Vmess,
+            "trojan" => Core.Model.Protocol.Trojan,
+            "shadowsocks" => Core.Model.Protocol.Shadowsocks,
+            "hysteria2" => Core.Model.Protocol.Hysteria2,
+            _ => Core.Model.Protocol.Vless,
+        },
+        SsMethod = IsShadowsocks ? SsMethod : null,
         Address = "probe",
         Port = 1,
         Credential = new Core.Security.Secret("probe"),
@@ -274,13 +326,29 @@ internal sealed partial class EditServerViewModel : ObservableObject
     private (Profile? Profile, string? Error) Build()
     {
         if (string.IsNullOrWhiteSpace(Address) || string.IsNullOrWhiteSpace(Credential))
-            return (null, "Укажите адрес сервера и " + (Protocol == "trojan" ? "пароль." : "UUID."));
+            return (null, "Укажите адрес сервера и " + (Protocol == "vless" || Protocol == "vmess" ? "UUID." : "пароль."));
         var issues = ProfileCompat.Issues(ProbeProfile());
         if (issues.Count > 0)
             return (null, issues[0]);
 
+        var hostPart = Address.Trim().Contains(':', StringComparison.Ordinal) ? "[" + Address.Trim() + "]" : Address.Trim();
         string link;
-        if (Protocol == "vmess")
+        if (IsShadowsocks)
+        {
+            link = $"ss://{Uri.EscapeDataString(SsMethod)}:{Uri.EscapeDataString(Credential.Trim())}@{hostPart}:{Port.Trim()}#{Uri.EscapeDataString(Name)}";
+        }
+        else if (IsHysteria2)
+        {
+            var q = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Sni))
+                q.Add("sni=" + Uri.EscapeDataString(Sni.Trim()));
+            if (!string.IsNullOrWhiteSpace(ObfsPassword))
+                q.Add("obfs=salamander&obfs-password=" + Uri.EscapeDataString(ObfsPassword.Trim()));
+            if (AllowInsecure)
+                q.Add("insecure=1");
+            link = $"hysteria2://{Uri.EscapeDataString(Credential.Trim())}@{hostPart}:{Port.Trim()}?{string.Join('&', q)}#{Uri.EscapeDataString(Name)}";
+        }
+        else if (Protocol == "vmess")
         {
             using var ms = new MemoryStream();
             using (var w = new Utf8JsonWriter(ms))

@@ -29,6 +29,8 @@ public sealed class XrayGoldenTests
             [new(Xhttp, 31200), new(Ws, 31201), new(Trojan, 31202), new(Vision, 31203)], Defaults, Auth),
         ["x02-direct-noise-fragment"] = () => XrayConfigBuilder.Build(
             [], Defaults with { Dpi = Defaults.Dpi with { Fragment = true, Noise = true, NoiseLen = "5-10" } }, Auth, directPort: 31210),
+        ["x04-shadowsocks"] = () => XrayConfigBuilder.Build(
+            [new(SingBoxGoldenTests.Ss2022, 31220)], Defaults, Auth),
         ["x03-mux"] = () => XrayConfigBuilder.Build(
             [new(Ws, 31201), new(Vision, 31203)], Defaults with { Dpi = Defaults.Dpi with { Mux = true, MuxConc = 4 } }, Auth),
     };
@@ -77,7 +79,7 @@ public sealed class XrayGoldenTests
         { "без пароля", Base.Replace("\"auth\": \"password\"", "\"auth\": \"noauth\"", StringComparison.Ordinal) },
         { "dokodemo", Base.Replace("\"protocol\": \"socks\"", "\"protocol\": \"dokodemo-door\"", StringComparison.Ordinal) },
         { "сертификат с диска", Base.Replace("\"allowInsecure\": false", "\"allowInsecure\": false, \"certificates\": [ { \"certificateFile\": \"C:\\\\x.pem\" } ]", StringComparison.Ordinal) },
-        { "неизвестный выход", Base.Replace("\"protocol\": \"blackhole\"", "\"protocol\": \"shadowsocks\"", StringComparison.Ordinal) },
+        { "неизвестный выход", Base.Replace("\"protocol\": \"blackhole\"", "\"protocol\": \"dokodemo-door\"", StringComparison.Ordinal) },
         { "битый JSON", "{" },
     };
 

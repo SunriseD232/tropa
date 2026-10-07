@@ -36,6 +36,9 @@ public sealed record GeneralSettings
     public bool NotifySwitch { get; init; } = true;
     public AppTheme Theme { get; init; } = AppTheme.Dark;
     public string Lang { get; init; } = "ru";
+
+    /// <summary>Мастер первого запуска пройден или пропущен.</summary>
+    public bool OnboardingDone { get; init; }
 }
 
 public sealed record ConnectionSettings
@@ -95,6 +98,15 @@ public sealed record DpiSettings
     public string NoiseDelay { get; init; } = "10-16";
     public bool Mux { get; init; }
     public int MuxConc { get; init; } = 8;
+
+    /// <summary>Наборы (docs/06-features.md, §5): soft — фрагментация по списку, hard — всё и шум; custom — как есть.</summary>
+    public DpiSettings WithPreset(DpiPreset preset) => preset switch
+    {
+        DpiPreset.Soft => this with { DpiPreset = preset, Fragment = true, FragScope = FragmentScope.List, Noise = false },
+        DpiPreset.Hard => this with { DpiPreset = preset, Fragment = true, FragScope = FragmentScope.All, Noise = true },
+        DpiPreset.Custom => this with { DpiPreset = preset },
+        _ => this with { DpiPreset = DpiPreset.Off, Fragment = false, Noise = false },
+    };
 }
 
 public sealed record CoreSettings

@@ -256,16 +256,7 @@ internal sealed partial class RulesViewModel : ObservableObject
         OnPropertyChanged(nameof(DpiDescription));
         if (_loading)
             return;
-        _engine.UpdateSettings(s => s with
-        {
-            Dpi = value switch
-            {
-                1 => s.Dpi with { DpiPreset = DpiPreset.Soft, Fragment = true, FragScope = FragmentScope.List, Noise = false },
-                2 => s.Dpi with { DpiPreset = DpiPreset.Hard, Fragment = true, FragScope = FragmentScope.All, Noise = true },
-                3 => s.Dpi with { DpiPreset = DpiPreset.Custom },
-                _ => s.Dpi with { DpiPreset = DpiPreset.Off, Fragment = false, Noise = false },
-            },
-        });
+        _engine.UpdateSettings(s => s with { Dpi = s.Dpi.WithPreset((DpiPreset)Math.Clamp(value, 0, 3)) });
         NeedsApply = _engine.Status.State == ConnectionState.Connected;
     }
 

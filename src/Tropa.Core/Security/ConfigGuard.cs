@@ -23,7 +23,7 @@ public static class ConfigGuard
     private static readonly FrozenSet<string> RootKeys = new[] { "log", "dns", "inbounds", "outbounds", "route", "experimental" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> LogKeys = new[] { "level", "timestamp", "disabled" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> InboundTypes = new[] { "tun", "mixed", "socks" }.ToFrozenSet(StringComparer.Ordinal);
-    private static readonly FrozenSet<string> OutboundTypes = new[] { "vless", "vmess", "trojan", "direct", "block", "urltest", "selector", "socks" }.ToFrozenSet(StringComparer.Ordinal);
+    private static readonly FrozenSet<string> OutboundTypes = new[] { "vless", "vmess", "trojan", "shadowsocks", "hysteria2", "direct", "block", "urltest", "selector", "socks" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> DnsServerTypes = new[] { "https", "tls", "quic", "h3", "udp", "tcp", "fakeip", "hosts" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> ExperimentalKeys = new[] { "clash_api", "cache_file" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> ClashApiKeys = new[] { "external_controller", "secret" }.ToFrozenSet(StringComparer.Ordinal);

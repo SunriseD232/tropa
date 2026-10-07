@@ -8,16 +8,16 @@
       <Setter Property="Width" Value="30" />
       <Setter Property="Height" Value="30" />
       <Setter Property="CornerRadius" Value="15" />
-      <Setter Property="Background" Value="{StaticResource Card2}" />
+      <Setter Property="Background" Value="{DynamicResource Card2}" />
     </Style>
-    <Style Selector="Border.step.ok"><Setter Property="Background" Value="{StaticResource OkBg}" /></Style>
-    <Style Selector="Border.step.warn"><Setter Property="Background" Value="{StaticResource WarnBg}" /></Style>
-    <Style Selector="Border.step.bad"><Setter Property="Background" Value="{StaticResource BadBg}" /></Style>
-    <Style Selector="Border.step.run"><Setter Property="Background" Value="{StaticResource InfoBg}" /></Style>
-    <Style Selector="Border.step.ok > TextBlock"><Setter Property="Foreground" Value="{StaticResource OkFg}" /></Style>
-    <Style Selector="Border.step.warn > TextBlock"><Setter Property="Foreground" Value="{StaticResource WarnFg}" /></Style>
-    <Style Selector="Border.step.bad > TextBlock"><Setter Property="Foreground" Value="{StaticResource BadFg}" /></Style>
-    <Style Selector="Border.step.run > TextBlock"><Setter Property="Foreground" Value="{StaticResource InfoFg}" /></Style>
+    <Style Selector="Border.step.ok"><Setter Property="Background" Value="{DynamicResource OkBg}" /></Style>
+    <Style Selector="Border.step.warn"><Setter Property="Background" Value="{DynamicResource WarnBg}" /></Style>
+    <Style Selector="Border.step.bad"><Setter Property="Background" Value="{DynamicResource BadBg}" /></Style>
+    <Style Selector="Border.step.run"><Setter Property="Background" Value="{DynamicResource InfoBg}" /></Style>
+    <Style Selector="Border.step.ok > TextBlock"><Setter Property="Foreground" Value="{DynamicResource OkFg}" /></Style>
+    <Style Selector="Border.step.warn > TextBlock"><Setter Property="Foreground" Value="{DynamicResource WarnFg}" /></Style>
+    <Style Selector="Border.step.bad > TextBlock"><Setter Property="Foreground" Value="{DynamicResource BadFg}" /></Style>
+    <Style Selector="Border.step.run > TextBlock"><Setter Property="Foreground" Value="{DynamicResource InfoFg}" /></Style>
   </UserControl.Styles>
 
   <StackPanel Spacing="18">
@@ -43,7 +43,10 @@
             <Button Content="Закрыть" Command="{Binding CloseReportCommand}" />
           </StackPanel>
           <StackPanel>
-            <TextBlock Text="Отчёт" FontSize="18" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="Отчёт" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="diagReport" />
+            </StackPanel>
             <TextBlock Classes="muted" TextWrapping="Wrap"
                        Text="Ключи, пароли и адреса серверов уже убраны (адреса заменены на server-1, server-2…). Проверьте текст перед тем, как кому-то отправить." />
           </StackPanel>
@@ -67,7 +70,7 @@
               <StackPanel Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" IsVisible="{Binding Details, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                <TextBlock Text="{Binding Action}" Foreground="{StaticResource InfoFg}" TextWrapping="Wrap" IsVisible="{Binding Action, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <TextBlock Text="{Binding Action}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" IsVisible="{Binding Action, Converter={x:Static ObjectConverters.IsNotNull}}" />
               </StackPanel>
             </DockPanel>
           </DataTemplate>
@@ -87,10 +90,10 @@
             <Button DockPanel.Dock="Right" Content="Проверить" Command="{Binding CheckDomainCommand}" Margin="8,0,0,0" />
             <TextBox Text="{Binding Domain}" PlaceholderText="discord.com" />
           </DockPanel>
-          <Border CornerRadius="10" Padding="12,10" Background="{StaticResource Card2}" Classes.bad="{Binding DomainSpoofed}"
+          <Border CornerRadius="10" Padding="12,10" Background="{DynamicResource Card2}" Classes.bad="{Binding DomainSpoofed}"
                   IsVisible="{Binding DomainResult, Converter={x:Static ObjectConverters.IsNotNull}}">
             <Border.Styles>
-              <Style Selector="Border.bad"><Setter Property="Background" Value="{StaticResource WarnBg}" /></Style>
+              <Style Selector="Border.bad"><Setter Property="Background" Value="{DynamicResource WarnBg}" /></Style>
             </Border.Styles>
             <TextBlock Text="{Binding DomainResult}" TextWrapping="Wrap" />
           </Border>

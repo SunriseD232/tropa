@@ -199,9 +199,11 @@ public static class DiagnosticsRunner
     /// <summary>Шаги 3, 4, 5, 7 из результата теста сервера.</summary>
     internal static IEnumerable<StepResult> ServerSteps(Profile active, ServerTestResult r)
     {
-        var tcpFailed = r.TcpMs is null && active.ChainVia is null;
+        var tcpFailed = r.TcpMs is null && active.ChainVia is null && active.Protocol != Protocol.Hysteria2;
         if (active.ChainVia is not null)
             yield return new StepResult("tcping", StepStatus.Skipped, "Сервер отвечает", "Сервер в цепочке: напрямую до него не достучаться по замыслу.");
+        else if (active.Protocol == Protocol.Hysteria2)
+            yield return new StepResult("tcping", StepStatus.Skipped, "Сервер отвечает", "Hysteria2 работает по UDP: доступность видна по шагу «Рукопожатие».");
         else if (tcpFailed)
         {
             yield return new StepResult("tcping", StepStatus.Bad, "Сервер не отвечает", r.Error,

@@ -58,6 +58,9 @@ public static class CompatRules
         new("mux", (_, p) => p?.Flow == VlessFlow.XtlsRprxVision,
             "активный сервер использует XTLS Vision, а Vision с Mux не работает",
             s => s with { Dpi = s.Dpi with { Mux = false } }),
+        new("mux", (_, p) => p?.Protocol == Protocol.Hysteria2,
+            "Hysteria2 работает поверх QUIC со своим мультиплексированием",
+            s => s with { Dpi = s.Dpi with { Mux = false } }),
         new("mux", (_, p) => p?.Transport.Type == TransportType.Xhttp,
             "у XHTTP своё мультиплексирование",
             s => s with { Dpi = s.Dpi with { Mux = false } }),
@@ -96,6 +99,24 @@ public static class ProfileCompat
         ArgumentNullException.ThrowIfNull(p);
         var issues = new List<string>();
         var sec = p.Security.Type;
+        if (p.Protocol == Protocol.Shadowsocks)
+        {
+            if (p.Transport.Type != TransportType.Tcp || sec != SecurityType.None)
+                issues.Add("Shadowsocks в Тропе работает без транспорта и TLS.");
+            if (p.SsMethod is null)
+                issues.Add("Для Shadowsocks не указан метод шифрования.");
+            return issues;
+        }
+
+        if (p.Protocol == Protocol.Hysteria2)
+        {
+            if (sec != SecurityType.Tls)
+                issues.Add("Hysteria2 всегда работает поверх TLS (QUIC).");
+            if (p.Transport.Type != TransportType.Tcp)
+                issues.Add("У Hysteria2 нет отдельного транспорта.");
+            return issues;
+        }
+
         if (sec == SecurityType.Reality && p.Protocol != Protocol.Vless)
             issues.Add("Reality поддерживается только для VLESS.");
         if (sec == SecurityType.Reality && p.Transport.Type == TransportType.Ws)
@@ -129,6 +150,14 @@ public static class ProfileCompat
         }
 
         var sec = p.Security.Type;
+        var simple = p.Protocol is Protocol.Shadowsocks or Protocol.Hysteria2;
+        Add("transport.xhttp", simple, "у Shadowsocks и Hysteria2 нет выбора транспорта");
+        Add("transport.ws", simple, "у Shadowsocks и Hysteria2 нет выбора транспорта");
+        Add("transport.grpc", simple, "у Shadowsocks и Hysteria2 нет выбора транспорта");
+        Add("transport.httpupgrade", simple, "у Shadowsocks и Hysteria2 нет выбора транспорта");
+        Add("security.reality", simple, "Reality только для VLESS");
+        Add("security.tls", p.Protocol == Protocol.Shadowsocks, "Shadowsocks шифрует сам, TLS к нему не добавляется");
+        Add("security.none", p.Protocol == Protocol.Hysteria2, "Hysteria2 всегда работает поверх TLS");
         Add("protocol.vmess", sec == SecurityType.Reality, "VMess не работает с Reality — сначала выберите TLS");
         Add("protocol.trojan", sec == SecurityType.Reality, "Reality в Тропе только для VLESS — сначала выберите TLS");
         Add("protocol.trojan", sec == SecurityType.None, "Trojan всегда работает поверх TLS — сначала выберите TLS");

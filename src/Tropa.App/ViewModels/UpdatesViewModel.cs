@@ -25,7 +25,7 @@ internal sealed partial class UpdatesViewModel : ObservableObject
         Status = engine.Updates.Enabled ? null : "Источник обновлений в этой сборке не настроен.";
         // Тихая проверка раз в сутки, если включено appCheck.
         var s = engine.State.Settings.Cores;
-        if (engine.Updates.Enabled && s.AppCheck && (s.LastUpdateCheck is null || DateTimeOffset.Now - s.LastUpdateCheck > TimeSpan.FromDays(1)))
+        if (engine.Updates.Enabled && (s.AppCheck || s.GeoUpdate) && (s.LastUpdateCheck is null || DateTimeOffset.Now - s.LastUpdateCheck > TimeSpan.FromDays(1)))
             Dispatcher.UIThread.Post(() => _ = CheckAsync(quiet: true), DispatcherPriority.Background);
     }
 
