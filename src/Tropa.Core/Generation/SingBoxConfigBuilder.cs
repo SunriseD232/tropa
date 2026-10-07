@@ -95,11 +95,17 @@ public static class SingBoxConfigBuilder
     /// <summary>Сервер для временного тестового экземпляра ядра и его локальный порт.</summary>
     public sealed record TestTarget(Profile Profile, int Port);
 
+    public const string PingInboundTag = "test-direct";
+
     /// <summary>
     /// Конфиг для тестов серверов (docs/07-testing-diagnostics.md, §1): у каждого сервера свой
     /// SOCKS-вход на 127.0.0.1 с паролем, весь прочий трафик отбрасывается. Текущее подключение не трогается.
+    /// <paramref name="pingPort"/> — вход «напрямую» для TCP-пинга до самих серверов.
+    /// Ядро выходит в сеть через физический адаптер (auto_detect_interface), а не через туннель
+    /// режима «Весь компьютер» — иначе мерили бы сервер «через текущий сервер».
     /// </summary>
-    public static string BuildTest(IReadOnlyList<TestTarget> targets, AppSettings settings, LocalAuth auth, IReadOnlyList<Profile>? allProfiles = null)
+    public static string BuildTest(IReadOnlyList<TestTarget> targets, AppSettings settings, LocalAuth auth,
+        IReadOnlyList<Profile>? allProfiles = null, int? pingPort = null)
     {
         ArgumentNullException.ThrowIfNull(targets);
         ArgumentNullException.ThrowIfNull(auth);
@@ -145,6 +151,19 @@ public static class SingBoxConfigBuilder
             rules.Push(new JsonObject { ["inbound"] = StrArray([inTag]), ["action"] = "route", ["outbound"] = ctx.TagFor(profile) });
         }
 
+        if (pingPort is { } pp)
+        {
+            inbounds.Push(new JsonObject
+            {
+                ["type"] = "socks",
+                ["tag"] = PingInboundTag,
+                ["listen"] = "127.0.0.1",
+                ["listen_port"] = pp,
+                ["users"] = Users(ctx),
+            });
+            rules.Push(new JsonObject { ["inbound"] = StrArray([PingInboundTag]), ["action"] = "route", ["outbound"] = DirectTag });
+        }
+
         rules.Push(new JsonObject { ["action"] = "reject" });
         outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DirectTag });
 
@@ -163,6 +182,7 @@ public static class SingBoxConfigBuilder
                 ["rules"] = rules,
                 ["final"] = DirectTag,
                 ["default_domain_resolver"] = "local",
+                ["auto_detect_interface"] = true,
             },
         };
         return config.ToJsonString(Indented) + "\n";

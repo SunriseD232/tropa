@@ -142,7 +142,7 @@ public sealed class SingBoxGoldenTests
     {
         var json = SingBoxConfigBuilder.BuildTest(
             [new(Reality with { ChainVia = Relay.Id }, 31001), new(VmessWsProfile, 31002), new(Trojan, 31003)],
-            Defaults, Auth, [Reality, Relay, VmessWsProfile, Trojan]);
+            Defaults, Auth, [Reality, Relay, VmessWsProfile, Trojan], pingPort: 31000);
         AssertGolden("09-test-instance", json);
     }
 

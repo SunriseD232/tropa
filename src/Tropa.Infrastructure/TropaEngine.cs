@@ -321,9 +321,11 @@ public sealed class TropaEngine : IAsyncDisposable
 
     // ---------------- Тесты ----------------
 
-    public Task<IReadOnlyList<DelayResult>> TestDelayAsync(IReadOnlyList<Profile> profiles, CancellationToken ct = default) =>
-        ServerTester.TestDelayAsync(profiles, State.Profiles.Select(p => p.Profile).ToList(), State.Settings, _locations,
-            _paths.RunDirectory, Scrubber, line => Log?.Invoke(this, line), ct);
+    public Task<IReadOnlyDictionary<Guid, Core.Testing.ServerTestResult>> TestAsync(
+        IReadOnlyList<Profile> profiles, TestKinds kinds = TestKinds.Standard, IProgress<TestProgress>? progress = null,
+        TesterOptions? options = null, CancellationToken ct = default) =>
+        ServerTester.TestAsync(profiles, State.Profiles.Select(p => p.Profile).ToList(), State.Settings, kinds, _locations,
+            _paths.RunDirectory, Scrubber, line => Log?.Invoke(this, line), progress, ct, options);
 
     // ---------------- Подключение ----------------
 

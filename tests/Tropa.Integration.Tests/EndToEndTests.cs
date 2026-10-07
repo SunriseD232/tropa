@@ -111,11 +111,14 @@ public sealed class EndToEndTests : IAsyncLifetime
         var report = await engine.ImportTextAsync($"vless://{Uuid}@127.0.0.1:{_serverPort}?security=none#local\nvless://{Uuid}@127.0.0.1:1?security=none#dead", null, TestContext.Current.CancellationToken);
         Assert.Equal(2, report.Added);
 
-        var results = await engine.TestDelayAsync(engine.State.Profiles.Select(p => p.Profile).ToList(), TestContext.Current.CancellationToken);
-        var good = results.Single(r => engine.State.Profiles.Single(p => p.Profile.Id == r.ProfileId).Profile.Name == "local");
-        var dead = results.Single(r => r.ProfileId != good.ProfileId);
-        Assert.True(good.Milliseconds is >= 0, good.Error);
-        Assert.Null(dead.Milliseconds);
+        var results = await engine.TestAsync(engine.State.Profiles.Select(p => p.Profile).ToList(),
+            Infrastructure.Testing.TestKinds.Tcp | Infrastructure.Testing.TestKinds.Delay, ct: TestContext.Current.CancellationToken);
+        var goodId = engine.State.Profiles.Single(p => p.Profile.Name == "local").Profile.Id;
+        var good = results[goodId];
+        var dead = results.Single(r => r.Key != goodId).Value;
+        Assert.True(good.DelayMs is >= 0, good.Error);
+        Assert.True(good.TcpMs is >= 0, good.Error);
+        Assert.Null(dead.TcpMs); // мёртвый порт отсекается ещё на TCP-пинге
         Assert.NotNull(dead.Error);
         Assert.True(_siteHits >= 3, "запросы должны были пройти через VLESS-сервер до «сайта»");
     }

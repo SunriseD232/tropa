@@ -49,6 +49,18 @@
           "password": "tropa-pass"
         }
       ]
+    },
+    {
+      "type": "socks",
+      "tag": "test-direct",
+      "listen": "127.0.0.1",
+      "listen_port": 31000,
+      "users": [
+        {
+          "username": "tropa-user",
+          "password": "tropa-pass"
+        }
+      ]
     }
   ],
   "outbounds": [
@@ -175,10 +187,18 @@
         "outbound": "srv-00000003"
       },
       {
+        "inbound": [
+          "test-direct"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
         "action": "reject"
       }
     ],
     "final": "direct",
-    "default_domain_resolver": "local"
+    "default_domain_resolver": "local",
+    "auto_detect_interface": true
   }
 }

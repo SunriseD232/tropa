@@ -204,17 +204,24 @@ internal sealed partial class ServersViewModel : ObservableObject
         try
         {
             var profiles = Items.Select(i => i.Profile).ToList();
-            var results = await _engine.TestDelayAsync(profiles);
-            foreach (var r in results)
+            var results = await _engine.TestAsync(profiles, Infrastructure.Testing.TestKinds.Standard);
+            foreach (var (id, r) in results)
             {
-                _results[r.ProfileId] = r.Milliseconds is { } ms
-                    ? ($"{ms} мс", ms > 600 ? "Медленно" : "Работает", ms > 600 ? "warn" : "ok")
-                    : ("—", r.Error ?? "Нет ответа", "bad");
+                var status = Core.Testing.ServerHealth.Classify(r);
+                var kind = status switch
+                {
+                    Core.Testing.HealthStatus.Working => "ok",
+                    Core.Testing.HealthStatus.Slow => "warn",
+                    _ => "bad",
+                };
+                var delay = r.DelayMs is { } ms ? $"{ms} мс" + (r.SpeedMbps is { } sp ? $" · {sp:0.#} Мбит/с" : "") : "—";
+                _results[id] = (delay, r.Error is { } e && status != Core.Testing.HealthStatus.Working ? e : Core.Testing.ServerHealth.Title(status), kind);
             }
 
             RebuildItems();
-            var ok = results.Count(r => r.Milliseconds is not null);
-            Message = $"Отвечают {ok} из {results.Count}. Это проверка задержки; тест скорости, который ловит «заморозку», появится в следующей версии.";
+            var ok = results.Values.Count(r => Core.Testing.ServerHealth.Classify(r) is Core.Testing.HealthStatus.Working or Core.Testing.HealthStatus.Slow);
+            var frozen = results.Values.Count(r => r.Frozen);
+            Message = $"Работают {ok} из {results.Count}." + (frozen > 0 ? $" «Замёрзли» (данные не идут, хотя пинг есть): {frozen}." : "");
         }
         catch (Exception ex) when (ex is Infrastructure.Cores.CoreStartException or Infrastructure.Cores.IntegrityException or InvalidOperationException)
         {
