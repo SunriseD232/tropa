@@ -113,6 +113,32 @@
       </Border>
 
       <StackPanel Grid.Column="2" Spacing="14">
+        <Border Classes="card" IsVisible="{Binding SiteImportOpen}">
+          <StackPanel Spacing="10">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="Импорт списка сайтов" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="siteImport" />
+            </StackPanel>
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Вставьте список или выберите файл: домены по строке, файл hosts, правила v2rayN (JSON) или Clash. Всё станет одним правилом в «Правилах → Сайты»." />
+            <TextBox Text="{Binding SiteImportText}" AcceptsReturn="True" TextWrapping="NoWrap" Height="180"
+                     FontFamily="{StaticResource Mono}" FontSize="12" PlaceholderText="discord.com&#10;DOMAIN-SUFFIX,x.com,PROXY&#10;domain:youtube.com" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding SiteImportPreview}"
+                       IsVisible="{Binding SiteImportPreview, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                <Button Content="Из файла…" Command="{Binding PickSiteFileCommand}" />
+                <Button Content="Отмена" Command="{Binding CancelSiteImportCommand}" />
+                <Button Classes="primary" Content="Добавить правило" Command="{Binding ConfirmSiteImportCommand}" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Куда направить:" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding SiteImportActions}" SelectedIndex="{Binding SiteImportAction}" MinWidth="180" />
+              </StackPanel>
+            </DockPanel>
+          </StackPanel>
+        </Border>
+
         <Border Classes="card" Padding="20,10">
           <StackPanel>
             <TextBlock Text="{Binding Current.Title}" FontSize="20" FontWeight="SemiBold" Margin="0,8,0,4" />

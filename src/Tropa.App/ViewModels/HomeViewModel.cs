@@ -8,6 +8,12 @@ using Tropa.Infrastructure.Net;
 
 namespace Tropa.App.ViewModels;
 
+/// <summary>Пункт быстрого выбора сервера на главной.</summary>
+internal sealed record ServerChoice(Guid Id, string Title)
+{
+    public override string ToString() => Title;
+}
+
 /// <summary>Главная: кнопка подключения, текущий сервер, режим, маршрут, трафик.</summary>
 internal sealed partial class HomeViewModel : ObservableObject
 {
@@ -39,6 +45,46 @@ internal sealed partial class HomeViewModel : ObservableObject
     }
 
     public UpdatesViewModel Updates { get; }
+
+    /// <summary>Быстрое переключение между серверами под кнопкой подключения.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<ServerChoice> Servers { get; } = [];
+
+    [ObservableProperty]
+    public partial ServerChoice? SelectedServer { get; set; }
+
+    private bool _fillingServers;
+
+    partial void OnSelectedServerChanged(ServerChoice? value)
+    {
+        if (_fillingServers || value is null || value.Id == _engine.State.ActiveProfileId)
+            return;
+        // Если подключено — Тропа сразу переподключится на выбранный сервер.
+        _ = _engine.SetActiveAsync(value.Id);
+    }
+
+    private void FillServers()
+    {
+        _fillingServers = true;
+        try
+        {
+            Servers.Clear();
+            var subs = _engine.State.Subscriptions.ToDictionary(s => s.Id, s => s.Name);
+            // Сначала рабочие по задержке, затем остальные; удалённые провайдером не показываем.
+            foreach (var sp in _engine.State.Profiles.Where(p => p.RemovedByProvider is null)
+                         .OrderBy(p => p.LastTest?.DelayMs ?? int.MaxValue).ThenBy(p => p.Order))
+            {
+                var delay = sp.LastTest?.DelayMs is { } ms ? $" · {ms} мс" : "";
+                var group = sp.Profile.SubscriptionId is { } sid && subs.TryGetValue(sid, out var name) ? $"  ({name})" : "";
+                Servers.Add(new ServerChoice(sp.Profile.Id, Format.NameWithoutFlag(sp.Profile.Name) + delay + group));
+            }
+
+            SelectedServer = Servers.FirstOrDefault(s => s.Id == _engine.State.ActiveProfileId);
+        }
+        finally
+        {
+            _fillingServers = false;
+        }
+    }
 
     [ObservableProperty]
     public partial string StateText { get; set; } = "Подключить";
@@ -170,6 +216,7 @@ internal sealed partial class HomeViewModel : ObservableObject
         }
 
         ModeTun = s.Settings.Connection.Mode == CaptureMode.Tun;
+        FillServers();
         KillSwitch = s.Settings.General.KillSwitch;
         OnPropertyChanged(nameof(KillSwitchReason));
         OnPropertyChanged(nameof(KillSwitchEnabled));

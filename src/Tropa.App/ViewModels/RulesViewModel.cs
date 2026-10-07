@@ -20,9 +20,10 @@ internal sealed partial class RuleItemViewModel : ObservableObject
     {
         _rule = rule;
         _changed = changed;
-        Title = rule.Match.Processes.Count > 0 ? rule.Match.Processes[0]
+        Title = rule.Label is { Length: > 0 } label ? label
+            : rule.Match.Processes.Count > 0 ? rule.Match.Processes[0]
             : rule.Match.DomainSuffixes.Count > 0 ? rule.Match.DomainSuffixes[0]
-            : rule.Label ?? "?";
+            : "?";
         TcpIndex = Index(rule.Tcp);
         UdpIndex = Index(rule.Udp);
         Enabled = rule.Enabled;

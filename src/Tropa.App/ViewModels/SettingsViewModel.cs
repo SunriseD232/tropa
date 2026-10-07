@@ -292,6 +292,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new ChoiceRow("Подробность журнала ядер", "logLevel", Opts("Только ошибки и предупреждения", "Информация", "Отладка"),
             s => (int)s.Expert.LogLevel, (s, i) => s with { Expert = s.Expert with { LogLevel = (CoreLogLevel)i } },
             hint: "Отладка сильно замедляет ядро — включайте ненадолго."),
+        new ActionRow("Импорт списка сайтов", "siteImport", "Списки из v2rayN, Clash, файла hosts или просто по строке — одним правилом.",
+            ("Открыть", new RelayCommand(() => SiteImportOpen = true))),
         new ActionRow("Сгенерированный конфиг", "genConfig", "Ключи и пароли скрыты.",
             ("Показать", new RelayCommand(ShowConfig)), ("Скрыть", new RelayCommand(() => ConfigPreview = null))),
         new ActionRow("Сбросить экспертные настройки", "genConfig", null,
@@ -329,6 +331,65 @@ internal sealed partial class SettingsViewModel : ObservableObject
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
         {
         }
+    }
+
+    // ---------------- Импорт списка сайтов ----------------
+
+    [ObservableProperty]
+    public partial bool SiteImportOpen { get; set; }
+
+    [ObservableProperty]
+    public partial string SiteImportText { get; set; } = "";
+
+    /// <summary>0 — через сервер, 1 — напрямую, 2 — блокировать.</summary>
+    [ObservableProperty]
+    public partial int SiteImportAction { get; set; }
+
+    [ObservableProperty]
+    public partial string? SiteImportPreview { get; set; }
+
+    public IReadOnlyList<string> SiteImportActions { get; } = ["Через сервер", "Напрямую", "Блокировать"];
+
+    private Core.Routing.SiteList? _siteList;
+
+    public event EventHandler? SiteFileRequested;
+
+    partial void OnSiteImportTextChanged(string value)
+    {
+        _siteList = string.IsNullOrWhiteSpace(value) ? null : Core.Routing.SiteListImport.Parse(value);
+        SiteImportPreview = _siteList is null ? null
+            : $"Найдено: доменов {_siteList.DomainSuffixes.Count + _siteList.Domains.Count}, ключевых слов {_siteList.Keywords.Count}, IP-сетей {_siteList.IpCidrs.Count}."
+              + (_siteList.Skipped > 0 ? $" Не разобрано строк: {_siteList.Skipped}." : "")
+              + (_siteList.Warnings.Count > 0 ? " " + string.Join(" ", _siteList.Warnings) : "");
+    }
+
+    [RelayCommand]
+    private void ShowInfo(string key) => _info.Show(key);
+
+    [RelayCommand]
+    private void PickSiteFile() => SiteFileRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void CancelSiteImport()
+    {
+        SiteImportOpen = false;
+        SiteImportText = "";
+    }
+
+    [RelayCommand]
+    private void ConfirmSiteImport()
+    {
+        if (_siteList is not { Count: > 0 } list)
+        {
+            Report("В списке не нашлось ни одного адреса.", error: true);
+            return;
+        }
+
+        var action = SiteImportAction switch { 1 => RuleAction.Direct, 2 => RuleAction.Block, _ => RuleAction.Proxy };
+        var label = $"Импорт: {list.Count} адр. ({DateTime.Now:dd.MM HH:mm})";
+        Commit(s => s with { Routing = s.Routing with { Rules = [.. s.Routing.Rules, list.ToRule(label, action, action)] } });
+        Report($"Добавлено правило «{label}» — оно в «Правилах → Сайты», там его можно выключить или удалить.");
+        CancelSiteImport();
     }
 
     // ---------------- Резервная копия ----------------

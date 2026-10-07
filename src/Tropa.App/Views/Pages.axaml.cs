@@ -83,8 +83,10 @@ internal sealed partial class SettingsView : UserControl
             {
                 vm.ExportRequested -= OnExport;
                 vm.ImportRequested -= OnImport;
+                vm.SiteFileRequested -= OnSiteFile;
                 vm.ExportRequested += OnExport;
                 vm.ImportRequested += OnImport;
+                vm.SiteFileRequested += OnSiteFile;
             }
         };
     }
@@ -107,6 +109,29 @@ internal sealed partial class SettingsView : UserControl
         await using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false)))
             await writer.WriteAsync(vm.ExportText());
         vm.ReportExported(file.Name);
+    }
+
+    private async void OnSiteFile(object? sender, EventArgs e)
+    {
+        if (DataContext is not SettingsViewModel vm || TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+            return;
+        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Список сайтов",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Списки (txt, json, yaml, list)") { Patterns = ["*.txt", "*.json", "*.yaml", "*.yml", "*.list", "*.conf", "hosts"] },
+                new FilePickerFileType("Все файлы") { Patterns = ["*"] },
+            ],
+        });
+        if (files.Count == 0)
+            return;
+        await using var stream = await files[0].OpenReadAsync();
+        if (stream.CanSeek && stream.Length > 10 * 1024 * 1024)
+            return;
+        using var reader = new StreamReader(stream);
+        vm.SiteImportText = await reader.ReadToEndAsync();
     }
 
     private async void OnImport(object? sender, EventArgs e)

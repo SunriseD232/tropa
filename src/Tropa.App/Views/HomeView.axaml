@@ -63,6 +63,9 @@
                 </StackPanel>
               </DockPanel>
             </Border>
+            <ComboBox ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer}" HorizontalAlignment="Stretch"
+                      IsVisible="{Binding !!Servers.Count}" PlaceholderText="Выбрать другой сервер"
+                      ToolTip.Tip="Быстрое переключение: если Тропа подключена, она сразу переподключится на выбранный сервер" />
           </StackPanel>
         </Border>
 
