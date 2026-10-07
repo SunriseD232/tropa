@@ -109,7 +109,7 @@ public sealed class DiagnosticsDnsTests : IAsyncDisposable
                 var t = await DiagnosticsRunner.QueryTcpAsync(ports.DirectPort, ports.Auth, "127.0.0.1", "discord.com", token, TcpPort);
                 var n = await DiagnosticsRunner.QueryUdpAsync(ports.DirectPort, ports.Auth, IPAddress.Loopback, "blocked.test", token, UdpPort);
                 return (u, t, n);
-            }, ct);
+            }, ct, bindPhysical: false);
 
         Assert.Equal("93.184.216.34", Assert.Single(udp!.Addresses).ToString());
         Assert.Equal("93.184.216.34", Assert.Single(tcp!.Addresses).ToString());

@@ -74,7 +74,7 @@ public static class DiagnosticsRunner
             progress?.Report(r);
 
         var effective = CompatRules.Evaluate(input.Settings, input.Active).Effective;
-        var adapters = Adapters();
+        var adapters = LocalNetwork.Adapters();
 
         // 1, 2, 6: сеть напрямую, часы и DNS — одним временным ядром.
         Set(results["netDirect"] with { Status = StepStatus.Running });
@@ -118,7 +118,26 @@ public static class DiagnosticsRunner
 
         // 8, 9: настройки, адаптеры и процессы.
         Set(Diagnosis.Leaks(effective, input.Connected, adapters));
-        Set(Diagnosis.OtherVpn(Diagnosis.ForeignVpnAdapters(adapters), ForeignProcesses(input.Locations)));
+        var foreignAdapters = Diagnosis.ForeignVpnAdapters(adapters);
+        var foreignProcesses = LocalNetwork.ForeignProcesses(input.Locations);
+        Set(Diagnosis.OtherVpn(foreignAdapters, foreignProcesses));
+
+        // Рукопожатие не прошло, а рядом работает другой клиент обхода — почти всегда причина в нём:
+        // v2rayN и подобные подменяют адрес соединения, и Reality уходит на настоящий сайт-маску.
+        if (foreignAdapters.Count + foreignProcesses.Count > 0)
+        {
+            StepResult? hs;
+            lock (results)
+                hs = results["realityHs"];
+            if (hs.Status == StepStatus.Bad)
+            {
+                Set(hs with
+                {
+                    Details = "Скорее всего, мешает другой VPN или клиент обхода (шаг «Другой VPN»): он перехватывает соединение с сервером.",
+                    Action = "Полностью закройте его (в v2rayN — «Выход» в меню значка в трее) и проверьте снова.",
+                });
+            }
+        }
 
         lock (results)
             return Steps.Select(s => results[s.Key]).ToList();
@@ -343,59 +362,5 @@ public static class DiagnosticsRunner
         {
             return null;
         }
-    }
-
-    public static IReadOnlyList<AdapterInfo> Adapters()
-    {
-        var list = new List<AdapterInfo>();
-        foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
-        {
-            if (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
-                continue;
-            var props = ni.GetIPProperties();
-            list.Add(new AdapterInfo(ni.Name, ni.Description, ni.OperationalStatus == OperationalStatus.Up,
-                props.UnicastAddresses.Select(u => u.Address).ToList(),
-                props.GatewayAddresses.Any(g => !g.Address.Equals(IPAddress.Any) && !g.Address.Equals(IPAddress.IPv6Any))));
-        }
-
-        return list;
-    }
-
-    /// <summary>Запущенные клиенты обхода. sing-box и xray считаются чужими, только если это не наши файлы.</summary>
-    private static List<string> ForeignProcesses(CoreLocations locations)
-    {
-        var ours = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var core in new[] { "sing-box", "xray" })
-        {
-            ours.Add(Path.GetFullPath(CoreProcess.ExecutablePath(locations, core)));
-        }
-
-        var found = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var p in Process.GetProcesses())
-        {
-            using (p)
-            {
-                if (Diagnosis.ForeignClients.Contains(p.ProcessName))
-                {
-                    found.Add(p.ProcessName);
-                    continue;
-                }
-
-                if (!p.ProcessName.Equals("sing-box", StringComparison.OrdinalIgnoreCase) && !p.ProcessName.Equals("xray", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                try
-                {
-                    // Ядра нашей службы работают под SYSTEM: путь к ним прочитать нельзя, их не считаем.
-                    var path = p.MainModule?.FileName;
-                    if (path is not null && !ours.Contains(Path.GetFullPath(path)) && !path.Contains(@"\Tropa\", StringComparison.OrdinalIgnoreCase))
-                        found.Add($"{p.ProcessName} ({Path.GetFileName(Path.GetDirectoryName(path))})");
-                }
-                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-                {
-                }
-            }
-        }
-
-        return [.. found];
     }
 }

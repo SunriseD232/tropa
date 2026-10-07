@@ -116,8 +116,12 @@ public static class SingBoxConfigBuilder
     /// Ядро выходит в сеть через физический адаптер (auto_detect_interface), а не через туннель
     /// режима «Весь компьютер» — иначе мерили бы сервер «через текущий сервер».
     /// </summary>
+    /// <param name="bindInterface">
+    /// Имя физического адаптера. Если на компьютере работает другой VPN со своим TUN, «интерфейс по
+    /// умолчанию» может оказаться его туннелем, и проверка пойдёт через чужую программу.
+    /// </param>
     public static string BuildTest(IReadOnlyList<TestTarget> targets, AppSettings settings, LocalAuth auth,
-        IReadOnlyList<Profile>? allProfiles = null, int? pingPort = null)
+        IReadOnlyList<Profile>? allProfiles = null, int? pingPort = null, string? bindInterface = null)
     {
         ArgumentNullException.ThrowIfNull(targets);
         ArgumentNullException.ThrowIfNull(auth);
@@ -195,9 +199,13 @@ public static class SingBoxConfigBuilder
                 ["rules"] = rules,
                 ["final"] = DirectTag,
                 ["default_domain_resolver"] = "local",
-                ["auto_detect_interface"] = true,
             },
         };
+        var route = (JsonObject)config["route"]!;
+        if (bindInterface is { Length: > 0 })
+            route["default_interface"] = bindInterface;
+        else
+            route["auto_detect_interface"] = true;
         return config.ToJsonString(Indented) + "\n";
     }
 

@@ -295,6 +295,8 @@ internal sealed partial class ServersViewModel : ObservableObject
             Message = kinds == TestKinds.Stability
                 ? null
                 : $"Работают {ok} из {results.Count}." + (frozen > 0 ? $" «Замёрзли» — пинг есть, а данные не идут: {frozen}. Авто-выбор их не возьмёт." : "");
+            if (ok < results.Count && _engine.ForeignVpnWarning() is { } foreign)
+                Message = (Message is null ? "" : Message + " ") + foreign;
         }
         catch (Exception ex) when (ex is Infrastructure.Cores.CoreStartException or Infrastructure.Cores.IntegrityException or InvalidOperationException)
         {

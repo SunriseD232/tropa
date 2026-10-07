@@ -449,6 +449,9 @@ public sealed class TropaEngine : IAsyncDisposable
             var note = State.Settings.Connection.Mode == CaptureMode.Tun && !TunAvailable
                 ? "Служба Тропы не установлена, поэтому режим «Весь компьютер» недоступен. Сейчас через Тропу идут браузеры и программы, использующие прокси Windows."
                 : null;
+            // Другой VPN рядом — частая причина «подключено, но ничего не открывается».
+            if (ForeignVpnWarning() is { } foreign)
+                note = note is null ? foreign : foreign + " " + note;
             SetStatus(new ConnectionStatus(ConnectionState.Connected, note, _now()));
         }
         catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException or ServiceException or TimeoutException)
@@ -668,6 +671,19 @@ public sealed class TropaEngine : IAsyncDisposable
         });
         var scrubber = new SecretScrubber(_secrets.Values.Concat([Auth.Username, Auth.Password]));
         return scrubber.Scrub(config);
+    }
+
+    /// <summary>Работает ли другой VPN или клиент обхода (v2rayN и т. п.): текст предупреждения или null.</summary>
+    public string? ForeignVpnWarning()
+    {
+        try
+        {
+            return LocalNetwork.ForeignVpnWarning(_locations);
+        }
+        catch (Exception ex) when (ex is System.Net.NetworkInformation.NetworkInformationException or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     // ---------------- Диагностика ----------------

@@ -100,7 +100,7 @@ public static partial class ServerTester
         if (targets.Count == 0)
             return results;
         var pingPort = FreePort();
-        var config = SingBoxConfigBuilder.BuildTest(singTargets, settings, auth, allProfiles, pingPort);
+        var config = SingBoxConfigBuilder.BuildTest(singTargets, settings, auth, allProfiles, pingPort, Diagnostics.LocalNetwork.PhysicalInterfaceName());
 
         var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy { AllowedDirectories = [runDirectory] });
         if (violations.Count > 0)
@@ -137,7 +137,7 @@ public static partial class ServerTester
     /// </summary>
     public static async Task<T> ProbeAsync<T>(Profile? server, IReadOnlyList<Profile> allProfiles, AppSettings settings,
         CoreLocations locations, string runDirectory, SecretScrubber scrubber, Action<string> log,
-        Func<ProbePorts, CancellationToken, Task<T>> body, CancellationToken ct)
+        Func<ProbePorts, CancellationToken, Task<T>> body, CancellationToken ct, bool bindPhysical = true)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(body);
@@ -157,7 +157,10 @@ public static partial class ServerTester
         }
 
         var all = singTargets.Concat(xrayTargets.Select(x => new SingBoxConfigBuilder.TestTarget(x.Profile, x.Port))).ToList();
-        var config = SingBoxConfigBuilder.BuildTest(all, settings, auth, allProfiles, directPort);
+        // Привязка к сетевой карте не пускает трафик через TUN другого VPN; адреса 127.0.0.1 через неё
+        // недоступны по UDP, поэтому тесты с локальными серверами её выключают.
+        var config = SingBoxConfigBuilder.BuildTest(all, settings, auth, allProfiles, directPort,
+            bindPhysical ? Diagnostics.LocalNetwork.PhysicalInterfaceName() : null);
         var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy { AllowedDirectories = [runDirectory] });
         if (violations.Count > 0)
             throw new IntegrityException("Конфиг проверки не прошёл проверку: " + violations[0]);
@@ -332,7 +335,7 @@ public static partial class ServerTester
             {
                 HttpRequestError.ProxyTunnelError => "Сервер не пропустил запрос: ошибка рукопожатия или ключа.",
                 HttpRequestError.ConnectionError => "Не удалось подключиться через сервер.",
-                HttpRequestError.SecureConnectionError => "Ошибка TLS на пути к тестовому адресу.",
+                HttpRequestError.SecureConnectionError => "Соединение через сервер оборвалось: сервер не принял ключ (Reality, SNI) или его перехватывает другая программа.",
                 _ => "Запрос через сервер не прошёл.",
             });
         }
