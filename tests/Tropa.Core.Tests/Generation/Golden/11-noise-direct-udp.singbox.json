@@ -1,0 +1,273 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "https",
+        "tag": "remote",
+        "server": "1.1.1.1",
+        "detour": "proxy"
+      },
+      {
+        "type": "udp",
+        "tag": "local",
+        "server": "77.88.8.8"
+      },
+      {
+        "type": "fakeip",
+        "tag": "fake",
+        "inet4_range": "198.18.0.0/15",
+        "inet6_range": "fc00::/18"
+      }
+    ],
+    "rules": [
+      {
+        "rule_set": [
+          "ru-services",
+          "geosite-category-ru"
+        ],
+        "server": "local"
+      },
+      {
+        "domain_suffix": [
+          "ru",
+          "su",
+          "xn--p1ai"
+        ],
+        "server": "local"
+      },
+      {
+        "query_type": [
+          "A",
+          "AAAA"
+        ],
+        "server": "fake"
+      }
+    ],
+    "final": "remote",
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": [
+        "172.19.0.1/30",
+        "fdfe:dcba:9876::1/126"
+      ],
+      "mtu": 9000,
+      "auto_route": true,
+      "strict_route": true,
+      "stack": "mixed",
+      "route_exclude_address": [
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "fc00::/7",
+        "fe80::/10"
+      ]
+    },
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 10880,
+      "users": [
+        {
+          "username": "tropa-user",
+          "password": "tropa-pass"
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "proxy",
+      "server": "nl1.example.com",
+      "server_port": 443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "flow": "xtls-rprx-vision",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "short_id": "a1b2c3"
+        }
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "socks",
+      "tag": "direct-noise",
+      "server": "127.0.0.1",
+      "server_port": 31201,
+      "version": "5",
+      "username": "xray-user",
+      "password": "xray-pass"
+    }
+  ],
+  "route": {
+    "rule_set": [
+      {
+        "type": "local",
+        "tag": "geoip-ru-blocked",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geoip-ru-blocked.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-category-ru",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-category-ru.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-ru-blocked",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-ru-blocked.srs"
+      },
+      {
+        "type": "inline",
+        "tag": "ru-services",
+        "rules": [
+          {
+            "domain_suffix": [
+              "gosuslugi.ru",
+              "esia.gosuslugi.ru",
+              "nalog.gov.ru",
+              "nalog.ru",
+              "mos.ru",
+              "pfr.gov.ru",
+              "sfr.gov.ru",
+              "cbr.ru",
+              "kremlin.ru",
+              "government.ru",
+              "fss.ru",
+              "rosreestr.gov.ru",
+              "gibdd.ru",
+              "sberbank.ru",
+              "sber.ru",
+              "tbank.ru",
+              "tinkoff.ru",
+              "vtb.ru",
+              "alfabank.ru",
+              "gazprombank.ru",
+              "raiffeisen.ru",
+              "pochtabank.ru",
+              "sovcombank.ru",
+              "open.ru",
+              "mkb.ru",
+              "psbank.ru",
+              "rshb.ru",
+              "domrf.ru",
+              "rosbank.ru",
+              "nspk.ru",
+              "mironline.ru",
+              "sbp.nspk.ru",
+              "yoomoney.ru",
+              "ozon.ru",
+              "wildberries.ru",
+              "wb.ru",
+              "avito.ru",
+              "market.yandex.ru"
+            ]
+          }
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "action": "sniff",
+        "sniffer": [
+          "http",
+          "tls"
+        ]
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "process_path": [
+          "C:\\Program Files\\Tropa\\cores\\xray.exe"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "ip_version": 6,
+        "action": "reject"
+      },
+      {
+        "network": "udp",
+        "port": 443,
+        "action": "reject"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "ru-services"
+        ],
+        "action": "route",
+        "outbound": "direct",
+        "tls_fragment": true,
+        "network": "tcp"
+      },
+      {
+        "rule_set": [
+          "ru-services"
+        ],
+        "action": "route",
+        "outbound": "direct-noise",
+        "network": "udp"
+      },
+      {
+        "rule_set": [
+          "geosite-ru-blocked"
+        ],
+        "action": "route",
+        "outbound": "proxy"
+      },
+      {
+        "rule_set": [
+          "geoip-ru-blocked"
+        ],
+        "action": "route",
+        "outbound": "proxy"
+      },
+      {
+        "network": "udp",
+        "action": "route",
+        "outbound": "direct-noise"
+      }
+    ],
+    "final": "direct",
+    "default_domain_resolver": "local",
+    "find_process": true,
+    "auto_detect_interface": true
+  },
+  "experimental": {
+    "clash_api": {
+      "external_controller": "127.0.0.1:19090",
+      "secret": "test-secret"
+    }
+  }
+}

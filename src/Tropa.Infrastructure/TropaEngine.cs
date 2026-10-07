@@ -50,6 +50,7 @@ public sealed class TropaEngine : IAsyncDisposable
     private readonly Func<CancellationToken, Task<ServiceClient?>> _connectService;
 
     private CoreProcess? _core;
+    private CoreProcess? _xray;
     private ServiceClient? _service;
     private bool _runningViaService;
     private CancellationTokenSource? _trafficCts;
@@ -436,22 +437,48 @@ public sealed class TropaEngine : IAsyncDisposable
         var clashSecret = SecretStore.NewRandomToken();
         var group = effective.Connection.AutoSelect
             ? State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null
-                    && p.Profile.Transport.Type != TransportType.Xhttp && ProfileCompat.Issues(p.Profile).Count == 0
+                    && ProfileCompat.Issues(p.Profile).Count == 0
+                    && !(p.Profile.Transport.Type == TransportType.Xhttp && p.Profile.ChainVia is not null)
                     // urltest видит только задержку и «заморозку» не замечает — такие серверы убираем сами.
                     && !ServerHealth.ShouldExclude(p.LastTest, _now()))
                 .Select(p => p.Profile).ToList()
             : [];
+
+        // Гибрид (docs/05-config-generation.md, §1): серверы с XHTTP — через Xray, шум — тоже через Xray.
+        var allProfiles = State.Profiles.Select(p => p.Profile).ToList();
+        var plan = CorePlan.Make(settings, UsedProfiles(active, group, allProfiles, effective));
+        string? xrayConfig = null;
+        var xrayPorts = new Dictionary<Guid, int>();
+        int? xrayDirectPort = null;
+        LocalAuth? xrayAuth = null;
+        if (plan.NeedsXray)
+        {
+            xrayAuth = new LocalAuth("xray-" + SecretStore.NewRandomToken(4), SecretStore.NewRandomToken());
+            foreach (var p in plan.XrayProfiles)
+                xrayPorts[p.Id] = ServerTester.FreePort();
+            xrayDirectPort = plan.XrayDirect ? ServerTester.FreePort() : null;
+            xrayConfig = XrayConfigBuilder.Build(plan.XrayProfiles.Select(p => new XrayTarget(p, xrayPorts[p.Id])).ToList(), settings, xrayAuth, xrayDirectPort);
+            var xrayViolations = XrayConfigGuard.Check(xrayConfig);
+            if (xrayViolations.Count > 0)
+                throw new IntegrityException("Конфиг Xray не прошёл проверку безопасности: " + xrayViolations[0]);
+        }
+
         var config = SingBoxConfigBuilder.Build(new SingBoxInput
         {
             Settings = settings,
             Active = active,
-            Profiles = State.Profiles.Select(p => p.Profile).ToList(),
+            Profiles = allProfiles,
             AutoSelectGroup = group,
             RuleSetDirectory = ruleSetDirectory,
             LocalAuth = Auth,
             ClashApiPort = clashPort,
             ClashApiSecret = clashSecret,
+            XrayPorts = xrayPorts,
+            XrayDirectPort = xrayDirectPort,
+            XrayAuth = xrayAuth,
+            XrayPath = service?.XrayPath ?? CoreProcess.ExecutablePath(_locations, "xray"),
         });
+        var xrayReadiness = xrayPorts.Values.Concat(xrayDirectPort is { } dp ? [dp] : []).FirstOrDefault();
 
         var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy
         {
@@ -473,13 +500,21 @@ public sealed class TropaEngine : IAsyncDisposable
                 },
                 _mixedPort,
                 effective.Connection.LanAllow,
-                effective.Dns.SmartNameRes), ct).ConfigureAwait(false);
+                effective.Dns.SmartNameRes,
+                xrayConfig,
+                xrayReadiness), ct).ConfigureAwait(false);
             if (!reply.Ok)
                 throw new ServiceException(reply.Error ?? "Служба отказалась запускать подключение.");
             _runningViaService = true;
         }
         else
         {
+            if (xrayConfig is not null)
+            {
+                _xray = await CoreProcess.StartXrayAsync(_locations, xrayConfig, xrayReadiness, _paths.RunDirectory, Scrubber, line => Log?.Invoke(this, line), ct).ConfigureAwait(false);
+                _xray.Exited += OnCoreExited;
+            }
+
             _core = await CoreProcess.StartSingBoxAsync(_locations, config, _mixedPort, _paths.RunDirectory, Scrubber, line => Log?.Invoke(this, line), ct).ConfigureAwait(false);
             _core.Exited += OnCoreExited;
         }
@@ -493,6 +528,33 @@ public sealed class TropaEngine : IAsyncDisposable
         _trafficCts = new CancellationTokenSource();
         _ = PumpTrafficAsync(new ClashApi(clashPort, clashSecret), _trafficCts.Token);
         _ = MonitorAsync(active.Id, _trafficCts.Token);
+    }
+
+    /// <summary>Серверы, которые попадут в конфиг: активный, группа, промежуточные звенья цепочек и серверы из правил.</summary>
+    private static List<Profile> UsedProfiles(Profile active, IReadOnlyList<Profile> group, IReadOnlyList<Profile> all, AppSettings settings)
+    {
+        var used = new Dictionary<Guid, Profile>();
+        void Add(Profile p)
+        {
+            if (!used.TryAdd(p.Id, p))
+                return;
+            if (p.ChainVia is { } via && all.FirstOrDefault(x => x.Id == via) is { } hop)
+                Add(hop);
+        }
+
+        Add(active);
+        foreach (var p in group)
+            Add(p);
+        foreach (var rule in settings.Routing.Rules.Where(r => r.Enabled))
+        {
+            foreach (var action in new[] { rule.Tcp, rule.Udp })
+            {
+                if (action.ServerId is { } id && all.FirstOrDefault(x => x.Id == id) is { } target)
+                    Add(target);
+            }
+        }
+
+        return [.. used.Values];
     }
 
     /// <summary>Интервал фоновой проверки текущего сервера. Внутреннее — для тестов.</summary>
@@ -612,12 +674,16 @@ public sealed class TropaEngine : IAsyncDisposable
             _trafficCts = null;
         }
 
-        if (_core is not null)
+        foreach (var core in new[] { _core, _xray })
         {
-            _core.Exited -= OnCoreExited;
-            await _core.DisposeAsync().ConfigureAwait(false);
-            _core = null;
+            if (core is null)
+                continue;
+            core.Exited -= OnCoreExited;
+            await core.DisposeAsync().ConfigureAwait(false);
         }
+
+        _core = null;
+        _xray = null;
 
         if (_runningViaService)
         {

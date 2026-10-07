@@ -36,6 +36,18 @@ public sealed record SingBoxInput
     public int? ClashApiPort { get; init; }
 
     public string? ClashApiSecret { get; init; }
+
+    /// <summary>Серверы, которые обслуживает Xray: Id профиля → порт его SOCKS-входа (гибрид, CorePlan).</summary>
+    public IReadOnlyDictionary<Guid, int> XrayPorts { get; init; } = new Dictionary<Guid, int>();
+
+    /// <summary>Порт входа Xray «напрямую» (шум для прямого UDP); null — не используется.</summary>
+    public int? XrayDirectPort { get; init; }
+
+    /// <summary>Логин и пароль SOCKS-входов Xray.</summary>
+    public LocalAuth? XrayAuth { get; init; }
+
+    /// <summary>Путь к xray.exe: в режиме TUN его собственный трафик отправляется напрямую, иначе он зациклится в туннель.</summary>
+    public string? XrayPath { get; init; }
 }
 
 /// <summary>
@@ -109,13 +121,14 @@ public static class SingBoxConfigBuilder
     {
         ArgumentNullException.ThrowIfNull(targets);
         ArgumentNullException.ThrowIfNull(auth);
-        if (targets.Count == 0)
+        if (targets.Count == 0 && pingPort is null)
             throw new ArgumentException("Нет серверов для теста.", nameof(targets));
 
         var input = new SingBoxInput
         {
             Settings = settings,
-            Active = targets[0].Profile,
+            // Active не используется тестовым конфигом, но обязателен для контекста.
+            Active = targets.Count > 0 ? targets[0].Profile : PlaceholderProfile,
             Profiles = allProfiles ?? targets.Select(t => t.Profile).ToList(),
             RuleSetDirectory = "",
             LocalAuth = auth,
@@ -187,6 +200,15 @@ public static class SingBoxConfigBuilder
         };
         return config.ToJsonString(Indented) + "\n";
     }
+
+    private static readonly Profile PlaceholderProfile = new()
+    {
+        Name = "placeholder",
+        Protocol = Protocol.Vless,
+        Address = "127.0.0.1",
+        Port = 1,
+        Credential = new Security.Secret("00000000-0000-0000-0000-000000000000"),
+    };
 
     private sealed class Context(SingBoxInput input, AppSettings settings)
     {
@@ -456,7 +478,27 @@ public static class SingBoxConfigBuilder
         }
 
         outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DirectTag });
+        if (ctx.Input.XrayDirectPort is { } directPort)
+            outbounds.Push(XraySocks(ctx, NoiseDirectTag, directPort));
         return outbounds;
+    }
+
+    public const string NoiseDirectTag = "direct-noise";
+
+    /// <summary>SOCKS-выход в локальный Xray (гибрид: sing-box — фронт, Xray — протокол).</summary>
+    private static JsonObject XraySocks(Context ctx, string tag, int port)
+    {
+        var auth = ctx.Input.XrayAuth ?? throw new ArgumentException("Для Xray не переданы логин и пароль.", nameof(ctx));
+        return new JsonObject
+        {
+            ["type"] = "socks",
+            ["tag"] = tag,
+            ["server"] = "127.0.0.1",
+            ["server_port"] = port,
+            ["version"] = "5",
+            ["username"] = auth.Username,
+            ["password"] = auth.Password,
+        };
     }
 
     private static JsonObject Outbound(Context ctx, Profile p, string tag)
@@ -464,6 +506,8 @@ public static class SingBoxConfigBuilder
         var issues = ProfileCompat.Issues(p);
         if (issues.Count > 0)
             throw new UnsupportedProfileException($"Сервер «{p.Name}» нельзя запустить: {string.Join(" ", issues)}");
+        if (ctx.Input.XrayPorts.TryGetValue(p.Id, out var xrayPort))
+            return XraySocks(ctx, tag, xrayPort);
         if (p.Transport.Type == TransportType.Xhttp)
             throw new UnsupportedProfileException($"Сервер «{p.Name}» использует XHTTP: для него нужно ядро Xray.");
 
@@ -633,6 +677,13 @@ public static class SingBoxConfigBuilder
 
         if (s.Dns.DnsHijack)
             rules.Push(new JsonObject { ["protocol"] = "dns", ["action"] = "hijack-dns" });
+
+        // Трафик самого Xray (гибрид) в режиме TUN попадает в туннель — отпускаем его напрямую,
+        // иначе соединения Xray к серверу ушли бы обратно в sing-box по кругу.
+        var xrayLoopRule = ctx.Tun && ctx.Input.XrayPath is { } xrayPath && (ctx.Input.XrayPorts.Count > 0 || ctx.Input.XrayDirectPort is not null);
+        if (xrayLoopRule)
+            rules.Push(new JsonObject { ["process_path"] = StrArray([ctx.Input.XrayPath!]), ["action"] = "route", ["outbound"] = DirectTag });
+
         if (s.General.Ipv6Block)
             rules.Push(new JsonObject { ["ip_version"] = 6, ["action"] = "reject" });
         if (s.Routing.BlockQuic)
@@ -683,6 +734,9 @@ public static class SingBoxConfigBuilder
                 break;
         }
 
+        if (ctx.Input.XrayDirectPort is not null)
+            rules = RouteDirectUdpThroughNoise(rules, final);
+
         var route = new JsonObject
         {
             ["rule_set"] = BuildRuleSets(ctx),
@@ -690,6 +744,8 @@ public static class SingBoxConfigBuilder
             ["final"] = final,
             ["default_domain_resolver"] = "local",
         };
+        if (ctx.Tun && xrayLoopRule)
+            route["find_process"] = true;
         if (ctx.Tun)
         {
             route["auto_detect_interface"] = true;
@@ -698,6 +754,55 @@ public static class SingBoxConfigBuilder
         }
 
         return route;
+    }
+
+    /// <summary>
+    /// Шум (info.ru.json: noise) есть только в Xray: прямой UDP-трафик отправляем через его вход
+    /// «напрямую», прямой TCP остаётся в sing-box (там своя фрагментация). Правило «напрямую» без
+    /// уточнения сети раскладывается на два: TCP → direct, UDP → direct-noise. Локальная сеть и
+    /// трафик самого Xray не трогаются.
+    /// </summary>
+    private static JsonArray RouteDirectUdpThroughNoise(JsonArray rules, string final)
+    {
+        var result = new JsonArray();
+        foreach (var node in rules.ToList())
+        {
+            rules.Remove(node);
+            var rule = (JsonObject)node!;
+            var isDirect = rule["outbound"]?.GetValue<string>() == DirectTag;
+            var untouchable = rule.ContainsKey("ip_is_private") || rule.ContainsKey("process_path") && rule["process_path"]!.ToJsonString().Contains("xray", StringComparison.OrdinalIgnoreCase);
+            if (!isDirect || untouchable)
+            {
+                result.Push(rule);
+                continue;
+            }
+
+            switch (rule["network"]?.GetValue<string>())
+            {
+                case "udp":
+                    rule["outbound"] = NoiseDirectTag;
+                    rule.Remove("tls_fragment");
+                    result.Push(rule);
+                    break;
+                case "tcp":
+                    result.Push(rule);
+                    break;
+                default:
+                    var tcp = (JsonObject)rule.DeepClone();
+                    tcp["network"] = "tcp";
+                    var udp = (JsonObject)rule.DeepClone();
+                    udp["network"] = "udp";
+                    udp["outbound"] = NoiseDirectTag;
+                    udp.Remove("tls_fragment");
+                    result.Push(tcp);
+                    result.Push(udp);
+                    break;
+            }
+        }
+
+        if (final == DirectTag)
+            result.Push(new JsonObject { ["network"] = "udp", ["action"] = "route", ["outbound"] = NoiseDirectTag });
+        return result;
     }
 
     private static void AddRuleSetRule(Context ctx, JsonArray rules, string tag, RuleAction action)

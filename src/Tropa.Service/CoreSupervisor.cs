@@ -19,6 +19,7 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Queue<DateTimeOffset> _restarts = new();
     private CoreProcess? _core;
+    private CoreProcess? _xray;
     private StartRequest? _request;
     private SecretScrubber _scrubber = SecretScrubber.PatternsOnly;
     private DnsClientPolicy? _dnsPolicy;
@@ -57,6 +58,14 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
             });
             if (violations.Count > 0)
                 return "Конфиг не прошёл проверку безопасности службы: " + violations[0];
+            if (request.XrayConfig is { } xrayConfig)
+            {
+                var xrayViolations = XrayConfigGuard.Check(xrayConfig);
+                if (xrayViolations.Count > 0)
+                    return "Конфиг Xray не прошёл проверку безопасности службы: " + xrayViolations[0];
+                if (request.XrayReadinessPort is < 1 or > 65535)
+                    return "Неверный порт готовности Xray.";
+            }
             if (request.ReadinessPort is < 1 or > 65535)
                 return "Неверный порт готовности.";
 
@@ -66,7 +75,7 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
             PinnedFiles.VerifyGeo(options.GeoDirectory);
 
             _request = request;
-            _scrubber = new SecretScrubber(ExtractSecrets(request.SingBoxConfig));
+            _scrubber = new SecretScrubber(ExtractSecrets(request.SingBoxConfig).Concat(request.XrayConfig is { } xc ? ExtractSecrets(xc) : []));
             _restarts.Clear();
             await LaunchAsync(ct).ConfigureAwait(false);
 
@@ -121,6 +130,14 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
     private async Task LaunchAsync(CancellationToken ct)
     {
         var request = _request ?? throw new InvalidOperationException("Нет конфига для запуска.");
+        // Xray первым: sing-box сразу отправляет в него трафик гибридных серверов.
+        if (request.XrayConfig is { } xrayConfig)
+        {
+            _xray = await CoreProcess.StartXrayAsync(options.Cores, xrayConfig, request.XrayReadinessPort,
+                options.RunDirectory, _scrubber, onLog, ct).ConfigureAwait(false);
+            _xray.Exited += OnCoreExited;
+        }
+
         _core = await CoreProcess.StartSingBoxAsync(options.Cores, request.SingBoxConfig, request.ReadinessPort,
             options.RunDirectory, _scrubber, onLog, ct).ConfigureAwait(false);
         _core.Exited += OnCoreExited;
@@ -131,11 +148,10 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (_core is null || !ReferenceEquals(sender, _core))
+            if (!ReferenceEquals(sender, _core) && !ReferenceEquals(sender, _xray))
                 return;
-            _core.Exited -= OnCoreExited;
-            await _core.DisposeAsync().ConfigureAwait(false);
-            _core = null;
+            // Упало любое из ядер — перезапускаем оба: гибрид работает только парой.
+            await DisposeCoresAsync().ConfigureAwait(false);
 
             var now = DateTimeOffset.Now;
             while (_restarts.Count > 0 && now - _restarts.Peek() > RestartWindow)
@@ -168,16 +184,24 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
 
     private async Task StopCoreAsync()
     {
-        if (_core is not null)
-        {
-            _core.Exited -= OnCoreExited;
-            await _core.DisposeAsync().ConfigureAwait(false);
-            _core = null;
-        }
-
+        await DisposeCoresAsync().ConfigureAwait(false);
         _dnsPolicy?.Restore();
         _dnsPolicy = null;
         _request = null;
+    }
+
+    private async Task DisposeCoresAsync()
+    {
+        foreach (var core in new[] { _core, _xray })
+        {
+            if (core is null)
+                continue;
+            core.Exited -= OnCoreExited;
+            await core.DisposeAsync().ConfigureAwait(false);
+        }
+
+        _core = null;
+        _xray = null;
     }
 
     private void SetStatus(StatusEvent status)
@@ -209,7 +233,8 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
                     foreach (var p in e.EnumerateObject())
                     {
                         if (p.Value.ValueKind == JsonValueKind.String
-                            && p.Name is "uuid" or "password" or "public_key" or "short_id" or "secret" or "username")
+                            && p.Name is "uuid" or "password" or "public_key" or "short_id" or "secret" or "username"
+                                or "id" or "pass" or "user" or "publicKey" or "shortId")
                             result.Add(p.Value.GetString()!);
                         Walk(p.Value);
                     }

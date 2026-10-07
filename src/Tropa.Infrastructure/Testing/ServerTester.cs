@@ -65,8 +65,8 @@ public static partial class ServerTester
             var issues = ProfileCompat.Issues(p);
             if (issues.Count > 0)
                 Report(results, progress, p.Id, new ServerTestResult { At = now, Error = "Несовместимые параметры: " + issues[0] });
-            else if (p.Transport.Type == TransportType.Xhttp)
-                Report(results, progress, p.Id, new ServerTestResult { At = now, Error = "XHTTP будет поддержан на этапе 5 (нужно ядро Xray)." });
+            else if (p.Transport.Type == TransportType.Xhttp && p.ChainVia is not null)
+                Report(results, progress, p.Id, new ServerTestResult { At = now, Error = "Цепочка для сервера с XHTTP пока не поддерживается." });
             else
                 testable.Add(p);
         }
@@ -75,14 +75,38 @@ public static partial class ServerTester
             return results;
 
         var auth = new LocalAuth("test-" + Storage.SecretStore.NewRandomToken(4), Storage.SecretStore.NewRandomToken());
-        var targets = testable.Select(p => new SingBoxConfigBuilder.TestTarget(p, FreePort())).ToList();
+
+        // Серверы с XHTTP (или все при «Всегда Xray») проверяются через временный Xray, остальные — через sing-box.
+        IReadOnlyList<Profile> viaXray;
+        try
+        {
+            viaXray = CorePlan.Make(settings with { Dpi = settings.Dpi with { Noise = false } }, testable).XrayProfiles;
+        }
+        catch (UnsupportedProfileException ex)
+        {
+            foreach (var p in testable.Where(p => p.Transport.Type == TransportType.Xhttp))
+                Report(results, progress, p.Id, new ServerTestResult { At = now, Error = ex.Message });
+            testable.RemoveAll(p => p.Transport.Type == TransportType.Xhttp);
+            viaXray = [];
+        }
+
+        var xrayIds = viaXray.Select(p => p.Id).ToHashSet();
+        var singTargets = testable.Where(p => !xrayIds.Contains(p.Id)).Select(p => new SingBoxConfigBuilder.TestTarget(p, FreePort())).ToList();
+        var xrayTargets = viaXray.Select(p => new XrayTarget(p, FreePort())).ToList();
+        var targets = singTargets.Concat(xrayTargets.Select(x => new SingBoxConfigBuilder.TestTarget(x.Profile, x.Port))).ToList();
+        if (targets.Count == 0)
+            return results;
         var pingPort = FreePort();
-        var config = SingBoxConfigBuilder.BuildTest(targets, settings, auth, allProfiles, pingPort);
+        var config = SingBoxConfigBuilder.BuildTest(singTargets, settings, auth, allProfiles, pingPort);
 
         var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy { AllowedDirectories = [runDirectory] });
         if (violations.Count > 0)
             throw new IntegrityException("Тестовый конфиг не прошёл проверку: " + violations[0]);
 
+        // Временный Xray (если нужен) — первым; его трафик в режиме TUN отпускается правилом основного sing-box.
+        await using var xray = xrayTargets.Count > 0
+            ? await StartXrayAsync(xrayTargets, settings, auth, locations, runDirectory, scrubber, log, ct).ConfigureAwait(false)
+            : null;
         await using var core = await CoreProcess.StartSingBoxAsync(locations, config, pingPort, runDirectory, scrubber, log, ct).ConfigureAwait(false);
         using var limiter = new SemaphoreSlim(Math.Clamp(settings.Connection.Parallel, 1, 10));
         using var speedLimiter = new SemaphoreSlim(Math.Max(1, options.ParallelSpeedTests));
@@ -102,6 +126,16 @@ public static partial class ServerTester
         });
         await Task.WhenAll(tasks).ConfigureAwait(false);
         return results;
+    }
+
+    private static async Task<CoreProcess> StartXrayAsync(List<XrayTarget> targets, AppSettings settings, LocalAuth auth,
+        CoreLocations locations, string runDirectory, SecretScrubber scrubber, Action<string> log, CancellationToken ct)
+    {
+        var xrayConfig = XrayConfigBuilder.Build(targets, settings, auth);
+        var violations = XrayConfigGuard.Check(xrayConfig);
+        if (violations.Count > 0)
+            throw new IntegrityException("Тестовый конфиг Xray не прошёл проверку: " + violations[0]);
+        return await CoreProcess.StartXrayAsync(locations, xrayConfig, targets[0].Port, runDirectory, scrubber, log, ct).ConfigureAwait(false);
     }
 
     private static void Report(Dictionary<Guid, ServerTestResult> results, IProgress<TestProgress>? progress, Guid id, ServerTestResult r)

@@ -138,7 +138,8 @@ internal sealed partial class PipeServer(ServiceOptions options, ILogger<PipeSer
                 if (hello.Protocol != IpcProtocol.Version)
                     return new Reply(hello.Id, false, $"Версии не совпадают: интерфейс {hello.Protocol}, служба {IpcProtocol.Version}. Обновите Тропу.");
                 session.Greeted = true;
-                return new HelloReply(hello.Id, IpcProtocol.Version, Version, options.Privileged, options.GeoDirectory);
+                return new HelloReply(hello.Id, IpcProtocol.Version, Version, options.Privileged, options.GeoDirectory,
+                    Infrastructure.Cores.CoreProcess.ExecutablePath(options.Cores, "xray"));
 
             case StatusRequest status:
                 await session.SendAsync(_supervisor!.Status, ct).ConfigureAwait(false);

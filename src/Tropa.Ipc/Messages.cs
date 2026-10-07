@@ -32,7 +32,9 @@ public sealed record StartRequest(
     CaptureModeDto Mode,
     int ReadinessPort,
     bool AllowLanInbound,
-    bool DisableSmartNameResolution) : Request;
+    bool DisableSmartNameResolution,
+    string? XrayConfig = null,
+    int XrayReadinessPort = 0) : Request;
 
 public sealed record StopRequest : Request;
 
@@ -48,7 +50,8 @@ public record ServerMessage;
 /// <summary>Ответ на запрос: успех или понятная пользователю причина отказа (без секретов).</summary>
 public record Reply(int Id, bool Ok, string? Error) : ServerMessage;
 
-public sealed record HelloReply(int Id, int Protocol, string ServiceVersion, bool TunSupported, string RuleSetDirectory)
+/// <param name="XrayPath">Путь к xray.exe службы: интерфейс ставит правило, чтобы трафик Xray не зацикливался в TUN.</param>
+public sealed record HelloReply(int Id, int Protocol, string ServiceVersion, bool TunSupported, string RuleSetDirectory, string? XrayPath = null)
     : Reply(Id, true, null);
 
 public sealed record StatusEvent(ServiceState State, string? Message, DateTimeOffset? Since) : ServerMessage;

@@ -26,6 +26,9 @@ public sealed class SingBoxGoldenTests
     private static readonly Profile Relay = WithId(Ok($"vless://{Uuid}@relay.example.ru:443?security=reality&sni=ya.ru&pbk={Pbk}&sid=01#Relay RU"), 4);
     private static readonly Profile Grpc = WithId(Ok($"vless://{Uuid}@us.example.com:443?type=grpc&serviceName=svc&security=tls&sni=us.example.com#NY"), 5);
 
+    internal static readonly Profile Xhttp = WithId(Ok($"vless://{Uuid}@de.example.com:443?type=xhttp&path=%2Fx&mode=packet-up&security=reality&sni=www.example.org&fp=firefox&pbk={Pbk}&sid=a1b2#DE%20XHTTP"), 6);
+    private static readonly LocalAuth XrayAuth = new("xray-user", "xray-pass");
+
     private static readonly AppSettings Defaults = new();
 
     public static TheoryData<string> Scenarios => new(All.Keys);
@@ -115,7 +118,30 @@ public sealed class SingBoxGoldenTests
                 },
             },
             Reality, clashApi: false),
+
+        // Гибрид: сервер с XHTTP обслуживает Xray, sing-box — фронт с TUN. Трафик xray.exe идёт напрямую.
+        ["10-hybrid-xhttp-tun"] = () => Input(Defaults, Xhttp, profiles: [Xhttp, Reality], group: [Xhttp, Reality]) with
+        {
+            XrayPorts = new Dictionary<Guid, int> { [Xhttp.Id] = 31200 },
+            XrayAuth = XrayAuth,
+            XrayPath = @"C:\Program Files\Tropa\cores\xray.exe",
+        },
+
+        // Шум: прямой UDP — через Xray, прямой TCP — в sing-box с фрагментацией.
+        ["11-noise-direct-udp"] = () => Input(
+            Defaults with
+            {
+                Dpi = Defaults.Dpi with { DpiPreset = DpiPreset.Hard, Fragment = true, FragScope = FragmentScope.All, Noise = true },
+                Routing = Defaults.Routing with { Preset = RoutePreset.BlockedOnly },
+            },
+            Reality) with
+        {
+            XrayDirectPort = 31201,
+            XrayAuth = XrayAuth,
+            XrayPath = @"C:\Program Files\Tropa\cores\xray.exe",
+        },
     };
+
 
     private static SingBoxInput Input(AppSettings settings, Profile active, IReadOnlyList<Profile>? profiles = null,
         IReadOnlyList<Profile>? group = null, bool clashApi = true) => new()

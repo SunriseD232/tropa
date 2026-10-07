@@ -63,6 +63,27 @@ public sealed class SingBoxCheckTests
         }
     }
 
+    public static TheoryData<string> XrayGoldenFiles()
+    {
+        var data = new TheoryData<string>();
+        foreach (var f in Directory.EnumerateFiles(GoldenDir(), "*.xray.json").Order(StringComparer.Ordinal))
+            data.Add(Path.GetFileName(f));
+        return data;
+    }
+
+    /// <summary>Xray пропускает неизвестные поля, так что это проверка синтаксиса и значений, а не схемы.</summary>
+    [Theory]
+    [MemberData(nameof(XrayGoldenFiles))]
+    public async Task Golden_config_passes_xray_test(string file)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var exe = Path.Combine(RepoRoot(), "cores", "xray.exe");
+        if (!File.Exists(exe))
+            Assert.Skip("xray.exe не найден: запустите tools/fetch-cores.ps1");
+        var (code, output) = await Run(exe, ["run", "-test", "-c", Path.Combine(GoldenDir(), file)], ct);
+        Assert.True(code == 0 && output.Contains("Configuration OK", StringComparison.Ordinal), $"xray -test не прошёл для {file}:\n{output}");
+    }
+
     private static async Task CompileEmptyRuleSet(string exe, string work, string geoDir, string tag, CancellationToken ct)
     {
         var source = Path.Combine(work, tag + ".json");

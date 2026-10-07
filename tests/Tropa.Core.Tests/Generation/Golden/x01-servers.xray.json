@@ -1,0 +1,236 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "tag": "in-srv-00000006",
+      "listen": "127.0.0.1",
+      "port": 31200,
+      "protocol": "socks",
+      "settings": {
+        "auth": "password",
+        "accounts": [
+          {
+            "user": "xray-user",
+            "pass": "xray-pass"
+          }
+        ],
+        "udp": true
+      }
+    },
+    {
+      "tag": "in-srv-00000007",
+      "listen": "127.0.0.1",
+      "port": 31201,
+      "protocol": "socks",
+      "settings": {
+        "auth": "password",
+        "accounts": [
+          {
+            "user": "xray-user",
+            "pass": "xray-pass"
+          }
+        ],
+        "udp": true
+      }
+    },
+    {
+      "tag": "in-srv-00000008",
+      "listen": "127.0.0.1",
+      "port": 31202,
+      "protocol": "socks",
+      "settings": {
+        "auth": "password",
+        "accounts": [
+          {
+            "user": "xray-user",
+            "pass": "xray-pass"
+          }
+        ],
+        "udp": true
+      }
+    },
+    {
+      "tag": "in-srv-00000009",
+      "listen": "127.0.0.1",
+      "port": 31203,
+      "protocol": "socks",
+      "settings": {
+        "auth": "password",
+        "accounts": [
+          {
+            "user": "xray-user",
+            "pass": "xray-pass"
+          }
+        ],
+        "udp": true
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "srv-00000006",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "de.example.com",
+            "port": 443,
+            "users": [
+              {
+                "id": "b831381d-6324-4d53-ad4f-8cda48b30811",
+                "encryption": "none",
+                "flow": ""
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "xhttpSettings": {
+          "path": "/x",
+          "mode": "packet-up"
+        },
+        "realitySettings": {
+          "serverName": "www.example.org",
+          "fingerprint": "firefox",
+          "password": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "publicKey": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "shortId": "a1b2",
+          "spiderX": "/"
+        }
+      }
+    },
+    {
+      "tag": "srv-00000007",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "cdn.example.com",
+            "port": 443,
+            "users": [
+              {
+                "id": "b831381d-6324-4d53-ad4f-8cda48b30811",
+                "encryption": "none",
+                "flow": ""
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "wsSettings": {
+          "path": "/ws",
+          "host": "cdn.example.com"
+        },
+        "tlsSettings": {
+          "serverName": "cdn.example.com",
+          "fingerprint": "chrome",
+          "allowInsecure": false,
+          "alpn": [
+            "h2",
+            "http/1.1"
+          ]
+        }
+      }
+    },
+    {
+      "tag": "srv-00000008",
+      "protocol": "trojan",
+      "settings": {
+        "servers": [
+          {
+            "address": "fi.example.com",
+            "port": 443,
+            "password": "pw"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "security": "tls",
+        "grpcSettings": {
+          "serviceName": "svc"
+        },
+        "tlsSettings": {
+          "serverName": "fi.example.com",
+          "fingerprint": "chrome",
+          "allowInsecure": false
+        }
+      }
+    },
+    {
+      "tag": "srv-00000009",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "nl1.example.com",
+            "port": 443,
+            "users": [
+              {
+                "id": "b831381d-6324-4d53-ad4f-8cda48b30811",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "raw",
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "www.microsoft.com",
+          "fingerprint": "chrome",
+          "password": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "publicKey": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "shortId": "a1b2c3",
+          "spiderX": "/"
+        }
+      }
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": [
+          "in-srv-00000006"
+        ],
+        "outboundTag": "srv-00000006"
+      },
+      {
+        "type": "field",
+        "inboundTag": [
+          "in-srv-00000007"
+        ],
+        "outboundTag": "srv-00000007"
+      },
+      {
+        "type": "field",
+        "inboundTag": [
+          "in-srv-00000008"
+        ],
+        "outboundTag": "srv-00000008"
+      },
+      {
+        "type": "field",
+        "inboundTag": [
+          "in-srv-00000009"
+        ],
+        "outboundTag": "srv-00000009"
+      }
+    ]
+  }
+}
