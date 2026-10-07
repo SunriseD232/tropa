@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Tropa.Core.Model;
 
 public enum RoutePreset { ExceptRu, BlockedOnly, All }
@@ -36,8 +38,10 @@ public sealed record RuleMatch
     public IReadOnlyList<string> IpCidrs { get; init; } = [];
     public IReadOnlyList<PortRange> Ports { get; init; } = [];
 
+    [JsonIgnore]
     public bool HasProcessCondition => Processes.Count > 0 || ProcessPaths.Count > 0;
 
+    [JsonIgnore]
     public bool IsEmpty =>
         !HasProcessCondition && Domains.Count == 0 && DomainSuffixes.Count == 0 && DomainKeywords.Count == 0
         && DomainRegexes.Count == 0 && GeoSite.Count == 0 && GeoIp.Count == 0 && IpCidrs.Count == 0 && Ports.Count == 0;

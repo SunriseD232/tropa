@@ -30,6 +30,15 @@
     <SolidColorBrush x:Key="InfoBg" Color="#152233" />
     <SolidColorBrush x:Key="InfoFg" Color="#9CC4FF" />
     <FontFamily x:Key="Mono">Cascadia Mono, Consolas, monospace</FontFamily>
+    <!-- Переключатели в цвете макета: включённое состояние должно читаться сразу -->
+    <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#3DDC97" />
+    <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#5BE6A8" />
+    <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#2FBF80" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#0B1A13" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#0B1A13" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#0B1A13" />
+    <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#2C333B" />
+    <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#3A424B" />
   </Application.Resources>
 
   <Application.Styles>
@@ -90,6 +99,11 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBox">
+      <Setter Property="Background" Value="{StaticResource Bg}" />
+      <Setter Property="BorderBrush" Value="#2C333B" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="ComboBox">
       <Setter Property="Background" Value="{StaticResource Bg}" />
       <Setter Property="BorderBrush" Value="#2C333B" />
       <Setter Property="CornerRadius" Value="10" />

@@ -9,6 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Tropa.Core\Tropa.Core.csproj" />
+    <ProjectReference Include="..\Tropa.Ipc\Tropa.Ipc.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Lock-файлы вшиты в сборку: хэши ядер и баз нельзя подменить, положив рядом другой файл. -->

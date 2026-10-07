@@ -28,7 +28,8 @@ internal sealed partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            _engine = TropaEngine.Open(DataPaths());
+            _engine = TropaEngine.Open(DataPaths(), connectService: TropaEngine.DefaultServiceConnector());
+            _ = _engine.AttachServiceAsync();
             var vm = new MainWindowViewModel(_engine);
             _window = new MainWindow { DataContext = vm };
             CreateTray();

@@ -8,11 +8,12 @@ namespace Tropa.Infrastructure.SystemIntegration;
 public sealed record JournalEntry(string Kind, Dictionary<string, string?> Original, DateTimeOffset At);
 
 /// <summary>
-/// Журнал изменений системы, сделанных от имени пользователя (docs/02-security.md, §3.6).
+/// Журнал изменений системы (docs/02-security.md, §3.6): у интерфейса свой (прокси Windows),
+/// у службы свой (политика DNS, позже брандмауэр).
 /// Исходное значение записывается на диск ДО изменения. Если Тропа упадёт, при следующем
 /// запуске журнал не пуст — значит, нужно откатить, и только потом работать.
 /// </summary>
-public sealed class UserJournal(string path)
+public sealed class ChangeJournal(string path)
 {
     private readonly Lock _lock = new();
 

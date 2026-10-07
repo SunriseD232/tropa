@@ -7,6 +7,7 @@ using Tropa.Core.Parsing;
 using Tropa.Core.Security;
 using Tropa.Infrastructure.Cores;
 using Tropa.Infrastructure.Net;
+using Tropa.Infrastructure.Service;
 using Tropa.Infrastructure.Storage;
 using Tropa.Infrastructure.SystemIntegration;
 using Tropa.Infrastructure.Testing;
@@ -45,12 +46,17 @@ public sealed class TropaEngine : IAsyncDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Func<DateTimeOffset> _now;
 
+    private readonly Func<CancellationToken, Task<ServiceClient?>> _connectService;
+
     private CoreProcess? _core;
+    private ServiceClient? _service;
+    private bool _runningViaService;
     private CancellationTokenSource? _trafficCts;
     private int _mixedPort;
     private bool _systemProxyApplied;
 
-    private TropaEngine(EnginePaths paths, StateStore store, LoadResult loaded, SystemProxy systemProxy, CoreLocations locations, Func<DateTimeOffset> now)
+    private TropaEngine(EnginePaths paths, StateStore store, LoadResult loaded, SystemProxy systemProxy, CoreLocations locations,
+        Func<DateTimeOffset> now, Func<CancellationToken, Task<ServiceClient?>> connectService)
     {
         _paths = paths;
         _store = store;
@@ -58,8 +64,55 @@ public sealed class TropaEngine : IAsyncDisposable
         _systemProxy = systemProxy;
         _locations = locations;
         _now = now;
+        _connectService = connectService;
         State = loaded.State;
         StartupWarning = loaded.Warning;
+    }
+
+    /// <summary>
+    /// Подключение к службе по умолчанию: канал Tropa.Service.v1, а на другом конце должна быть
+    /// Tropa.Service.exe из каталога программы.
+    /// </summary>
+    public static Func<CancellationToken, Task<ServiceClient?>> DefaultServiceConnector()
+    {
+        var expected = Path.Combine(AppContext.BaseDirectory, "Tropa.Service.exe");
+#if DEBUG
+        // Только для разработки: служба собирается в свой каталог.
+        if (Environment.GetEnvironmentVariable("TROPA_DEV_SERVICE") is { Length: > 0 } dev)
+            expected = dev;
+#endif
+        return ct => ServiceClient.TryConnectAsync(Ipc.IpcProtocol.PipeName, expected, TimeSpan.FromMilliseconds(500), ct);
+    }
+
+    /// <summary>Служба Тропы подключена и может включить режим «Весь компьютер».</summary>
+    public bool TunAvailable => _service is { IsConnected: true, TunSupported: true };
+
+    /// <summary>Служба подключена (даже если без прав на TUN).</summary>
+    public bool ServiceAvailable => _service is { IsConnected: true };
+
+    public event EventHandler? ServiceChanged;
+
+    /// <summary>Пытается подключиться к службе. Без неё Тропа работает в режиме «Только браузеры».</summary>
+    public async Task AttachServiceAsync(CancellationToken ct = default)
+    {
+        if (ServiceAvailable)
+            return;
+        try
+        {
+            var client = await _connectService(ct).ConfigureAwait(false);
+            if (client is null)
+                return;
+            client.Log += (_, line) => Log?.Invoke(this, line);
+            client.Status += OnServiceStatus;
+            client.Disconnected += OnServiceDisconnected;
+            _service = client;
+        }
+        catch (ServiceException ex)
+        {
+            StartupWarning = ex.Message;
+        }
+
+        ServiceChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public AppState State { get; private set; }
@@ -79,16 +132,18 @@ public sealed class TropaEngine : IAsyncDisposable
 
     public SecretScrubber Scrubber => new(_secrets.Values);
 
-    public static TropaEngine Open(EnginePaths paths, IProxySettingsStore? proxyStore = null, CoreLocations? locations = null, Func<DateTimeOffset>? now = null)
+    public static TropaEngine Open(EnginePaths paths, IProxySettingsStore? proxyStore = null, CoreLocations? locations = null,
+        Func<DateTimeOffset>? now = null, Func<CancellationToken, Task<ServiceClient?>>? connectService = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         Directory.CreateDirectory(paths.Roaming);
         Directory.CreateDirectory(paths.Local);
         var store = new StateStore(paths.Roaming);
         var loaded = store.Load();
-        var journal = new UserJournal(paths.JournalPath);
+        var journal = new ChangeJournal(paths.JournalPath);
         var systemProxy = new SystemProxy(proxyStore ?? new RegistryProxySettingsStore(), journal);
-        var engine = new TropaEngine(paths, store, loaded, systemProxy, locations ?? CoreLocations.Default(), now ?? (() => DateTimeOffset.Now));
+        var engine = new TropaEngine(paths, store, loaded, systemProxy, locations ?? CoreLocations.Default(), now ?? (() => DateTimeOffset.Now),
+            connectService ?? (_ => Task.FromResult<ServiceClient?>(null)));
 
         // Откат после сбоя: если в журнале остались наши изменения, возвращаем систему в исходное состояние.
         if (systemProxy.IsAppliedByUs)
@@ -272,12 +327,6 @@ public sealed class TropaEngine : IAsyncDisposable
 
     // ---------------- Подключение ----------------
 
-    /// <summary>
-    /// До появления службы (этап 3) работает только режим «Только браузеры»:
-    /// выбор «Весь компьютер» сохраняется, но фактически включается системный прокси.
-    /// </summary>
-    public static bool TunAvailable => false;
-
     public async Task ConnectAsync(CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -286,13 +335,14 @@ public sealed class TropaEngine : IAsyncDisposable
             if (Status.State == ConnectionState.Connected)
                 return;
             SetStatus(new ConnectionStatus(ConnectionState.Connecting));
+            await AttachServiceAsync(ct).ConfigureAwait(false);
             await StartCoreAsync(ct).ConfigureAwait(false);
             var note = State.Settings.Connection.Mode == CaptureMode.Tun && !TunAvailable
-                ? "Режим «Весь компьютер» появится в следующей версии. Сейчас через Тропу идут браузеры и программы, использующие прокси Windows."
+                ? "Служба Тропы не установлена, поэтому режим «Весь компьютер» недоступен. Сейчас через Тропу идут браузеры и программы, использующие прокси Windows."
                 : null;
             SetStatus(new ConnectionStatus(ConnectionState.Connected, note, _now()));
         }
-        catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException)
+        catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException or ServiceException or TimeoutException)
         {
             await StopCoreAsync().ConfigureAwait(false);
             SetStatus(new ConnectionStatus(ConnectionState.Error, Scrubber.Scrub(ex.Message)));
@@ -318,6 +368,13 @@ public sealed class TropaEngine : IAsyncDisposable
         }
     }
 
+    /// <summary>Применяет изменённые настройки и правила: если подключено — переподключается.</summary>
+    public async Task ApplyIfConnectedAsync(CancellationToken ct = default)
+    {
+        if (Status.State == ConnectionState.Connected)
+            await ReconnectAsync(ct).ConfigureAwait(false);
+    }
+
     private async Task ReconnectAsync(CancellationToken ct)
     {
         await DisconnectAsync().ConfigureAwait(false);
@@ -340,8 +397,14 @@ public sealed class TropaEngine : IAsyncDisposable
         if (!PortIsFree(_mixedPort))
             throw new InvalidOperationException($"Порт {_mixedPort} занят другой программой. Закройте её или выберите другой порт в настройках.");
 
-        PinnedFiles.EnsureGeoInstalled(_locations.GeoSourceDirectory, _paths.GeoDirectory);
-        PinnedFiles.VerifyGeo(_paths.GeoDirectory);
+        // Через службу наборы правил читает она — из своего защищённого каталога.
+        var service = ServiceAvailable ? _service : null;
+        var ruleSetDirectory = service?.RuleSetDirectory ?? _paths.GeoDirectory;
+        if (service is null)
+        {
+            PinnedFiles.EnsureGeoInstalled(_locations.GeoSourceDirectory, _paths.GeoDirectory);
+            PinnedFiles.VerifyGeo(_paths.GeoDirectory);
+        }
 
         var clashPort = ServerTester.FreePort();
         var clashSecret = SecretStore.NewRandomToken();
@@ -356,7 +419,7 @@ public sealed class TropaEngine : IAsyncDisposable
             Active = active,
             Profiles = State.Profiles.Select(p => p.Profile).ToList(),
             AutoSelectGroup = group,
-            RuleSetDirectory = _paths.GeoDirectory,
+            RuleSetDirectory = ruleSetDirectory,
             LocalAuth = Auth,
             ClashApiPort = clashPort,
             ClashApiSecret = clashSecret,
@@ -364,15 +427,34 @@ public sealed class TropaEngine : IAsyncDisposable
 
         var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy
         {
-            AllowedDirectories = [_paths.GeoDirectory, _paths.RunDirectory],
+            AllowedDirectories = service is null ? [_paths.GeoDirectory, _paths.RunDirectory] : [ruleSetDirectory],
             AllowLanInbound = effective.Connection.LanAllow,
         });
         if (violations.Count > 0)
             throw new IntegrityException("Конфиг не прошёл проверку безопасности: " + violations[0]);
 
-        var scrubber = Scrubber;
-        _core = await CoreProcess.StartSingBoxAsync(_locations, config, _mixedPort, _paths.RunDirectory, scrubber, line => Log?.Invoke(this, line), ct).ConfigureAwait(false);
-        _core.Exited += OnCoreExited;
+        if (service is not null)
+        {
+            var reply = await service.SendAsync(new Ipc.StartRequest(
+                config,
+                effective.Connection.Mode switch
+                {
+                    CaptureMode.Tun => Ipc.CaptureModeDto.Tun,
+                    CaptureMode.SystemProxy => Ipc.CaptureModeDto.SystemProxy,
+                    _ => Ipc.CaptureModeDto.PortsOnly,
+                },
+                _mixedPort,
+                effective.Connection.LanAllow,
+                effective.Dns.SmartNameRes), ct).ConfigureAwait(false);
+            if (!reply.Ok)
+                throw new ServiceException(reply.Error ?? "Служба отказалась запускать подключение.");
+            _runningViaService = true;
+        }
+        else
+        {
+            _core = await CoreProcess.StartSingBoxAsync(_locations, config, _mixedPort, _paths.RunDirectory, Scrubber, line => Log?.Invoke(this, line), ct).ConfigureAwait(false);
+            _core.Exited += OnCoreExited;
+        }
 
         if (effective.Connection.Mode == CaptureMode.SystemProxy)
         {
@@ -445,6 +527,74 @@ public sealed class TropaEngine : IAsyncDisposable
             await _core.DisposeAsync().ConfigureAwait(false);
             _core = null;
         }
+
+        if (_runningViaService)
+        {
+            _runningViaService = false;
+            if (_service is { IsConnected: true } service)
+            {
+                try
+                {
+                    await service.SendAsync(new Ipc.StopRequest(), CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is ServiceException or TimeoutException)
+                {
+                    // Служба сама остановит ядро, когда интерфейс отключится от канала.
+                }
+            }
+        }
+    }
+
+    /// <summary>Служба сообщила о сбое ядра, которое не удалось перезапустить.</summary>
+    private void OnServiceStatus(object? sender, Ipc.StatusEvent status)
+    {
+        if (status.State != Ipc.ServiceState.Failed || !_runningViaService)
+            return;
+        _ = Task.Run(async () =>
+        {
+            await _gate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                _runningViaService = false; // служба уже остановила ядро
+                await StopCoreAsync().ConfigureAwait(false);
+                SetStatus(new ConnectionStatus(ConnectionState.Error, status.Message ?? "Служба остановила подключение из-за сбоя ядра."));
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        });
+    }
+
+    /// <summary>Связь со службой потеряна: она остановит ядро сама, мы возвращаем прокси Windows.</summary>
+    private void OnServiceDisconnected(object? sender, EventArgs e)
+    {
+        _ = Task.Run(async () =>
+        {
+            await _gate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                var wasRunning = _runningViaService;
+                _runningViaService = false;
+                if (_service is { } old)
+                {
+                    _service = null;
+                    await old.DisposeAsync().ConfigureAwait(false);
+                }
+
+                if (wasRunning)
+                {
+                    await StopCoreAsync().ConfigureAwait(false);
+                    SetStatus(new ConnectionStatus(ConnectionState.Error, "Связь со службой Тропы потеряна. Подключение остановлено."));
+                }
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
+            ServiceChanged?.Invoke(this, EventArgs.Empty);
+        });
     }
 
     private void SetStatus(ConnectionStatus status)
@@ -473,6 +623,13 @@ public sealed class TropaEngine : IAsyncDisposable
         try
         {
             await StopCoreAsync().ConfigureAwait(false);
+            if (_service is { } service)
+            {
+                service.Disconnected -= OnServiceDisconnected;
+                service.Status -= OnServiceStatus;
+                _service = null;
+                await service.DisposeAsync().ConfigureAwait(false);
+            }
         }
         finally
         {

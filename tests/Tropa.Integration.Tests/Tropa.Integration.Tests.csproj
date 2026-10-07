@@ -17,5 +17,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tropa.Core\Tropa.Core.csproj" />
     <ProjectReference Include="..\..\src\Tropa.Infrastructure\Tropa.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Tropa.Service\Tropa.Service.csproj" />
   </ItemGroup>
 </Project>

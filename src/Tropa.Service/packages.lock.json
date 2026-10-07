@@ -308,8 +308,22 @@
       "tropa.core": {
         "type": "Project"
       },
+      "tropa.infrastructure": {
+        "type": "Project",
+        "dependencies": {
+          "System.Security.Cryptography.ProtectedData": "[10.0.12, )",
+          "Tropa.Core": "[0.1.0, )",
+          "Tropa.Ipc": "[0.1.0, )"
+        }
+      },
       "tropa.ipc": {
         "type": "Project"
+      },
+      "System.Security.Cryptography.ProtectedData": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "wO0W8VDMeRJZakRySOmemAnrBZMwEFRlbfBtATxUiLf2I3IhSRnCp1Vt157NWptdE4IJ7eftd5n8q9LtaKHFTQ=="
       }
     }
   }

@@ -109,7 +109,7 @@
         <Border Classes="card">
           <StackPanel Spacing="8">
             <TextBlock Classes="lbl" Text="КАК ЭТО РАБОТАЕТ СЕЙЧАС" />
-            <TextBlock Classes="muted" Text="Тропа включает прокси Windows, и через сервер идут браузеры и программы, которые его используют. При отключении и даже после сбоя прежние настройки прокси возвращаются." />
+            <TextBlock Classes="muted" Text="{Binding HowItWorks}" />
             <TextBlock Classes="muted" Text="Ключи серверов хранятся зашифрованными, ядро sing-box запускается только после проверки его контрольной суммы." />
           </StackPanel>
         </Border>

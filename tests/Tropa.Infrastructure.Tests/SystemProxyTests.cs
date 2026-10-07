@@ -37,7 +37,7 @@ public sealed class SystemProxyTests : IDisposable
     {
         var store = new FakeProxyStore();
         var original = store.Read();
-        var proxy = new SystemProxy(store, new UserJournal(JournalPath));
+        var proxy = new SystemProxy(store, new ChangeJournal(JournalPath));
 
         proxy.Apply(10808, "localhost;127.*", Now);
         Assert.Equal("127.0.0.1:10808", store.Values["ProxyServer"]);
@@ -54,7 +54,7 @@ public sealed class SystemProxyTests : IDisposable
     {
         var store = new FakeProxyStore();
         var original = store.Read();
-        var proxy = new SystemProxy(store, new UserJournal(JournalPath));
+        var proxy = new SystemProxy(store, new ChangeJournal(JournalPath));
         proxy.Apply(10808, "", Now);
         proxy.Apply(20808, "", Now); // смена порта при переподключении
         proxy.Restore();
@@ -66,9 +66,9 @@ public sealed class SystemProxyTests : IDisposable
     {
         var store = new FakeProxyStore();
         var original = store.Read();
-        new SystemProxy(store, new UserJournal(JournalPath)).Apply(10808, "", Now);
+        new SystemProxy(store, new ChangeJournal(JournalPath)).Apply(10808, "", Now);
         // «Падение»: экземпляр потерян, остался только журнал на диске.
-        var afterRestart = new SystemProxy(store, new UserJournal(JournalPath));
+        var afterRestart = new SystemProxy(store, new ChangeJournal(JournalPath));
         Assert.True(afterRestart.IsAppliedByUs);
         afterRestart.Restore();
         Assert.Equal(original, store.Values);
@@ -79,7 +79,7 @@ public sealed class SystemProxyTests : IDisposable
     {
         var store = new FakeProxyStore();
         var original = store.Read();
-        new SystemProxy(store, new UserJournal(JournalPath)).Restore();
+        new SystemProxy(store, new ChangeJournal(JournalPath)).Restore();
         Assert.Equal(original, store.Values);
     }
 
@@ -87,7 +87,7 @@ public sealed class SystemProxyTests : IDisposable
     public void Corrupted_journal_is_kept_for_diagnostics()
     {
         File.WriteAllText(JournalPath, "{ broken");
-        Assert.Empty(new UserJournal(JournalPath).Pending());
+        Assert.Empty(new ChangeJournal(JournalPath).Pending());
         Assert.True(File.Exists(JournalPath + ".corrupt"));
     }
 }

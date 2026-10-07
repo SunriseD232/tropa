@@ -16,6 +16,7 @@ public sealed record SubscriptionInfo
     public Uri? WebPageUrl { get; init; }
     public string? Announce { get; init; }
 
+    [System.Text.Json.Serialization.JsonIgnore]
     public long? Remaining => Total is > 0 ? Math.Max(0, Total.Value - (Upload ?? 0) - (Download ?? 0)) : null;
 }
 

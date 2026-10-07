@@ -10,6 +10,9 @@
       },
       "tropa.core": {
         "type": "Project"
+      },
+      "tropa.ipc": {
+        "type": "Project"
       }
     }
   }

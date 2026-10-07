@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
-  <!-- Служба Windows (LocalSystem): ядра, TUN, системные изменения, тесты серверов. -->
+  <!-- Служба Windows (LocalSystem): ядра, TUN, системные изменения. Принимает команды только от Tropa.exe. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <OutputType>Exe</OutputType>
     <RootNamespace>Tropa.Service</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
@@ -11,5 +12,16 @@
   <ItemGroup>
     <ProjectReference Include="..\Tropa.Core\Tropa.Core.csproj" />
     <ProjectReference Include="..\Tropa.Ipc\Tropa.Ipc.csproj" />
+    <ProjectReference Include="..\Tropa.Infrastructure\Tropa.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tropa.Integration.Tests" />
+  </ItemGroup>
+  <!-- Ядро и наборы правил рядом со службой; хэши сверяются с вшитыми lock-файлами. -->
+  <ItemGroup Condition="Exists('..\..\cores\sing-box.exe')">
+    <None Include="..\..\cores\sing-box.exe" Link="cores\sing-box.exe" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\geo\*.srs" Link="geo\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -11,6 +11,7 @@
   <Window.DataTemplates>
     <DataTemplate DataType="vm:HomeViewModel"><v:HomeView /></DataTemplate>
     <DataTemplate DataType="vm:ServersViewModel"><v:ServersView /></DataTemplate>
+    <DataTemplate DataType="vm:RulesViewModel"><v:RulesView /></DataTemplate>
     <DataTemplate DataType="vm:PlaceholderViewModel"><v:PlaceholderView /></DataTemplate>
   </Window.DataTemplates>
 

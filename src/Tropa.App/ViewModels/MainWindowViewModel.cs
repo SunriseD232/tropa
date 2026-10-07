@@ -20,7 +20,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Import = new ImportViewModel(engine, Info);
         Home = new HomeViewModel(engine, Info);
         Servers = new ServersViewModel(engine, Info, () => Import.Open());
-        Rules = new PlaceholderViewModel("Правила", "Правила для приложений и сайтов с отдельными действиями для TCP и UDP появятся вместе с режимом «Весь компьютер». Пресет маршрута уже можно выбрать на главной.");
+        Rules = new RulesViewModel(engine, Info);
         Diagnostics = new PlaceholderViewModel("Диагностика", "Пошаговая проверка с понятными объяснениями и отчёт для помощи — в одной из следующих версий.");
         Settings = new PlaceholderViewModel("Настройки", "Полный экран настроек — в одной из следующих версий. Сейчас настройки хранятся с безопасными значениями по умолчанию.");
         CurrentPage = Home;
@@ -32,7 +32,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public ImportViewModel Import { get; }
     public HomeViewModel Home { get; }
     public ServersViewModel Servers { get; }
-    public PlaceholderViewModel Rules { get; }
+    public RulesViewModel Rules { get; }
     public PlaceholderViewModel Diagnostics { get; }
     public PlaceholderViewModel Settings { get; }
 

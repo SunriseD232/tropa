@@ -202,7 +202,8 @@
         "type": "Project",
         "dependencies": {
           "System.Security.Cryptography.ProtectedData": "[10.0.12, )",
-          "Tropa.Core": "[0.1.0, )"
+          "Tropa.Core": "[0.1.0, )",
+          "Tropa.Ipc": "[0.1.0, )"
         }
       },
       "tropa.ipc": {

@@ -21,6 +21,11 @@ internal sealed partial class ServersView : UserControl
     }
 }
 
+internal sealed partial class RulesView : UserControl
+{
+    public RulesView() => InitializeComponent();
+}
+
 internal sealed partial class PlaceholderView : UserControl
 {
     public PlaceholderView() => InitializeComponent();

@@ -13,9 +13,9 @@ public interface IProxySettingsStore
 
 /// <summary>
 /// Системный прокси Windows (HKCU, режим «Только браузеры»). Каждое включение сначала
-/// записывает исходные настройки в <see cref="UserJournal"/>, выключение возвращает их.
+/// записывает исходные настройки в <see cref="ChangeJournal"/>, выключение возвращает их.
 /// </summary>
-public sealed class SystemProxy(IProxySettingsStore store, UserJournal journal)
+public sealed class SystemProxy(IProxySettingsStore store, ChangeJournal journal)
 {
     public const string JournalKind = "system-proxy";
 

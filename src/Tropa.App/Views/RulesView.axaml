@@ -1,0 +1,126 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Tropa.App.ViewModels"
+             x:Class="Tropa.App.Views.RulesView"
+             x:DataType="vm:RulesViewModel">
+  <StackPanel Spacing="18">
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <TextBlock Classes="muted" Text="Основа" VerticalAlignment="Center" />
+        <ComboBox SelectedIndex="{Binding PresetIndex}" MinWidth="240">
+          <ComboBoxItem Content="Всё, кроме российского" />
+          <ComboBoxItem Content="Только заблокированное" />
+          <ComboBoxItem Content="Всё через прокси" />
+        </ComboBox>
+        <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="route" />
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Classes="h1" Text="Правила" />
+          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruleOrder" />
+        </StackPanel>
+        <TextBlock Classes="muted" Text="Правила проверяются сверху вниз, срабатывает первое подходящее. Госуслуги и банки всегда идут напрямую." />
+      </StackPanel>
+    </DockPanel>
+
+    <Border Background="{StaticResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding NeedsApply}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="primary" Content="Применить сейчас" Command="{Binding ApplyCommand}" />
+        <TextBlock Foreground="{StaticResource InfoFg}" VerticalAlignment="Center" TextWrapping="Wrap"
+                   Text="Правила изменены. Чтобы они заработали, подключение переподключится на секунду." />
+      </DockPanel>
+    </Border>
+
+    <Border Classes="card" Padding="20,8">
+      <UniformGrid Columns="2">
+        <DockPanel Margin="0,10,20,10">
+          <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding BlockQuic}" OnContent="" OffContent="" />
+          <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="blockQuic" />
+          <StackPanel>
+            <TextBlock Text="Блокировать QUIC (UDP 443)" FontSize="15" />
+            <TextBlock Classes="muted" Text="Браузер сразу уходит на TCP, сайты не «думают»" />
+          </StackPanel>
+        </DockPanel>
+        <DockPanel Margin="20,10,0,10">
+          <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding UdpProxy}" OnContent="" OffContent="" />
+          <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="udpProxy" />
+          <StackPanel>
+            <TextBlock Text="UDP через сервер" FontSize="15" />
+            <TextBlock Classes="muted" Text="Нужно для голоса Discord и звонков" />
+          </StackPanel>
+        </DockPanel>
+      </UniformGrid>
+    </Border>
+
+    <!-- Приложения -->
+    <Border Classes="card">
+      <StackPanel Spacing="12">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Text="Приложения" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="appRules" />
+        </StackPanel>
+        <Border Background="{StaticResource WarnBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding AppRulesNote, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <TextBlock Text="{Binding AppRulesNote}" Foreground="{StaticResource WarnFg}" TextWrapping="Wrap" />
+        </Border>
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Добавить" Command="{Binding AddAppCommand}" Margin="8,0,0,0" />
+          <Button DockPanel.Dock="Right" Content="↻" Width="40" Command="{Binding RefreshRunningAppsCommand}" ToolTip.Tip="Обновить список запущенных программ" Margin="8,0,0,0" />
+          <AutoCompleteBox Text="{Binding NewApp}" ItemsSource="{Binding RunningApps}" FilterMode="Contains"
+                           PlaceholderText="Программа: начните вводить или выберите из запущенных (Discord.exe)" MinimumPrefixLength="0" />
+        </DockPanel>
+        <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4,4,0">
+          <TextBlock Grid.Column="0" Classes="lbl" Text="ПРОГРАММА" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+            <TextBlock Classes="lbl" Text="TCP" VerticalAlignment="Center" />
+            <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="tcpUdpSplit" />
+          </StackPanel>
+          <TextBlock Grid.Column="2" Classes="lbl" Text="UDP" />
+          <TextBlock Grid.Column="3" Classes="lbl" Text="ВКЛ" />
+        </Grid>
+        <ItemsControl ItemsSource="{Binding Apps}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RuleItemViewModel">
+              <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4">
+                <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <ComboBox Grid.Column="1" SelectedIndex="{Binding TcpIndex}" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="2" SelectedIndex="{Binding UdpIndex}" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ToggleSwitch Grid.Column="3" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
+                <Button Grid.Column="4" Content="✕" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Classes="muted" IsVisible="{Binding !Apps.Count}"
+                   Text="Пример: Discord.exe — TCP и UDP через сервер (иначе не работает голос); игра — TCP через сервер, UDP напрямую ради пинга; торрент-клиент — блокировать." />
+      </StackPanel>
+    </Border>
+
+    <!-- Сайты -->
+    <Border Classes="card">
+      <StackPanel Spacing="12">
+        <TextBlock Text="Сайты" FontSize="18" FontWeight="SemiBold" />
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Добавить" Command="{Binding AddSiteCommand}" Margin="8,0,0,0" />
+          <TextBox Text="{Binding NewSite}" PlaceholderText="Адрес сайта: youtube.com (правило действует и на поддомены)" />
+        </DockPanel>
+        <ItemsControl ItemsSource="{Binding Sites}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:RuleItemViewModel">
+              <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4">
+                <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <ComboBox Grid.Column="1" SelectedIndex="{Binding TcpIndex}" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="2" SelectedIndex="{Binding UdpIndex}" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ToggleSwitch Grid.Column="3" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
+                <Button Grid.Column="4" Content="✕" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+
+    <Border Background="{StaticResource BadBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding Error}" Foreground="{StaticResource BadFg}" TextWrapping="Wrap" />
+    </Border>
+  </StackPanel>
+</UserControl>

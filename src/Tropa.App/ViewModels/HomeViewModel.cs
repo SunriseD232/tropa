@@ -25,6 +25,12 @@ internal sealed partial class HomeViewModel : ObservableObject
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => OnStatus(s));
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(Refresh);
         engine.Traffic += (_, t) => Dispatcher.UIThread.Post(() => OnTraffic(t));
+        engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(TunAvailable));
+            OnPropertyChanged(nameof(ModeNote));
+            OnPropertyChanged(nameof(HowItWorks));
+        });
         Refresh();
         OnStatus(engine.Status);
     }
@@ -80,13 +86,21 @@ internal sealed partial class HomeViewModel : ObservableObject
     [ObservableProperty]
     public partial string RouteDescription { get; set; } = "";
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Привязка из XAML")]
-    public bool TunAvailable => TropaEngine.TunAvailable;
+    public bool TunAvailable => _engine.TunAvailable;
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Привязка из XAML")]
-    public string ModeNote => TropaEngine.TunAvailable
-        ? ""
-        : "Режим «Весь компьютер» (игры, голос Discord, правила для приложений) появится в следующей версии. Сейчас Тропа работает как прокси для браузеров.";
+    public string ModeNote => (_engine.TunAvailable, _engine.ServiceAvailable) switch
+    {
+        (true, _) => "",
+        (false, true) => "Служба Тропы запущена без прав системы, поэтому режим «Весь компьютер» недоступен. Сейчас Тропа работает как прокси для браузеров.",
+        _ => "Режим «Весь компьютер» требует службу Тропы, а она не установлена или не запущена. Сейчас Тропа работает как прокси для браузеров.",
+    };
+
+    /// <summary>Пояснение «как это работает сейчас» — зависит от того, что реально включится.</summary>
+    public string HowItWorks => ModeTun && _engine.TunAvailable
+        ? "Служба Тропы создаёт виртуальную сетевую карту, и через неё идёт трафик всех программ: игры, голос Discord, мессенджеры. Правила для приложений работают. При отключении, сбое или закрытии Тропы служба останавливает подключение и возвращает настройки DNS Windows."
+        : "Тропа включает прокси Windows, и через сервер идут браузеры и программы, которые его используют. При отключении и даже после сбоя прежние настройки прокси возвращаются.";
+
+    partial void OnModeTunChanged(bool value) => OnPropertyChanged(nameof(HowItWorks));
 
     private void Refresh()
     {

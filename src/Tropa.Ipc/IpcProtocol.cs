@@ -11,4 +11,7 @@ public static class IpcProtocol
 
     /// <summary>Максимальный размер одного сообщения в байтах.</summary>
     public const int MaxMessageBytes = 4 * 1024 * 1024;
+
+    /// <summary>Имя службы Windows.</summary>
+    public const string ServiceName = "Tropa";
 }
