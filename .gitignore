@@ -7,9 +7,9 @@ artifacts/
 .idea/
 TestResults/
 # ядра качаются tools/fetch-cores.ps1 по lock-файлу и не хранятся в git
-cores/
+/cores/
 # временные файлы генераторов макета
 design/canvas-src/__pycache__/
-geo/
+/geo/
 # выпуск: tools/build-release.ps1
 out/
