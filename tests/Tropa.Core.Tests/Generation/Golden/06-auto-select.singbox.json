@@ -1,0 +1,321 @@
+{
+  "log": {
+    "level": "warn",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "https",
+        "tag": "remote",
+        "server": "1.1.1.1",
+        "detour": "proxy"
+      },
+      {
+        "type": "udp",
+        "tag": "local",
+        "server": "77.88.8.8"
+      },
+      {
+        "type": "fakeip",
+        "tag": "fake",
+        "inet4_range": "198.18.0.0/15",
+        "inet6_range": "fc00::/18"
+      }
+    ],
+    "rules": [
+      {
+        "rule_set": [
+          "ru-services",
+          "geosite-category-ru"
+        ],
+        "server": "local"
+      },
+      {
+        "domain_suffix": [
+          "ru",
+          "su",
+          "xn--p1ai"
+        ],
+        "server": "local"
+      },
+      {
+        "query_type": [
+          "A",
+          "AAAA"
+        ],
+        "server": "fake"
+      }
+    ],
+    "final": "remote",
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": [
+        "172.19.0.1/30",
+        "fdfe:dcba:9876::1/126"
+      ],
+      "mtu": 9000,
+      "auto_route": true,
+      "strict_route": true,
+      "stack": "mixed",
+      "route_exclude_address": [
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "fc00::/7",
+        "fe80::/10"
+      ]
+    },
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 10808,
+      "users": [
+        {
+          "username": "tropa-user",
+          "password": "tropa-pass"
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "urltest",
+      "tag": "proxy",
+      "outbounds": [
+        "srv-00000001",
+        "srv-00000003",
+        "srv-00000005"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "3m",
+      "tolerance": 50
+    },
+    {
+      "type": "vless",
+      "tag": "srv-00000001",
+      "server": "nl1.example.com",
+      "server_port": 443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "flow": "xtls-rprx-vision",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "short_id": "a1b2c3"
+        }
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "srv-00000003",
+      "server": "fi.example.com",
+      "server_port": 443,
+      "password": "pw",
+      "tls": {
+        "enabled": true,
+        "server_name": "fi.example.com",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "srv-00000005",
+      "server": "us.example.com",
+      "server_port": 443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "us.example.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "grpc",
+        "service_name": "svc"
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rule_set": [
+      {
+        "type": "local",
+        "tag": "geoip-ru",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geoip-ru.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geoip-ru-blocked",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geoip-ru-blocked.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-category-ru",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-category-ru.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-ru-blocked",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-ru-blocked.srs"
+      },
+      {
+        "type": "inline",
+        "tag": "ru-services",
+        "rules": [
+          {
+            "domain_suffix": [
+              "gosuslugi.ru",
+              "esia.gosuslugi.ru",
+              "nalog.gov.ru",
+              "nalog.ru",
+              "mos.ru",
+              "pfr.gov.ru",
+              "sfr.gov.ru",
+              "cbr.ru",
+              "kremlin.ru",
+              "government.ru",
+              "fss.ru",
+              "rosreestr.gov.ru",
+              "gibdd.ru",
+              "sberbank.ru",
+              "sber.ru",
+              "tbank.ru",
+              "tinkoff.ru",
+              "vtb.ru",
+              "alfabank.ru",
+              "gazprombank.ru",
+              "raiffeisen.ru",
+              "pochtabank.ru",
+              "sovcombank.ru",
+              "open.ru",
+              "mkb.ru",
+              "psbank.ru",
+              "rshb.ru",
+              "domrf.ru",
+              "rosbank.ru",
+              "nspk.ru",
+              "mironline.ru",
+              "sbp.nspk.ru",
+              "yoomoney.ru",
+              "ozon.ru",
+              "wildberries.ru",
+              "wb.ru",
+              "avito.ru",
+              "market.yandex.ru"
+            ]
+          }
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "action": "sniff",
+        "sniffer": [
+          "http",
+          "tls"
+        ]
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "ip_version": 6,
+        "action": "reject"
+      },
+      {
+        "network": "udp",
+        "port": 443,
+        "action": "reject"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "ru-services"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geosite-ru-blocked"
+        ],
+        "action": "route",
+        "outbound": "proxy"
+      },
+      {
+        "rule_set": [
+          "geoip-ru-blocked"
+        ],
+        "action": "route",
+        "outbound": "proxy"
+      },
+      {
+        "rule_set": [
+          "geosite-category-ru"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "domain_suffix": [
+          "ru",
+          "su",
+          "xn--p1ai"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "geoip-ru"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      }
+    ],
+    "final": "proxy",
+    "default_domain_resolver": "local",
+    "auto_detect_interface": true
+  },
+  "experimental": {
+    "clash_api": {
+      "external_controller": "127.0.0.1:19090",
+      "secret": "test-secret"
+    }
+  }
+}

@@ -76,6 +76,7 @@ record RuleMatch(string[] Processes, string[] ProcessPaths, string[] Domains, st
 enum RuleAction { Proxy, Direct, Block, Server /* + Guid конкретного профиля */ }
 ```
 
+- Семантика условий (как в sing-box): внутри группы «ИЛИ», между группами «И». Группы: процесс; адрес (домены, geosite, geoip, CIDR); порт. Пример: «game.exe И порт 443».
 - Порядок: системные правила (DNS, LAN, блок QUIC) → пользовательские сверху вниз → финальное правило пресета.
 - Раздельные TCP/UDP: при генерации правило разворачивается в два правила ядра с `network: tcp` и `network: udp`. Если действия одинаковые — в одно без `network`.
 - Правила с `Processes` действуют только в TUN. В других режимах они не генерируются, а в UI помечаются.
@@ -83,7 +84,7 @@ enum RuleAction { Proxy, Direct, Block, Server /* + Guid конкретного 
 ### Пресеты
 | Пресет | Правила |
 |---|---|
-| `except_ru` | ruServices → direct; geosite:category-ru → direct; geoip:ru → direct; geoip:private → direct; final → proxy |
+| `except_ru` | ruServices → direct; **заблокированное в РФ (geosite/geoip ru-blocked) → proxy, даже если это .ru**; geosite:category-ru → direct; .ru/.su/.рф → direct; geoip:ru → direct; final → proxy |
 | `blocked` | ruServices → direct; списки блокировок РФ (geosite/geoip) → proxy; final → direct |
 | `all` | geoip:private → direct; final → proxy |
 

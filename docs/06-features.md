@@ -72,7 +72,7 @@
 | lanBypass | bool | true |
 | sysBypass | строка | localhost;127.*;10.*;172.16.*;192.168.*;*.local |
 | uwpLoopback | список приложений | — |
-| socksPort / httpPort | число | 10808 / 10809 |
+| socksPort | число | 10808 (mixed: SOCKS5 и HTTP на одном порту) |
 | randomPorts | bool | false |
 | lanAllow | bool | false |
 | autoSelect | bool | true |

@@ -1,0 +1,188 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "https",
+        "tag": "remote",
+        "server": "1.1.1.1",
+        "detour": "proxy"
+      },
+      {
+        "type": "udp",
+        "tag": "local",
+        "server": "77.88.8.8"
+      }
+    ],
+    "rules": [],
+    "final": "remote"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": [
+        "172.19.0.1/30",
+        "fdfe:dcba:9876::1/126"
+      ],
+      "mtu": 9000,
+      "auto_route": true,
+      "strict_route": true,
+      "stack": "mixed",
+      "route_exclude_address": [
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "fc00::/7",
+        "fe80::/10"
+      ]
+    },
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 10808,
+      "users": [
+        {
+          "username": "tropa-user",
+          "password": "tropa-pass"
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "proxy",
+      "server": "us.example.com",
+      "server_port": 443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "us.example.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "grpc",
+        "service_name": "svc"
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rule_set": [
+      {
+        "type": "inline",
+        "tag": "ru-services",
+        "rules": [
+          {
+            "domain_suffix": [
+              "gosuslugi.ru",
+              "esia.gosuslugi.ru",
+              "nalog.gov.ru",
+              "nalog.ru",
+              "mos.ru",
+              "pfr.gov.ru",
+              "sfr.gov.ru",
+              "cbr.ru",
+              "kremlin.ru",
+              "government.ru",
+              "fss.ru",
+              "rosreestr.gov.ru",
+              "gibdd.ru",
+              "sberbank.ru",
+              "sber.ru",
+              "tbank.ru",
+              "tinkoff.ru",
+              "vtb.ru",
+              "alfabank.ru",
+              "gazprombank.ru",
+              "raiffeisen.ru",
+              "pochtabank.ru",
+              "sovcombank.ru",
+              "open.ru",
+              "mkb.ru",
+              "psbank.ru",
+              "rshb.ru",
+              "domrf.ru",
+              "rosbank.ru",
+              "nspk.ru",
+              "mironline.ru",
+              "sbp.nspk.ru",
+              "yoomoney.ru",
+              "ozon.ru",
+              "wildberries.ru",
+              "wb.ru",
+              "avito.ru",
+              "market.yandex.ru"
+            ]
+          }
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "action": "sniff",
+        "sniffer": [
+          "http",
+          "tls",
+          "quic"
+        ]
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      },
+      {
+        "rule_set": [
+          "ru-services"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "network": "udp",
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "domain_suffix": [
+          "youtube.com",
+          "googlevideo.com",
+          "ytimg.com",
+          "ggpht.com",
+          "youtu.be",
+          "youtube-nocookie.com",
+          "yt.be"
+        ],
+        "action": "route",
+        "outbound": "direct",
+        "tls_fragment": true
+      }
+    ],
+    "final": "proxy",
+    "default_domain_resolver": "local",
+    "auto_detect_interface": true
+  },
+  "experimental": {
+    "clash_api": {
+      "external_controller": "127.0.0.1:19090",
+      "secret": "test-secret"
+    }
+  }
+}

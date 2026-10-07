@@ -1,0 +1,192 @@
+using Tropa.Core.Generation;
+using Tropa.Core.Model;
+using Tropa.Core.Tests.Cores;
+using static Tropa.Core.Tests.Parsing.ShareLinkTests;
+
+namespace Tropa.Core.Tests.Generation;
+
+/// <summary>
+/// Эталонные конфиги sing-box (docs/05-config-generation.md, §4).
+/// Обновить эталоны после осознанного изменения генератора:
+/// <c>TROPA_UPDATE_GOLDEN=1 dotnet test</c>, затем просмотреть diff.
+/// Каждый эталон дополнительно проверяется настоящим «sing-box check» в Tropa.Integration.Tests.
+/// </summary>
+public sealed class SingBoxGoldenTests
+{
+    /// <summary>Каталог гео-баз в эталонах; интеграционный тест подменяет его на временный.</summary>
+    public const string GeoDir = @"C:\tropa-test-geo";
+
+    private static readonly LocalAuth Auth = new("tropa-user", "tropa-pass");
+
+    private static Profile WithId(Profile p, int n) => p with { Id = new Guid(n, 0, 0, new byte[8]) };
+
+    private static readonly Profile Reality = WithId(Ok(VlessReality), 1);
+    private static readonly Profile VmessWsProfile = WithId(Ok(VmessWs), 2);
+    private static readonly Profile Trojan = WithId(Ok("trojan://pw@fi.example.com:443?sni=fi.example.com&alpn=h2,http/1.1#Helsinki"), 3);
+    private static readonly Profile Relay = WithId(Ok($"vless://{Uuid}@relay.example.ru:443?security=reality&sni=ya.ru&pbk={Pbk}&sid=01#Relay RU"), 4);
+    private static readonly Profile Grpc = WithId(Ok($"vless://{Uuid}@us.example.com:443?type=grpc&serviceName=svc&security=tls&sni=us.example.com#NY"), 5);
+
+    private static readonly AppSettings Defaults = new();
+
+    public static TheoryData<string> Scenarios => new(All.Keys);
+
+    private static readonly Dictionary<string, Func<SingBoxInput>> All = new()
+    {
+        ["01-reality-vision-tun-except-ru"] = () => Input(Defaults, Reality),
+
+        ["02-reality-vision-system-proxy"] = () => Input(
+            Defaults with { Connection = Defaults.Connection with { Mode = CaptureMode.SystemProxy } }, Reality),
+
+        ["03-vmess-ws-blocked-only"] = () => Input(
+            Defaults with
+            {
+                Routing = Defaults.Routing with { Preset = RoutePreset.BlockedOnly },
+                Dns = Defaults.Dns with { LocalDnsRule = LocalDnsRule.DirectRules },
+            },
+            VmessWsProfile),
+
+        ["04-trojan-app-rules-tcp-udp"] = () => Input(
+            Defaults with
+            {
+                Routing = Defaults.Routing with
+                {
+                    Rules =
+                    [
+                        new Rule
+                        {
+                            Id = new Guid(10, 0, 0, new byte[8]),
+                            Match = new RuleMatch { Processes = ["VALORANT.exe"] },
+                            Tcp = RuleAction.Proxy,
+                            Udp = RuleAction.Direct,
+                        },
+                        new Rule
+                        {
+                            Id = new Guid(11, 0, 0, new byte[8]),
+                            Match = new RuleMatch { Processes = ["qbittorrent.exe"] },
+                            Tcp = RuleAction.Block,
+                            Udp = RuleAction.Block,
+                        },
+                        new Rule
+                        {
+                            Id = new Guid(12, 0, 0, new byte[8]),
+                            Match = new RuleMatch { DomainSuffixes = ["discord.com", "discord.gg"], GeoSite = ["discord"], Ports = [PortRange.Of(443), new PortRange(50000, 65535)] },
+                            Tcp = new RuleAction(RuleActionKind.Server, Reality.Id),
+                            Udp = new RuleAction(RuleActionKind.Server, Reality.Id),
+                        },
+                        new Rule
+                        {
+                            Id = new Guid(13, 0, 0, new byte[8]),
+                            Enabled = false,
+                            Match = new RuleMatch { Domains = ["disabled.example.com"] },
+                            Tcp = RuleAction.Block,
+                            Udp = RuleAction.Block,
+                        },
+                    ],
+                },
+            },
+            Trojan, profiles: [Trojan, Reality]),
+
+        ["05-chain-relay"] = () => Input(Defaults, Reality with { ChainVia = Relay.Id }, profiles: [Reality, Relay]),
+
+        ["06-auto-select"] = () => Input(Defaults, Reality, profiles: [Reality, Trojan, Grpc], group: [Reality, Trojan, Grpc]),
+
+        ["07-dpi-fragment-udp-direct"] = () => Input(
+            Defaults with
+            {
+                Dpi = Defaults.Dpi with { DpiPreset = DpiPreset.Soft, Fragment = true, FragScope = FragmentScope.List },
+                Routing = Defaults.Routing with { BlockQuic = false, UdpProxy = false, Preset = RoutePreset.All },
+                General = Defaults.General with { Ipv6Block = false },
+                Dns = Defaults.Dns with { Fakeip = false, Sniffing = true, LocalDnsRule = LocalDnsRule.None },
+                Expert = Defaults.Expert with { SniffQuic = true, LogLevel = CoreLogLevel.Info },
+            },
+            Grpc),
+
+        ["08-lan-hosts-custom-dns"] = () => Input(
+            Defaults with
+            {
+                Connection = Defaults.Connection with { LanAllow = true, Mode = CaptureMode.SystemProxy, SocksPort = 20808 },
+                General = Defaults.General with { LocalPass = false }, // будет принудительно включён: LAN требует пароль
+                Dns = Defaults.Dns with
+                {
+                    RemoteDns = "https://dns.google/dns-query",
+                    LocalDns = "tls://77.88.8.8",
+                    Hosts = "router.local 192.168.1.1\n# комментарий\n10.0.0.5 nas.local\nbroken line here",
+                    DnsCache = false,
+                },
+            },
+            Reality, clashApi: false),
+    };
+
+    private static SingBoxInput Input(AppSettings settings, Profile active, IReadOnlyList<Profile>? profiles = null,
+        IReadOnlyList<Profile>? group = null, bool clashApi = true) => new()
+    {
+        Settings = settings,
+        Active = active,
+        Profiles = profiles ?? [active],
+        AutoSelectGroup = group ?? [],
+        RuleSetDirectory = GeoDir,
+        LocalAuth = Auth,
+        ClashApiPort = clashApi ? 19090 : null,
+        ClashApiSecret = clashApi ? "test-secret" : null,
+    };
+
+    public static string GoldenDirectory =>
+        Path.Combine(CoresLockTests.RepoRoot(), "tests", "Tropa.Core.Tests", "Generation", "Golden");
+
+    [Theory]
+    [MemberData(nameof(Scenarios))]
+    public void Matches_golden(string scenario)
+    {
+        var actual = SingBoxConfigBuilder.Build(All[scenario]());
+        var path = Path.Combine(GoldenDirectory, scenario + ".singbox.json");
+
+        if (Environment.GetEnvironmentVariable("TROPA_UPDATE_GOLDEN") == "1")
+        {
+            Directory.CreateDirectory(GoldenDirectory);
+            File.WriteAllText(path, actual);
+            return;
+        }
+
+        Assert.True(File.Exists(path), $"Нет эталона {path}. Запустите тесты с TROPA_UPDATE_GOLDEN=1.");
+        Assert.Equal(File.ReadAllText(path).ReplaceLineEndings("\n"), actual.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public void Xhttp_requires_xray()
+    {
+        var xhttp = Ok($"vless://{Uuid}@de.example.com:443?type=xhttp&path=%2Fx&security=tls&sni=de.example.com#de");
+        var ex = Assert.Throws<UnsupportedProfileException>(() => SingBoxConfigBuilder.Build(Input(Defaults, xhttp)));
+        Assert.Contains("Xray", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Incompatible_profile_is_refused()
+    {
+        var bad = Ok($"vless://{Uuid}@a.example.com:443?flow=xtls-rprx-vision&type=ws&security=tls&sni=a.example.com#x");
+        Assert.Throws<UnsupportedProfileException>(() => SingBoxConfigBuilder.Build(Input(Defaults, bad)));
+    }
+
+    [Fact]
+    public void Process_rules_are_skipped_outside_tun()
+    {
+        var settings = Defaults with
+        {
+            Connection = Defaults.Connection with { Mode = CaptureMode.SystemProxy },
+            Routing = Defaults.Routing with
+            {
+                Rules = [new Rule { Match = new RuleMatch { Processes = ["Discord.exe"] }, Tcp = RuleAction.Block, Udp = RuleAction.Block }],
+            },
+        };
+        var json = SingBoxConfigBuilder.Build(Input(settings, Reality));
+        Assert.DoesNotContain("Discord.exe", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("find_process", json, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/ws?ed=2048", "/ws", 2048)]
+    [InlineData("/ws?ed=2048&x=1", "/ws?x=1", 2048)]
+    [InlineData("/ws", "/ws", 0)]
+    [InlineData("/ws?ed=abc", "/ws?ed=abc", 0)]
+    public void Early_data_is_split_from_path(string input, string path, int ed) =>
+        Assert.Equal((path, ed), SingBoxConfigBuilder.SplitEarlyData(input));
+}

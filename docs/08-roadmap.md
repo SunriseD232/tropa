@@ -9,14 +9,14 @@
 - [x] `tools/cores.lock.json` (sing-box 1.14.2, Xray 26.9.30), `tools/update-cores-lock.ps1` (ручное закрепление: дайджест GitHub + .dgst Xray), `tools/fetch-cores.ps1` (хэш архива и exe, починка подменённых файлов). wintun отдельно не нужен: встроен в sing-box
 - [x] CI `.github/workflows/ci.yml`: actions закреплены по SHA коммита, `permissions: contents: read`, restore `--locked-mode`, build Release, fetch-cores, test. Локально все шаги проходят; на GitHub ещё не запускался (нет удалённого репозитория)
 
-## Этап 1. Ядро логики (`Tropa.Core`) — без UI
-- [ ] Модель: Profile, Subscription, Rule, Settings (+ JSON-сериализация через source generators)
-- [ ] Парсеры vless/vmess/trojan + обратная сборка ссылок, корпус тестов
-- [ ] SubscriptionParser (base64/текст/JSON), заголовки userinfo
-- [ ] CompatRules + тесты по таблицам
-- [ ] SingBoxConfigBuilder: режим proxy (mixed-inbound), VLESS/VMess/Trojan, пресеты, DNS без FakeIP
-- [ ] SecretScrubber, NameSanitizer, ConfigGuard
-- [ ] Golden-тесты + `sing-box check`
+## Этап 1. Ядро логики (`Tropa.Core`) — без UI — ✅ (2026-10-07)
+- [x] Модель: Profile (секрет в типе `Secret`, не утекает через ToString), AppSettings по разделам, Rule/RuleMatch/RoutingSettings. JSON-сериализация — вместе с SettingsStore на этапе 2
+- [x] `ShareLink.Parse/Build` для vless/vmess/trojan: IPv6, IDN→punycode, `type=raw`, xhttp, base64url без паддинга, отказ от alterId>0, VLESS Encryption, kcp/quic, headerType=http; очистка имён от bidi/невидимых символов; round-trip тесты
+- [x] `SubscriptionParser`: список ссылок, base64 (все варианты), JSON sing-box и Xray (только outbound-ы, массив конфигов с remarks), лимит 5000; `SubscriptionHeaders`: userinfo, interval, title (base64:), support-url только https/tg, announce
+- [x] `CompatRules.Evaluate` (настройки + активный профиль → эффективные настройки и причины) и `ProfileCompat` (Issues / DisabledOptions)
+- [x] `SingBoxConfigBuilder` (схема sing-box 1.14.2): сразу и TUN, и mixed; VLESS/VMess/Trojan; TLS/Reality/uTLS; WS (с early data из `?ed=`), gRPC, HTTPUpgrade; цепочки; urltest; правила с раздельным TCP/UDP и «через конкретный сервер»; пресеты; DNS (DoH через прокси, локальный, FakeIP, hosts); блок QUIC и IPv6; фрагментация `tls_fragment`; mux. XHTTP → `UnsupportedProfileException` (нужен Xray, этап 5)
+- [x] `SecretScrubber` (известные секреты + шаблоны), `NameSanitizer`, `ConfigGuard` (белые списки разделов и типов, только loopback, пути только в разрешённых каталогах, без UNC и потоков NTFS, проверка ссылок между тегами). 16 вредоносных конфигов в тестах
+- [x] 8 golden-сценариев (`tests/Tropa.Core.Tests/Generation/Golden`), каждый проходит настоящий `sing-box check` (пустые .srs компилирует `sing-box rule-set compile`) и `ConfigGuard`
 
 ## Этап 2. MVP-приложение (без службы, только режим «Только браузеры»)
 - [ ] Avalonia: каркас, боковое меню, тёмная тема по макету
@@ -71,4 +71,5 @@
 
 ## Заметки сеансов
 - 2026-10-07: спецификация создана.
+- 2026-10-07: этап 1 закрыт: 159 модульных + 10 интеграционных тестов, Release без предупреждений. Найдено и исправлено: путь «a.srs:stream» обходил проверку каталога. **Проверить на этапе 3:** семантику `routeOnly` (в sing-box 1.11+ sniff — действие правила, нужно убедиться, подменяется ли адрес назначения доменом) и поведение `tls_fragment` на живом трафике.
 - 2026-10-07: этап 0 закрыт. Сборка без предупреждений, 22 теста зелёные (20 Core + 2 интеграционных: хэш и запуск ядер). App открывает окно-каркас, служба стартует в консольном режиме. Коммитов ещё нет — владелец не просил. Следующее: этап 1, начать с модели `Profile` и парсера `vless://`.
