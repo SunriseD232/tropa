@@ -9,6 +9,17 @@
       <TextBlock Classes="muted" Text="{Binding SubscriptionLine}" IsVisible="{Binding SubscriptionLine, Converter={x:Static ObjectConverters.IsNotNull}}" />
     </StackPanel>
 
+    <Border Background="{StaticResource BadBg}" CornerRadius="12" Padding="14,12" IsVisible="{Binding Blocking}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="primary" Content="Снять блокировку" Command="{Binding ReleaseBlockingCommand}" Margin="12,0,0,0" />
+        <StackPanel Spacing="2">
+          <TextBlock Text="Интернет заблокирован аварийной блокировкой" FontWeight="SemiBold" Foreground="{StaticResource BadFg}" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Подключение оборвалось, и kill switch не пускает трафик мимо туннеля. Подключитесь снова или снимите блокировку." />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
     <Grid ColumnDefinitions="1.15*,20,*">
       <StackPanel Grid.Column="0" Spacing="20">
         <!-- Кнопка подключения -->
@@ -74,6 +85,15 @@
               </RadioButton>
             </UniformGrid>
             <TextBlock Classes="muted" Text="{Binding ModeNote}" Foreground="{StaticResource WarnFg}" IsVisible="{Binding !TunAvailable}" />
+
+            <DockPanel Margin="0,8,0,0">
+              <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding KillSwitch}" IsEnabled="{Binding KillSwitchEnabled}" OnContent="" OffContent="" />
+              <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="killSwitch" />
+              <StackPanel>
+                <TextBlock Text="Аварийная блокировка (kill switch)" FontSize="15" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding KillSwitchReason, TargetNullValue='Если туннель оборвётся, интернет не пойдёт напрямую'}" />
+              </StackPanel>
+            </DockPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
               <TextBlock Classes="lbl" Text="МАРШРУТ" VerticalAlignment="Center" />

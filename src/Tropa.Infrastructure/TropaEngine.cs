@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Sockets;
 using Tropa.Core.Compatibility;
+using Tropa.Core.Diagnostics;
 using Tropa.Core.Generation;
 using Tropa.Core.Model;
 using Tropa.Core.Parsing;
 using Tropa.Core.Security;
 using Tropa.Core.Testing;
 using Tropa.Infrastructure.Cores;
+using Tropa.Infrastructure.Diagnostics;
 using Tropa.Infrastructure.Net;
 using Tropa.Infrastructure.Service;
 using Tropa.Infrastructure.Storage;
@@ -53,6 +55,11 @@ public sealed class TropaEngine : IAsyncDisposable
     private CoreProcess? _xray;
     private ServiceClient? _service;
     private bool _runningViaService;
+
+    /// <summary>Переподключение через службу без команды Stop: старое ядро ещё может работать.</summary>
+    private bool _servicePending;
+
+    private readonly Queue<string> _recentLog = new();
     private CancellationTokenSource? _trafficCts;
     private int _mixedPort;
     private bool _systemProxyApplied;
@@ -69,6 +76,7 @@ public sealed class TropaEngine : IAsyncDisposable
         _connectService = connectService;
         State = loaded.State;
         StartupWarning = loaded.Warning;
+        Log += (_, line) => Remember(line);
     }
 
     /// <summary>
@@ -108,6 +116,14 @@ public sealed class TropaEngine : IAsyncDisposable
             client.Status += OnServiceStatus;
             client.Disconnected += OnServiceDisconnected;
             _service = client;
+            // Узнаём, не держит ли служба блокировку после прошлого сеанса.
+            try
+            {
+                await client.SendAsync(new Ipc.StatusRequest(), ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is ServiceException or TimeoutException)
+            {
+            }
         }
         catch (ServiceException ex)
         {
@@ -118,6 +134,29 @@ public sealed class TropaEngine : IAsyncDisposable
     }
 
     public AppState State { get; private set; }
+
+    /// <summary>Служба держит аварийную блокировку: ядро не работает, интернет мимо туннеля закрыт.</summary>
+    public bool Blocking { get; private set; }
+
+    /// <summary>Последние строки журнала (для отчёта диагностики), уже без секретов.</summary>
+    public IReadOnlyList<string> RecentLog
+    {
+        get
+        {
+            lock (_recentLog)
+                return [.. _recentLog];
+        }
+    }
+
+    private void Remember(string line)
+    {
+        lock (_recentLog)
+        {
+            _recentLog.Enqueue($"{_now():HH:mm:ss} {Scrubber.Scrub(line)}");
+            while (_recentLog.Count > 500)
+                _recentLog.Dequeue();
+        }
+    }
 
     public ConnectionStatus Status { get; private set; } = new(ConnectionState.Disconnected);
 
@@ -387,14 +426,85 @@ public sealed class TropaEngine : IAsyncDisposable
         }
         catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException or ServiceException or TimeoutException)
         {
-            await StopCoreAsync().ConfigureAwait(false);
+            // Переподключение без Stop не удалось: старое ядро службы останавливаем, но при включённом
+            // kill switch блокировку не снимаем — служба держит её до «Отключить».
+            _runningViaService |= _servicePending;
+            await StopCoreAsync(sendStop: !State.Settings.General.KillSwitch).ConfigureAwait(false);
             SetStatus(new ConnectionStatus(ConnectionState.Error, Scrubber.Scrub(ex.Message)));
+        }
+        finally
+        {
+            _servicePending = false;
+            _gate.Release();
+        }
+    }
+
+    // ---------------- Диагностика ----------------
+
+    private DiagnosticsInput DiagnosticsInputNow() => new()
+    {
+        Settings = State.Settings,
+        Active = State.ActiveProfile,
+        Profiles = State.Profiles.Select(p => p.Profile).ToList(),
+        Connected = Status.State == ConnectionState.Connected,
+        Locations = _locations,
+        RunDirectory = _paths.RunDirectory,
+        Scrubber = Scrubber,
+        Log = line => Log?.Invoke(this, line),
+    };
+
+    /// <summary>Девять шагов диагностики; текущее подключение не трогается.</summary>
+    public Task<IReadOnlyList<StepResult>> RunDiagnosticsAsync(IProgress<StepResult>? progress, CancellationToken ct = default) =>
+        DiagnosticsRunner.RunAsync(DiagnosticsInputNow(), progress, ct);
+
+    /// <summary>Инструмент «Проверка домена»: ответ DNS провайдера и через туннель.</summary>
+    public Task<DomainCheck> CheckDomainAsync(string domain, CancellationToken ct = default) =>
+        DiagnosticsRunner.CheckDomainAsync(DiagnosticsInputNow(), domain, ct);
+
+    /// <summary>Снять блокировку, которую служба держит после сбоя или аварийного закрытия Тропы.</summary>
+    public async Task ReleaseBlockingAsync(CancellationToken ct = default)
+    {
+        await AttachServiceAsync(ct).ConfigureAwait(false);
+        if (_service is { IsConnected: true } service)
+            await service.SendAsync(new Ipc.StopRequest(), ct).ConfigureAwait(false);
+        Blocking = false;
+        ServiceChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// «Аварийно вернуть настройки сети» (docs/02-security.md, §3.6): отключиться, вернуть прокси
+    /// Windows и попросить службу откатить всё своё. Работает даже при сломанном состоянии.
+    /// </summary>
+    public async Task EmergencyRollbackAsync()
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _runningViaService = false;
+            await StopCoreAsync().ConfigureAwait(false);
+            _systemProxy.Restore();
+            SetStatus(new ConnectionStatus(ConnectionState.Disconnected));
         }
         finally
         {
             _gate.Release();
         }
+
+        try
+        {
+            await AttachServiceAsync().ConfigureAwait(false);
+            if (_service is { IsConnected: true } service)
+                await service.SendAsync(new Ipc.RollbackAllRequest(), CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is ServiceException or TimeoutException or IOException)
+        {
+            Log?.Invoke(this, "Служба не ответила на аварийный откат: " + ex.Message);
+        }
+
+        Blocking = false;
+        ServiceChanged?.Invoke(this, EventArgs.Empty);
     }
+
 
     public async Task DisconnectAsync()
     {
@@ -420,7 +530,22 @@ public sealed class TropaEngine : IAsyncDisposable
 
     private async Task ReconnectAsync(CancellationToken ct)
     {
-        await DisconnectAsync().ConfigureAwait(false);
+        // Через службу перезапуск — одной командой Start: служба сама остановит старое ядро
+        // и не снимет блокировку kill switch между остановкой и запуском.
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var viaService = _runningViaService;
+            SetStatus(new ConnectionStatus(ConnectionState.Disconnecting));
+            await StopCoreAsync(sendStop: !viaService).ConfigureAwait(false);
+            _servicePending = viaService;
+            SetStatus(new ConnectionStatus(ConnectionState.Disconnected));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
         await ConnectAsync(ct).ConfigureAwait(false);
     }
 
@@ -518,7 +643,10 @@ public sealed class TropaEngine : IAsyncDisposable
                 effective.Connection.LanAllow,
                 effective.Dns.SmartNameRes,
                 xrayConfig,
-                xrayReadiness), ct).ConfigureAwait(false);
+                xrayReadiness,
+                effective.General.KillSwitch,
+                effective.Connection.LanBypass,
+                effective.Connection.Mode == CaptureMode.SystemProxy ? effective.Connection.UwpLoopback : null), ct).ConfigureAwait(false);
             if (!reply.Ok)
                 throw new ServiceException(reply.Error ?? "Служба отказалась запускать подключение.");
             _runningViaService = true;
@@ -675,7 +803,7 @@ public sealed class TropaEngine : IAsyncDisposable
         });
     }
 
-    private async Task StopCoreAsync()
+    private async Task StopCoreAsync(bool sendStop = true)
     {
         if (_systemProxyApplied)
         {
@@ -704,7 +832,7 @@ public sealed class TropaEngine : IAsyncDisposable
         if (_runningViaService)
         {
             _runningViaService = false;
-            if (_service is { IsConnected: true } service)
+            if (sendStop && _service is { IsConnected: true } service)
             {
                 try
                 {
@@ -721,6 +849,12 @@ public sealed class TropaEngine : IAsyncDisposable
     /// <summary>Служба сообщила о сбое ядра, которое не удалось перезапустить.</summary>
     private void OnServiceStatus(object? sender, Ipc.StatusEvent status)
     {
+        if (Blocking != status.Blocking)
+        {
+            Blocking = status.Blocking;
+            ServiceChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         if (status.State != Ipc.ServiceState.Failed || !_runningViaService)
             return;
         _ = Task.Run(async () =>

@@ -115,6 +115,32 @@
       </StackPanel>
     </Border>
 
+    <!-- Приложения Store: loopback-исключения (только режим «Только браузеры») -->
+    <Border Classes="card" IsVisible="{Binding StoreAppsVisible}">
+      <StackPanel Spacing="10">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Показать приложения" Command="{Binding LoadStoreAppsCommand}" />
+          <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <TextBlock Text="Приложения из Microsoft Store" FontSize="18" FontWeight="SemiBold" />
+            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="uwpLoopback" />
+          </StackPanel>
+        </DockPanel>
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Приложения Store (например, «Почта» или «Microsoft Store») не могут подключиться к прокси без разрешения. Отметьте те, которым оно нужно." />
+        <TextBlock Classes="muted" Text="{Binding StoreAppsSummary}" />
+        <TextBox Text="{Binding StoreFilter}" PlaceholderText="Поиск по названию" IsVisible="{Binding !!StoreApps.Count}" />
+        <ScrollViewer MaxHeight="260" IsVisible="{Binding !!StoreApps.Count}">
+          <ItemsControl ItemsSource="{Binding StoreApps}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:StoreAppViewModel">
+                <CheckBox IsChecked="{Binding IsChecked}" Content="{Binding Name}" Margin="0,2" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </StackPanel>
+    </Border>
+
     <!-- Сайты -->
     <Border Classes="card">
       <StackPanel Spacing="12">

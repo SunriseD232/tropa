@@ -30,6 +30,8 @@ internal sealed partial class HomeViewModel : ObservableObject
             OnPropertyChanged(nameof(TunAvailable));
             OnPropertyChanged(nameof(ModeNote));
             OnPropertyChanged(nameof(HowItWorks));
+            OnPropertyChanged(nameof(Blocking));
+            OnPropertyChanged(nameof(KillSwitchReason));
         });
         Refresh();
         OnStatus(engine.Status);
@@ -88,6 +90,47 @@ internal sealed partial class HomeViewModel : ObservableObject
 
     public bool TunAvailable => _engine.TunAvailable;
 
+    /// <summary>Служба держит аварийную блокировку — показываем плашку с кнопкой «Снять блокировку».</summary>
+    public bool Blocking => _engine.Blocking && _engine.Status.State != ConnectionState.Connected;
+
+    [ObservableProperty]
+    public partial bool KillSwitch { get; set; }
+
+    /// <summary>Почему kill switch сейчас недоступен (null — доступен).</summary>
+    public string? KillSwitchReason
+    {
+        get
+        {
+            var s = _engine.State.Settings;
+            if (!_engine.TunAvailable)
+                return "Сейчас недоступно: нужна служба Тропы и режим «Весь компьютер».";
+            return Core.Compatibility.CompatRules.Evaluate(s).Disabled.TryGetValue("killSwitch", out var reason) ? "Сейчас недоступно: " + reason + "." : null;
+        }
+    }
+
+    public bool KillSwitchEnabled => KillSwitchReason is null;
+
+    partial void OnKillSwitchChanged(bool value)
+    {
+        if (_engine.State.Settings.General.KillSwitch != value)
+            _engine.UpdateSettings(s => s with { General = s.General with { KillSwitch = value } });
+    }
+
+    [RelayCommand]
+    private async Task ReleaseBlockingAsync()
+    {
+        try
+        {
+            await _engine.ReleaseBlockingAsync();
+        }
+        catch (Exception ex) when (ex is Infrastructure.Service.ServiceException or TimeoutException)
+        {
+            Message = "Служба не ответила: " + ex.Message + " Используйте «Аварийно вернуть настройки сети» в меню значка в трее.";
+        }
+
+        OnPropertyChanged(nameof(Blocking));
+    }
+
     public string ModeNote => (_engine.TunAvailable, _engine.ServiceAvailable) switch
     {
         (true, _) => "",
@@ -124,6 +167,9 @@ internal sealed partial class HomeViewModel : ObservableObject
         }
 
         ModeTun = s.Settings.Connection.Mode == CaptureMode.Tun;
+        KillSwitch = s.Settings.General.KillSwitch;
+        OnPropertyChanged(nameof(KillSwitchReason));
+        OnPropertyChanged(nameof(KillSwitchEnabled));
         RouteIndex = (int)s.Settings.Routing.Preset;
         RouteDescription = RouteText(s.Settings.Routing.Preset);
     }
@@ -182,6 +228,7 @@ internal sealed partial class HomeViewModel : ObservableObject
         IsBusy = s.State is ConnectionState.Connecting or ConnectionState.Disconnecting;
         IsError = s.State == ConnectionState.Error;
         Message = s.Message;
+        OnPropertyChanged(nameof(Blocking));
         StateText = s.State switch
         {
             ConnectionState.Connected => "Подключено",

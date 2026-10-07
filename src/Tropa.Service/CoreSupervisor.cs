@@ -23,6 +23,8 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
     private StartRequest? _request;
     private SecretScrubber _scrubber = SecretScrubber.PatternsOnly;
     private DnsClientPolicy? _dnsPolicy;
+    private LoopbackExemption? _loopback;
+    private IKillSwitch? _killSwitch;
 
     public StatusEvent Status { get; private set; } = new(ServiceState.Idle, null, null);
 
@@ -32,6 +34,9 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         Directory.CreateDirectory(options.DataDirectory);
         if (options.DnsRegistry is { } registry)
             new DnsClientPolicy(registry, new ChangeJournal(options.JournalPath)).Restore();
+        if (options.LoopbackStore is { } loopback)
+            new LoopbackExemption(loopback, new ChangeJournal(options.JournalPath)).Restore();
+        // Фильтры kill switch восстанавливать не нужно: динамический сеанс WFP закрылся вместе с упавшей службой.
         // Конфиги с ключами, оставшиеся от прерванного запуска, удаляем.
         if (Directory.Exists(options.RunDirectory))
         {
@@ -46,7 +51,9 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await StopCoreAsync().ConfigureAwait(false);
+            var wantKillSwitch = request.KillSwitch && request.Mode == CaptureModeDto.Tun;
+            // При переподключении блокировку не снимаем: иначе между остановкой и запуском трафик ушёл бы напрямую.
+            await StopCoreAsync(keepKillSwitch: wantKillSwitch).ConfigureAwait(false);
 
             if (request.Mode == CaptureModeDto.Tun && !options.Privileged)
                 return "Режим «Весь компьютер» требует службу Тропы с правами системы. Установите службу или выберите «Только браузеры».";
@@ -68,6 +75,10 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
             }
             if (request.ReadinessPort is < 1 or > 65535)
                 return "Неверный порт готовности.";
+            if (request.LoopbackSids is { } sids && sids.Any(sid => !LoopbackExemption.IsAppContainerSid(sid)))
+                return "Неверный идентификатор приложения Store.";
+            if (wantKillSwitch && options.KillSwitchFactory is null)
+                return "Kill switch недоступен: служба работает без прав системы.";
 
             SetStatus(new StatusEvent(ServiceState.Starting, null, null));
             PrepareDirectories();
@@ -77,6 +88,11 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
             _request = request;
             _scrubber = new SecretScrubber(ExtractSecrets(request.SingBoxConfig).Concat(request.XrayConfig is { } xc ? ExtractSecrets(xc) : []));
             _restarts.Clear();
+            // Блокировка включается ДО запуска ядра: ядра в ней разрешены по пути к exe.
+            if (wantKillSwitch)
+                _killSwitch ??= options.KillSwitchFactory!(AllowedApps(), request.KillSwitchAllowLan);
+            else
+                DisposeKillSwitch();
             await LaunchAsync(ct).ConfigureAwait(false);
 
             if (request.Mode == CaptureModeDto.Tun && request.DisableSmartNameResolution && options.DnsRegistry is { } registry)
@@ -85,14 +101,22 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
                 _dnsPolicy.Apply(DateTimeOffset.Now);
             }
 
+            if (request.Mode == CaptureModeDto.SystemProxy && request.LoopbackSids is { Count: > 0 } loopbackSids && options.LoopbackStore is { } store)
+            {
+                _loopback = new LoopbackExemption(store, new ChangeJournal(options.JournalPath));
+                _loopback.Apply(loopbackSids, DateTimeOffset.Now);
+            }
+
             SetStatus(new StatusEvent(ServiceState.Running, null, DateTimeOffset.Now));
             return null;
         }
-        catch (Exception ex) when (ex is CoreStartException or IntegrityException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is CoreStartException or IntegrityException or IOException or UnauthorizedAccessException
+            or System.ComponentModel.Win32Exception or ArgumentException or PlatformNotSupportedException or InvalidOperationException)
         {
-            await StopCoreAsync().ConfigureAwait(false);
+            // Не удалось запустить: блокировка остаётся, если пользователь её включил, — так и задумано.
+            await StopCoreAsync(keepKillSwitch: request.KillSwitch && request.Mode == CaptureModeDto.Tun).ConfigureAwait(false);
             var message = _scrubber.Scrub(ex.Message);
-            SetStatus(new StatusEvent(ServiceState.Failed, message, null));
+            SetStatus(new StatusEvent(ServiceState.Failed, message, null, Blocking: _killSwitch is not null));
             return message;
         }
         finally
@@ -101,16 +125,22 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         }
     }
 
-    public async Task StopAsync()
+    /// <param name="keepBlocking">
+    /// Интерфейс пропал (закрыт или упал): ядро останавливаем, но включённую блокировку держим —
+    /// для этого она и нужна. Снимает её команда «Отключить» или «Аварийно вернуть настройки сети».
+    /// </param>
+    public async Task StopAsync(bool keepBlocking = false)
     {
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (Status.State is ServiceState.Idle)
+            if (Status.State is ServiceState.Idle && _killSwitch is null)
                 return;
             SetStatus(new StatusEvent(ServiceState.Stopping, null, null));
-            await StopCoreAsync().ConfigureAwait(false);
-            SetStatus(new StatusEvent(ServiceState.Idle, null, null));
+            await StopCoreAsync(keepKillSwitch: keepBlocking).ConfigureAwait(false);
+            SetStatus(_killSwitch is null
+                ? new StatusEvent(ServiceState.Idle, null, null)
+                : new StatusEvent(ServiceState.Idle, "Интернет заблокирован аварийной блокировкой: Тропа закрылась, не отключившись.", null, Blocking: true));
         }
         finally
         {
@@ -118,9 +148,34 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         }
     }
 
+    /// <summary>«Аварийно вернуть настройки сети»: всё остановить и откатить, даже если состояние непонятное.</summary>
+    public async Task RollbackAllAsync()
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await StopCoreAsync(keepKillSwitch: false).ConfigureAwait(false);
+            RecoverAfterCrash();
+            SetStatus(new StatusEvent(ServiceState.Idle, "Настройки сети возвращены.", null));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private List<string> AllowedApps() =>
+        [CoreProcess.ExecutablePath(options.Cores, "sing-box"), CoreProcess.ExecutablePath(options.Cores, "xray")];
+
+    private void DisposeKillSwitch()
+    {
+        _killSwitch?.Dispose();
+        _killSwitch = null;
+    }
+
     private void PrepareDirectories()
     {
-        if (options.Privileged)
+        if (options.SecureDataDirectory)
             SecureDirectory.Ensure(options.DataDirectory);
         Directory.CreateDirectory(options.DataDirectory);
         Directory.CreateDirectory(options.RunDirectory);
@@ -141,6 +196,14 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         _core = await CoreProcess.StartSingBoxAsync(options.Cores, request.SingBoxConfig, request.ReadinessPort,
             options.RunDirectory, _scrubber, onLog, ct).ConfigureAwait(false);
         _core.Exited += OnCoreExited;
+
+        // После каждого запуска у TUN может быть новый интерфейс: разрешаем трафик именно через него.
+        if (_killSwitch is not null)
+        {
+            var luid = await options.FindTunLuid(ct).ConfigureAwait(false)
+                ?? throw new CoreStartException("Интерфейс туннеля не появился, интернет заблокирован аварийной блокировкой.");
+            _killSwitch.AllowTunInterface(luid);
+        }
     }
 
     private void OnCoreExited(object? sender, int exitCode) => _ = Task.Run(async () =>
@@ -158,8 +221,11 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
                 _restarts.Dequeue();
             if (_restarts.Count >= MaxRestarts)
             {
-                await StopCoreAsync().ConfigureAwait(false);
-                SetStatus(new StatusEvent(ServiceState.Failed, $"Ядро падает слишком часто (последний код {exitCode}). Подключение остановлено.", null));
+                await StopCoreAsync(keepKillSwitch: true).ConfigureAwait(false);
+                SetStatus(new StatusEvent(ServiceState.Failed,
+                    $"Ядро падает слишком часто (последний код {exitCode}). Подключение остановлено"
+                        + (_killSwitch is null ? "." : ", интернет мимо туннеля заблокирован. Нажмите «Отключить», чтобы снять блокировку."),
+                    null, Blocking: _killSwitch is not null));
                 return;
             }
 
@@ -170,10 +236,10 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
                 await LaunchAsync(CancellationToken.None).ConfigureAwait(false);
                 SetStatus(new StatusEvent(ServiceState.Running, "Ядро перезапущено после сбоя.", Status.Since ?? now));
             }
-            catch (Exception ex) when (ex is CoreStartException or IntegrityException or IOException)
+            catch (Exception ex) when (ex is CoreStartException or IntegrityException or IOException or System.ComponentModel.Win32Exception)
             {
-                await StopCoreAsync().ConfigureAwait(false);
-                SetStatus(new StatusEvent(ServiceState.Failed, _scrubber.Scrub(ex.Message), null));
+                await StopCoreAsync(keepKillSwitch: true).ConfigureAwait(false);
+                SetStatus(new StatusEvent(ServiceState.Failed, _scrubber.Scrub(ex.Message), null, Blocking: _killSwitch is not null));
             }
         }
         finally
@@ -182,12 +248,16 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         }
     });
 
-    private async Task StopCoreAsync()
+    private async Task StopCoreAsync(bool keepKillSwitch = false)
     {
         await DisposeCoresAsync().ConfigureAwait(false);
         _dnsPolicy?.Restore();
         _dnsPolicy = null;
+        _loopback?.Restore();
+        _loopback = null;
         _request = null;
+        if (!keepKillSwitch)
+            DisposeKillSwitch();
     }
 
     private async Task DisposeCoresAsync()

@@ -27,6 +27,9 @@ public enum TestKinds
     Standard = Tcp | Delay | Speed | Udp,
 }
 
+/// <summary>Порты временного ядра диагностики: вход «напрямую» и (если есть) вход через сервер.</summary>
+public sealed record ProbePorts(int DirectPort, int? ServerPort, LocalAuth Auth);
+
 /// <summary>Промежуточный результат — чтобы таблица обновлялась по мере проверки.</summary>
 public sealed record TestProgress(Guid ProfileId, ServerTestResult Result);
 
@@ -127,6 +130,55 @@ public static partial class ServerTester
         await Task.WhenAll(tasks).ConfigureAwait(false);
         return results;
     }
+
+    /// <summary>
+    /// Временное ядро для диагностики: вход «напрямую» (мимо туннеля) и, если указан сервер, вход через него.
+    /// Ядро живёт, пока выполняется <paramref name="body"/>.
+    /// </summary>
+    public static async Task<T> ProbeAsync<T>(Profile? server, IReadOnlyList<Profile> allProfiles, AppSettings settings,
+        CoreLocations locations, string runDirectory, SecretScrubber scrubber, Action<string> log,
+        Func<ProbePorts, CancellationToken, Task<T>> body, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(body);
+        var auth = new LocalAuth("probe-" + Storage.SecretStore.NewRandomToken(4), Storage.SecretStore.NewRandomToken());
+        var directPort = FreePort();
+        int? serverPort = null;
+        var singTargets = new List<SingBoxConfigBuilder.TestTarget>();
+        var xrayTargets = new List<XrayTarget>();
+        if (server is not null && ProfileCompat.Issues(server).Count == 0)
+        {
+            serverPort = FreePort();
+            var viaXray = CorePlan.Make(settings with { Dpi = settings.Dpi with { Noise = false } }, [server]).XrayProfiles.Count > 0;
+            if (viaXray)
+                xrayTargets.Add(new XrayTarget(server, serverPort.Value));
+            else
+                singTargets.Add(new SingBoxConfigBuilder.TestTarget(server, serverPort.Value));
+        }
+
+        var all = singTargets.Concat(xrayTargets.Select(x => new SingBoxConfigBuilder.TestTarget(x.Profile, x.Port))).ToList();
+        var config = SingBoxConfigBuilder.BuildTest(all, settings, auth, allProfiles, directPort);
+        var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy { AllowedDirectories = [runDirectory] });
+        if (violations.Count > 0)
+            throw new IntegrityException("Конфиг проверки не прошёл проверку: " + violations[0]);
+
+        await using var xray = xrayTargets.Count > 0
+            ? await StartXrayAsync(xrayTargets, settings, auth, locations, runDirectory, scrubber, log, ct).ConfigureAwait(false)
+            : null;
+        await using var core = await CoreProcess.StartSingBoxAsync(locations, config, directPort, runDirectory, scrubber, log, ct).ConfigureAwait(false);
+        return await body(new ProbePorts(directPort, serverPort, auth), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>HTTP-клиент через локальный SOCKS-вход временного ядра.</summary>
+    public static HttpClient ProbeClient(int port, LocalAuth auth, TimeSpan timeout, bool allowRedirect = true) => new(new SocketsHttpHandler
+    {
+        UseProxy = true,
+        Proxy = new WebProxy($"socks5://127.0.0.1:{port}") { Credentials = new NetworkCredential(auth.Username, auth.Password) },
+        PooledConnectionLifetime = TimeSpan.Zero,
+        ConnectTimeout = timeout,
+        AllowAutoRedirect = allowRedirect,
+    })
+    { Timeout = timeout };
 
     private static async Task<CoreProcess> StartXrayAsync(List<XrayTarget> targets, AppSettings settings, LocalAuth auth,
         CoreLocations locations, string runDirectory, SecretScrubber scrubber, Action<string> log, CancellationToken ct)

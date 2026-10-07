@@ -15,6 +15,7 @@ public enum ServiceState { Idle, Starting, Running, Stopping, Failed }
 [JsonDerivedType(typeof(StartRequest), "start")]
 [JsonDerivedType(typeof(StopRequest), "stop")]
 [JsonDerivedType(typeof(StatusRequest), "status")]
+[JsonDerivedType(typeof(RollbackAllRequest), "rollbackAll")]
 public abstract record Request
 {
     /// <summary>Номер запроса: ответ приходит с тем же номером.</summary>
@@ -34,11 +35,20 @@ public sealed record StartRequest(
     bool AllowLanInbound,
     bool DisableSmartNameResolution,
     string? XrayConfig = null,
-    int XrayReadinessPort = 0) : Request;
+    int XrayReadinessPort = 0,
+    bool KillSwitch = false,
+    bool KillSwitchAllowLan = true,
+    IReadOnlyList<string>? LoopbackSids = null) : Request;
 
 public sealed record StopRequest : Request;
 
 public sealed record StatusRequest : Request;
+
+/// <summary>
+/// «Аварийно вернуть настройки сети»: остановить ядра, снять блокировку и откатить все изменения
+/// системы. Разрешено любому проверенному клиенту, даже если подключением управляет другой.
+/// </summary>
+public sealed record RollbackAllRequest : Request;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Reply), "reply")]
@@ -54,7 +64,8 @@ public record Reply(int Id, bool Ok, string? Error) : ServerMessage;
 public sealed record HelloReply(int Id, int Protocol, string ServiceVersion, bool TunSupported, string RuleSetDirectory, string? XrayPath = null)
     : Reply(Id, true, null);
 
-public sealed record StatusEvent(ServiceState State, string? Message, DateTimeOffset? Since) : ServerMessage;
+/// <param name="Blocking">Kill switch держит блокировку: ядро не работает, но интернет мимо туннеля закрыт.</param>
+public sealed record StatusEvent(ServiceState State, string? Message, DateTimeOffset? Since, bool Blocking = false) : ServerMessage;
 
 /// <summary>Строка журнала ядра, уже очищенная от секретов на стороне службы.</summary>
 public sealed record LogEvent(string Line) : ServerMessage;

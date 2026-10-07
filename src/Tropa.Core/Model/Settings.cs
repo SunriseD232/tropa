@@ -46,6 +46,8 @@ public sealed record ConnectionSettings
     public bool StrictRoute { get; init; } = true;
     public bool LanBypass { get; init; } = true;
     public string SysBypass { get; init; } = "localhost;127.*;10.*;172.16.*;192.168.*;*.local";
+    /// <summary>SID-ы приложений Store, которым на время подключения разрешён loopback (info.ru.json: uwpLoopback).</summary>
+    public IReadOnlyList<string> UwpLoopback { get; init; } = [];
     /// <summary>Порт mixed-inbound (SOCKS5 и HTTP на одном порту).</summary>
     public int SocksPort { get; init; } = 10880;
     /// <summary>Отдельный порт для устройств в локальной сети, всегда с паролем.</summary>

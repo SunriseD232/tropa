@@ -71,6 +71,19 @@ internal sealed partial class RuleItemViewModel : ObservableObject
     }
 }
 
+/// <summary>Приложение Store в списке loopback-исключений.</summary>
+internal sealed partial class StoreAppViewModel(string sid, string name, bool isChecked, Action<string, bool> changed) : ObservableObject
+{
+    public string Sid { get; } = sid;
+
+    public string Name { get; } = name;
+
+    [ObservableProperty]
+    public partial bool IsChecked { get; set; } = isChecked;
+
+    partial void OnIsCheckedChanged(bool value) => changed(Sid, value);
+}
+
 /// <summary>Экран «Правила» (docs/06-features.md, §3).</summary>
 internal sealed partial class RulesViewModel : ObservableObject
 {
@@ -83,7 +96,11 @@ internal sealed partial class RulesViewModel : ObservableObject
         _engine = engine;
         _info = info;
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(Load);
-        engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(AppRulesNote)));
+        engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(AppRulesNote));
+            OnPropertyChanged(nameof(StoreAppsVisible));
+        });
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() =>
         {
             if (s.State != ConnectionState.Connected)
@@ -98,6 +115,59 @@ internal sealed partial class RulesViewModel : ObservableObject
     public ObservableCollection<RuleItemViewModel> Sites { get; } = [];
 
     public ObservableCollection<string> RunningApps { get; } = [];
+
+    private List<StoreAppViewModel> _allStoreApps = [];
+
+    public ObservableCollection<StoreAppViewModel> StoreApps { get; } = [];
+
+    /// <summary>Карточка Store нужна только в режиме «Только браузеры»: в TUN приложения Store и так идут через Тропу.</summary>
+    public bool StoreAppsVisible => _engine.State.Settings.Connection.Mode == CaptureMode.SystemProxy || !_engine.TunAvailable;
+
+    public string StoreAppsSummary => _engine.State.Settings.Connection.UwpLoopback.Count switch
+    {
+        0 => "Не выбрано ни одного приложения.",
+        var n => $"Выбрано: {n}. Исключения включаются при подключении и снимаются при отключении.",
+    };
+
+    [ObservableProperty]
+    public partial string? StoreFilter { get; set; }
+
+    partial void OnStoreFilterChanged(string? value) => FilterStoreApps();
+
+    private void FilterStoreApps()
+    {
+        StoreApps.Clear();
+        foreach (var a in _allStoreApps.Where(a => string.IsNullOrWhiteSpace(StoreFilter) || a.Name.Contains(StoreFilter.Trim(), StringComparison.CurrentCultureIgnoreCase)))
+            StoreApps.Add(a);
+    }
+
+    [RelayCommand]
+    private async Task LoadStoreAppsAsync()
+    {
+        try
+        {
+            var chosen = _engine.State.Settings.Connection.UwpLoopback.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var apps = await Task.Run(Infrastructure.SystemIntegration.FirewallLoopbackStore.Enumerate);
+            _allStoreApps = apps.Select(a => new StoreAppViewModel(a.Sid, a.DisplayName, chosen.Contains(a.Sid), OnStoreAppChanged)).ToList();
+            FilterStoreApps();
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Error = "Не удалось получить список приложений Store: " + ex.Message;
+        }
+    }
+
+    private void OnStoreAppChanged(string sid, bool on)
+    {
+        _engine.UpdateSettings(s =>
+        {
+            var list = s.Connection.UwpLoopback.Where(x => !string.Equals(x, sid, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (on)
+                list.Add(sid);
+            return s with { Connection = s.Connection with { UwpLoopback = list } };
+        });
+        NeedsApply = _engine.Status.State == ConnectionState.Connected;
+    }
 
     public IReadOnlyList<string> Actions { get; } = ["Через сервер", "Напрямую", "Блокировать"];
 
@@ -159,6 +229,8 @@ internal sealed partial class RulesViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(AppRulesNote));
+        OnPropertyChanged(nameof(StoreAppsVisible));
+        OnPropertyChanged(nameof(StoreAppsSummary));
         _loading = false;
     }
 

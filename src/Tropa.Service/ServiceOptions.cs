@@ -19,8 +19,21 @@ internal sealed record ServiceOptions
     /// <summary>Есть ли права на TUN и системные настройки (служба под SYSTEM или запуск от администратора).</summary>
     public required bool Privileged { get; init; }
 
+    /// <summary>Закрыть каталог данных от пользователей (только SYSTEM и администраторы). У службы — всегда.</summary>
+    public bool SecureDataDirectory { get; init; }
+
     /// <summary>Политика DNS в HKLM; null — недоступна (нет прав).</summary>
     public IRegistryValues? DnsRegistry { get; init; }
+
+    /// <summary>Список loopback-исключений Store; null — недоступен (нет прав).</summary>
+    public ILoopbackStore? LoopbackStore { get; init; }
+
+    /// <summary>Создаёт kill switch: (разрешённые программы, пускать ли локальную сеть). null — недоступен.</summary>
+    public Func<IReadOnlyList<string>, bool, IKillSwitch>? KillSwitchFactory { get; init; }
+
+    /// <summary>Поиск LUID нашего TUN (в тестах подменяется).</summary>
+    public Func<CancellationToken, Task<ulong?>> FindTunLuid { get; init; } =
+        ct => KillSwitch.FindTunLuidAsync(Core.Diagnostics.Diagnosis.OwnTunAddress, TimeSpan.FromSeconds(10), ct);
 
     public string GeoDirectory => Path.Combine(DataDirectory, "geo");
     public string RunDirectory => Path.Combine(DataDirectory, "run");
@@ -52,7 +65,10 @@ internal sealed record ServiceOptions
             Cores = CoreLocations.Default(),
             ClientVerifier = new ExecutablePathVerifier(expectedClient),
             Privileged = privileged,
+            SecureDataDirectory = privileged,
             DnsRegistry = privileged ? new DnsClientPolicyRegistry() : null,
+            LoopbackStore = privileged ? new FirewallLoopbackStore() : null,
+            KillSwitchFactory = privileged ? (apps, lan) => new KillSwitch(apps, lan) : null,
         };
     }
 }

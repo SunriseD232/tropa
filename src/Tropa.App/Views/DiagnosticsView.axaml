@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Tropa.App.ViewModels"
+             x:Class="Tropa.App.Views.DiagnosticsView"
+             x:DataType="vm:DiagnosticsViewModel">
+  <UserControl.Styles>
+    <Style Selector="Border.step">
+      <Setter Property="Width" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="CornerRadius" Value="15" />
+      <Setter Property="Background" Value="{StaticResource Card2}" />
+    </Style>
+    <Style Selector="Border.step.ok"><Setter Property="Background" Value="{StaticResource OkBg}" /></Style>
+    <Style Selector="Border.step.warn"><Setter Property="Background" Value="{StaticResource WarnBg}" /></Style>
+    <Style Selector="Border.step.bad"><Setter Property="Background" Value="{StaticResource BadBg}" /></Style>
+    <Style Selector="Border.step.run"><Setter Property="Background" Value="{StaticResource InfoBg}" /></Style>
+    <Style Selector="Border.step.ok > TextBlock"><Setter Property="Foreground" Value="{StaticResource OkFg}" /></Style>
+    <Style Selector="Border.step.warn > TextBlock"><Setter Property="Foreground" Value="{StaticResource WarnFg}" /></Style>
+    <Style Selector="Border.step.bad > TextBlock"><Setter Property="Foreground" Value="{StaticResource BadFg}" /></Style>
+    <Style Selector="Border.step.run > TextBlock"><Setter Property="Foreground" Value="{StaticResource InfoFg}" /></Style>
+  </UserControl.Styles>
+
+  <StackPanel Spacing="18">
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Content="Отчёт для помощи" Command="{Binding OpenReportCommand}" />
+        <Button Content="Остановить" Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}" />
+        <Button Classes="primary" Content="Проверить всё" Command="{Binding RunCommand}" />
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock Classes="h1" Text="Диагностика" />
+        <TextBlock Classes="muted" Text="{Binding Summary}" TextWrapping="Wrap" />
+      </StackPanel>
+    </DockPanel>
+
+    <!-- Отчёт: предпросмотр перед копированием или сохранением -->
+    <Border Classes="card" IsVisible="{Binding ReportOpen}">
+      <StackPanel Spacing="10">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+            <Button Content="Скопировать" Click="OnCopyReport" />
+            <Button Content="Сохранить файл" Click="OnSaveReport" />
+            <Button Content="Закрыть" Command="{Binding CloseReportCommand}" />
+          </StackPanel>
+          <StackPanel>
+            <TextBlock Text="Отчёт" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Ключи, пароли и адреса серверов уже убраны (адреса заменены на server-1, server-2…). Проверьте текст перед тем, как кому-то отправить." />
+          </StackPanel>
+        </DockPanel>
+        <TextBox Text="{Binding ReportText}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" Height="320" FontFamily="{StaticResource Mono}" FontSize="12" />
+        <TextBlock x:Name="ReportNote" Classes="muted" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card" Padding="20,8">
+      <ItemsControl ItemsSource="{Binding Steps}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:StepItemViewModel">
+            <DockPanel Margin="0,10">
+              <Border DockPanel.Dock="Left" Classes="step" Classes.ok="{Binding IsOk}" Classes.warn="{Binding IsWarn}"
+                      Classes.bad="{Binding IsBad}" Classes.run="{Binding IsRunning}" Margin="0,0,14,0" VerticalAlignment="Top">
+                <TextBlock Text="{Binding Glyph}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <Button DockPanel.Dock="Right" Classes="info" VerticalAlignment="Top"
+                      Command="{Binding $parent[ItemsControl].((vm:DiagnosticsViewModel)DataContext).ShowInfoCommand}" CommandParameter="{Binding Key}" />
+              <StackPanel Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" IsVisible="{Binding Details, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <TextBlock Text="{Binding Action}" Foreground="{StaticResource InfoFg}" TextWrapping="Wrap" IsVisible="{Binding Action, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              </StackPanel>
+            </DockPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Border>
+
+    <Grid ColumnDefinitions="*,20,*">
+      <!-- Проверка домена -->
+      <Border Grid.Column="0" Classes="card">
+        <StackPanel Spacing="10">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="Проверка домена" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="dnsCheck" />
+          </StackPanel>
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Проверить" Command="{Binding CheckDomainCommand}" Margin="8,0,0,0" />
+            <TextBox Text="{Binding Domain}" PlaceholderText="discord.com" />
+          </DockPanel>
+          <Border CornerRadius="10" Padding="12,10" Background="{StaticResource Card2}" Classes.bad="{Binding DomainSpoofed}"
+                  IsVisible="{Binding DomainResult, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <Border.Styles>
+              <Style Selector="Border.bad"><Setter Property="Background" Value="{StaticResource WarnBg}" /></Style>
+            </Border.Styles>
+            <TextBlock Text="{Binding DomainResult}" TextWrapping="Wrap" />
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <!-- Журнал -->
+      <Border Grid.Column="2" Classes="card">
+        <StackPanel Spacing="10">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="↻" Width="40" Command="{Binding RefreshLogCommand}" ToolTip.Tip="Обновить журнал" />
+            <TextBlock Text="Журнал" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBox Text="{Binding LogFilter}" PlaceholderText="Фильтр: например, error или dns" />
+          <TextBox Text="{Binding LogText}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" Height="200"
+                   FontFamily="{StaticResource Mono}" FontSize="11" PlaceholderText="Журнал пуст: ядро ещё ничего не сообщало." />
+        </StackPanel>
+      </Border>
+    </Grid>
+  </StackPanel>
+</UserControl>

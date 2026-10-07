@@ -71,6 +71,9 @@ internal sealed partial class App : Application
         };
         var open = new NativeMenuItem("Открыть Тропу");
         open.Click += (_, _) => ShowWindow();
+        // Работает даже при сломанной конфигурации: отключает, возвращает прокси Windows и просит службу откатить всё.
+        var emergency = new NativeMenuItem("Аварийно вернуть настройки сети");
+        emergency.Click += async (_, _) => await _engine!.EmergencyRollbackAsync();
         var exit = new NativeMenuItem("Выход");
         exit.Click += async (_, _) => await ExitAsync();
 
@@ -78,7 +81,7 @@ internal sealed partial class App : Application
         {
             Icon = LoadIcon("tray-off.ico"),
             ToolTipText = "Тропа — отключено",
-            Menu = new NativeMenu { Items = { _toggleItem, open, new NativeMenuItemSeparator(), exit } },
+            Menu = new NativeMenu { Items = { _toggleItem, open, new NativeMenuItemSeparator(), emergency, exit } },
         };
         _tray.Clicked += (_, _) => ShowWindow();
         TrayIcon.SetIcons(this, new TrayIcons { _tray });

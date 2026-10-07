@@ -22,7 +22,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Edit = new EditServerViewModel(engine, Info);
         Servers = new ServersViewModel(engine, Info, () => Import.Open(), Edit);
         Rules = new RulesViewModel(engine, Info);
-        Diagnostics = new PlaceholderViewModel("Диагностика", "Пошаговая проверка с понятными объяснениями и отчёт для помощи — в одной из следующих версий.");
+        Diagnostics = new DiagnosticsViewModel(engine, Info);
         Settings = new PlaceholderViewModel("Настройки", "Полный экран настроек — в одной из следующих версий. Сейчас настройки хранятся с безопасными значениями по умолчанию.");
         CurrentPage = Home;
         Warning = engine.StartupWarning;
@@ -35,7 +35,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public HomeViewModel Home { get; }
     public ServersViewModel Servers { get; }
     public RulesViewModel Rules { get; }
-    public PlaceholderViewModel Diagnostics { get; }
+    public DiagnosticsViewModel Diagnostics { get; }
     public PlaceholderViewModel Settings { get; }
 
     [ObservableProperty]
@@ -55,17 +55,23 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public bool IsSettings => CurrentPage == Settings;
 
     public static string CoreVersions =>
-        $"sing-box {Infrastructure.Cores.PinnedFiles.Cores.Get("sing-box").Version}";
+        $"sing-box {Infrastructure.Cores.PinnedFiles.Cores.Get("sing-box").Version} · Xray {Infrastructure.Cores.PinnedFiles.Cores.Get("xray").Version}";
 
     [RelayCommand]
     private void Navigate(string page) => CurrentPage = page switch
     {
         "servers" => Servers,
         "rules" => Rules,
-        "diagnostics" => Diagnostics,
+        "diagnostics" => ShowDiagnostics(),
         "settings" => Settings,
         _ => Home,
     };
+
+    private DiagnosticsViewModel ShowDiagnostics()
+    {
+        Diagnostics.OnShown();
+        return Diagnostics;
+    }
 
     [RelayCommand]
     private void DismissWarning() => Warning = null;

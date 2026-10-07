@@ -120,7 +120,7 @@ internal sealed partial class PipeServer(ServiceOptions options, ILogger<PipeSer
             {
                 // Интерфейс закрылся или упал: подключение без интерфейса никто не сможет выключить.
                 _controller = null;
-                await _supervisor!.StopAsync().ConfigureAwait(false);
+                await _supervisor!.StopAsync(keepBlocking: true).ConfigureAwait(false);
             }
 
             await session.DisposeAsync().ConfigureAwait(false);
@@ -162,6 +162,13 @@ internal sealed partial class PipeServer(ServiceOptions options, ILogger<PipeSer
                 await _supervisor!.StopAsync().ConfigureAwait(false);
                 _controller = null;
                 return new Reply(stop.Id, true, null);
+
+            case RollbackAllRequest rollback:
+                // Аварийный откат доступен любому проверенному клиенту: это «красная кнопка».
+                await _supervisor!.RollbackAllAsync().ConfigureAwait(false);
+                lock (_sessionsLock)
+                    _controller = null;
+                return new Reply(rollback.Id, true, null);
 
             default:
                 return new Reply(request.Id, false, "Неизвестная команда.");
