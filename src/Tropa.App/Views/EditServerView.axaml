@@ -167,6 +167,10 @@
             <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8" Margin="0,0,0,12" IsVisible="{Binding ShowPlainWarning}">
               <TextBlock Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" Text="Транспорт не шифруется: VLESS в таком виде ничего не скрывает от провайдера, VMess легко распознаётся." />
             </Border>
+            <StackPanel Classes="field" IsVisible="{Binding HasTransport}">
+              <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Classes="f" Text="Ядро для этого сервера" /><Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="coreChoice" /></StackPanel>
+              <ComboBox ItemsSource="{Binding CoreOptions}" SelectedIndex="{Binding CoreIndex}" HorizontalAlignment="Stretch" />
+            </StackPanel>
             <Border Background="{DynamicResource InfoBg}" CornerRadius="10" Padding="10,8">
               <DockPanel>
                 <Button DockPanel.Dock="Right" Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="coreChoice" />

@@ -389,4 +389,41 @@ public sealed class ServiceTests : IAsyncLifetime
         Assert.False(engine.DpiStatus["blocked"]);
         await engine.DisconnectAsync();
     }
+
+    /// <summary>Ядро «Автоматически»: проверка сначала через Xray; заработал — запоминается Xray.</summary>
+    [Fact]
+    public async Task Auto_core_is_detected_xray_first()
+    {
+        if (!CoresPresent)
+            Assert.Skip("Ядра не скачаны");
+        var ct = TestContext.Current.CancellationToken;
+        await using var engine = TropaEngine.Open(
+            new EnginePaths(Path.Combine(_work.FullName, "cr"), Path.Combine(_work.FullName, "cl")), new FakeProxyStore(), Cores);
+        using var site = new TcpListener(IPAddress.Loopback, 0);
+        site.Start();
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                using var c = await site.AcceptTcpClientAsync(ct);
+                var stream = c.GetStream();
+                _ = await stream.ReadAsync(new byte[4096], ct);
+                await stream.WriteAsync("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"u8.ToArray(), ct);
+            }
+        }, ct);
+        engine.UpdateSettings(s => s with { Connection = s.Connection with { TestUrl = $"http://127.0.0.1:{((IPEndPoint)site.LocalEndpoint).Port}/" } });
+        await engine.ImportTextAsync($"vless://{Uuid}@127.0.0.1:{_vlessPort}?security=none#auto", null, ct);
+        await engine.ImportTextAsync($"vless://{Uuid}@localhost:{_vlessPort}?security=none#fixed", null, ct);
+        var auto = engine.State.Profiles.First(p => p.Profile.Name == "auto").Profile;
+        var fixedOne = engine.State.Profiles.First(p => p.Profile.Name == "fixed").Profile;
+        await engine.SetServerCoreAsync(fixedOne.Id, CoreChoice.SingBox, ct);
+
+        await engine.TestAsync([auto, fixedOne], Infrastructure.Testing.TestKinds.Delay, ct: ct);
+        var a = engine.State.Profiles.First(p => p.Profile.Id == auto.Id);
+        var f = engine.State.Profiles.First(p => p.Profile.Id == fixedOne.Id);
+        Assert.True(a.LastTest?.DelayMs is not null, a.LastTest?.Error);
+        Assert.Equal(CoreChoice.Xray, a.DetectedCore);
+        Assert.Equal(CoreChoice.Xray, a.EffectiveCore);
+        Assert.Equal(CoreChoice.SingBox, f.EffectiveCore); // выбор пользователя важнее
+    }
 }

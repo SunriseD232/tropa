@@ -34,4 +34,13 @@ public sealed record StoredProfile
 
     /// <summary>Последняя проверка: показывается в списке и учитывается авто-выбором.</summary>
     public ServerTestResult? LastTest { get; init; }
+
+    /// <summary>Ядро для этого сервера, выбранное пользователем. Auto — Тропа определяет сама (сначала Xray).</summary>
+    public CoreChoice Core { get; init; } = CoreChoice.Auto;
+
+    /// <summary>Ядро, на котором сервер заработал при последней автоматической проверке; null — не определено.</summary>
+    public CoreChoice? DetectedCore { get; init; }
+
+    /// <summary>Ядро, которое сейчас будет использовано: выбор пользователя, иначе найденное проверкой.</summary>
+    public CoreChoice EffectiveCore => Core != CoreChoice.Auto ? Core : DetectedCore ?? CoreChoice.Auto;
 }

@@ -244,3 +244,24 @@ public sealed class RecommendedSettingsTests
         Assert.Equal(7, r.Cores.LastManifestSequence);
     }
 }
+
+public sealed class PerServerCoreTests
+{
+    private static Profile P(string link) => ShareLink.Parse(link).Profile!;
+
+    [Fact]
+    public void Each_server_uses_its_own_core()
+    {
+        var a = P("vless://b831381d-6324-4d53-ad4f-8cda48b30811@a.example.com:443?security=tls&sni=a.example.com#A");
+        var b = P("vless://b831381d-6324-4d53-ad4f-8cda48b30811@b.example.com:443?security=tls&sni=b.example.com#B");
+        var x = P("vless://b831381d-6324-4d53-ad4f-8cda48b30811@x.example.com:443?type=xhttp&path=%2Fx&security=tls&sni=x.example.com#X");
+        var choices = new Dictionary<Guid, CoreChoice> { [a.Id] = CoreChoice.Xray, [b.Id] = CoreChoice.Auto, [x.Id] = CoreChoice.Auto };
+        var plan = CorePlan.Make(new AppSettings(), [a, b, x], id => choices[id]);
+        Assert.Equal(new[] { a.Id, x.Id }.Order(), plan.XrayProfiles.Select(p => p.Id).Order());
+
+        // XHTTP нельзя запустить в sing-box — понятная ошибка, а не тихо сломанный конфиг.
+        choices[x.Id] = CoreChoice.SingBox;
+        var ex = Assert.Throws<UnsupportedProfileException>(() => CorePlan.Make(new AppSettings(), [x], id => choices[id]));
+        Assert.Contains("XHTTP", ex.Message, StringComparison.Ordinal);
+    }
+}

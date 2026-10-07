@@ -405,20 +405,101 @@ public sealed class TropaEngine : IAsyncDisposable
 
     // ---------------- Тесты ----------------
 
-    /// <summary>Проверяет серверы и сохраняет результаты: они видны в списке и учитываются авто-выбором.</summary>
+    /// <summary>Ядро сервера: выбор пользователя, иначе найденное проверкой; Auto — не определено.</summary>
+    private CoreChoice CoreFor(Guid id) => State.Profiles.FirstOrDefault(p => p.Profile.Id == id)?.EffectiveCore ?? CoreChoice.Auto;
+
+    /// <summary>Пользователь выбрал ядро для сервера. Если сервер сейчас подключён — переподключаемся.</summary>
+    public async Task SetServerCoreAsync(Guid profileId, CoreChoice core, CancellationToken ct = default)
+    {
+        Update(s => s with { Profiles = s.Profiles.Select(p => p.Profile.Id == profileId ? p with { Core = core } : p).ToList() });
+        if (State.ActiveProfileId == profileId)
+            await ApplyIfConnectedAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Проверяет серверы и сохраняет результаты: они видны в списке и учитываются авто-выбором.
+    /// Для серверов с ядром «Автоматически» сначала проверяется Xray, а неработающие — ещё раз
+    /// через sing-box; на каком ядре сервер заработал, то и запоминается.
+    /// </summary>
     public async Task<IReadOnlyDictionary<Guid, ServerTestResult>> TestAsync(
         IReadOnlyList<Profile> profiles, TestKinds kinds = TestKinds.Standard, IProgress<TestProgress>? progress = null,
         TesterOptions? options = null, AppSettings? settingsOverride = null, CancellationToken ct = default)
     {
-        var results = await ServerTester.TestAsync(profiles, State.Profiles.Select(p => p.Profile).ToList(), settingsOverride ?? State.Settings,
-            kinds, _locations, _paths.RunDirectory, Scrubber, line => Log?.Invoke(this, line), progress, ct, options).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(profiles);
+        var settings = settingsOverride ?? State.Settings;
+        var all = State.Profiles.Select(p => p.Profile).ToList();
+        Task<IReadOnlyDictionary<Guid, ServerTestResult>> Run(IReadOnlyList<Profile> list, CoreChoice core, IProgress<TestProgress>? report) =>
+            list.Count == 0
+                ? Task.FromResult<IReadOnlyDictionary<Guid, ServerTestResult>>(new Dictionary<Guid, ServerTestResult>())
+                : ServerTester.TestAsync(list, all, settings with { Cores = settings.Cores with { CoreChoice = core } }, kinds,
+                    _locations, _paths.RunDirectory, Scrubber, line => Log?.Invoke(this, line), report, ct, options);
+
+        // Определять ядро есть смысл, только когда проверяется реальная задержка.
+        var detect = kinds.HasFlag(TestKinds.Delay) && settings.Cores.CoreChoice == CoreChoice.Auto;
+        var results = new Dictionary<Guid, ServerTestResult>();
+        var detected = new Dictionary<Guid, CoreChoice?>();
+        var groups = profiles.GroupBy(KeyFor);
+
+        foreach (var g in groups)
+        {
+            if (g.Key != CoreChoice.Auto)
+            {
+                foreach (var (id, r) in await Run(g.ToList(), g.Key, progress).ConfigureAwait(false))
+                    results[id] = r;
+                continue;
+            }
+
+            // Автоматически: сначала Xray, затем неработающие — через sing-box.
+            var first = await Run(g.ToList(), CoreChoice.Xray, progress).ConfigureAwait(false);
+            var retry = g.Where(p => !Works(first.GetValueOrDefault(p.Id))).ToList();
+            var second = await Run(retry, CoreChoice.SingBox, progress).ConfigureAwait(false);
+            foreach (var p in g)
+            {
+                var x = first.GetValueOrDefault(p.Id);
+                var s = second.GetValueOrDefault(p.Id);
+                if (Works(x))
+                    (results[p.Id], detected[p.Id]) = (x!, CoreChoice.Xray);
+                else if (Works(s))
+                    (results[p.Id], detected[p.Id]) = (s!, CoreChoice.SingBox);
+                else
+                {
+                    results[p.Id] = s ?? x!;
+                    detected[p.Id] = null;
+                }
+
+                progress?.Report(new TestProgress(p.Id, results[p.Id]));
+            }
+        }
+
         Update(s => s with
         {
             Profiles = s.Profiles.Select(sp => results.TryGetValue(sp.Profile.Id, out var r)
-                ? sp with { LastTest = MergeResult(sp.LastTest, r, kinds) }
+                ? sp with
+                {
+                    LastTest = MergeResult(sp.LastTest, r, kinds),
+                    DetectedCore = detected.TryGetValue(sp.Profile.Id, out var d) ? d : sp.DetectedCore,
+                }
                 : sp).ToList(),
         });
         return results;
+
+        static bool Works(ServerTestResult? r) => ServerHealth.Classify(r) is HealthStatus.Working or HealthStatus.Slow;
+
+        // На каком ядре проверять: Auto — определить (сначала Xray, потом sing-box).
+        CoreChoice KeyFor(Profile p)
+        {
+            if (p.Protocol == Protocol.Hysteria2)
+                return CoreChoice.SingBox;
+            if (p.Transport.Type == TransportType.Xhttp)
+                return CoreChoice.Xray;
+            var stored = State.Profiles.FirstOrDefault(sp => sp.Profile.Id == p.Id);
+            if (stored?.Core is { } chosen && chosen != CoreChoice.Auto)
+                return chosen;
+            if (detect)
+                return CoreChoice.Auto;
+            var known = stored?.DetectedCore ?? settings.Cores.CoreChoice;
+            return known == CoreChoice.Auto ? CoreChoice.SingBox : known;
+        }
     }
 
     /// <summary>
@@ -445,6 +526,22 @@ public sealed class TropaEngine : IAsyncDisposable
                 return;
             SetStatus(new ConnectionStatus(ConnectionState.Connecting));
             await AttachServiceAsync(ct).ConfigureAwait(false);
+            // Ядро для сервера ещё не определено — быстро проверяем: сначала Xray, потом sing-box.
+            if (State.ActiveProfile is { } active && CoreFor(active.Id) == CoreChoice.Auto
+                && active.Protocol != Protocol.Hysteria2 && active.Transport.Type != TransportType.Xhttp
+                && State.Settings.Cores.CoreChoice == CoreChoice.Auto)
+            {
+                try
+                {
+                    await TestAsync([active], TestKinds.Delay, ct: ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is CoreStartException or IntegrityException or IOException or UnsupportedProfileException)
+                {
+                    // Проверка не обязательна: не удалась — подключаемся по общей настройке ядра.
+                    Log?.Invoke(this, "Не удалось определить ядро для сервера: " + Scrubber.Scrub(ex.Message));
+                }
+            }
+
             await StartCoreAsync(ct).ConfigureAwait(false);
             var note = State.Settings.Connection.Mode == CaptureMode.Tun && !TunAvailable
                 ? "Служба Тропы не установлена, поэтому режим «Весь компьютер» недоступен. Сейчас через Тропу идут браузеры и программы, использующие прокси Windows."
@@ -838,7 +935,7 @@ public sealed class TropaEngine : IAsyncDisposable
 
         // Гибрид (docs/05-config-generation.md, §1): серверы с XHTTP — через Xray, шум — тоже через Xray.
         var allProfiles = State.Profiles.Select(p => p.Profile).ToList();
-        var plan = CorePlan.Make(settings, UsedProfiles(active, group, allProfiles, effective));
+        var plan = CorePlan.Make(settings, UsedProfiles(active, group, allProfiles, effective), CoreFor);
         string? xrayConfig = null;
         var xrayPorts = new Dictionary<Guid, int>();
         int? xrayDirectPort = null;

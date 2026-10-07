@@ -24,6 +24,11 @@ internal sealed partial class GroupTab(string title, Guid? subscriptionId, bool 
     public partial bool IsSelected { get; set; }
 }
 
+internal static class CoreTexts
+{
+    public static string Name(CoreChoice c) => c switch { CoreChoice.Xray => "Xray", CoreChoice.SingBox => "sing-box", _ => "авто" };
+}
+
 internal sealed partial class ServerItemViewModel(Profile profile) : ObservableObject
 {
     private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
@@ -34,6 +39,9 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
     public string Country => Format.CountryCode(Profile.Name);
     public string Protocol => Format.Protocol(Profile);
     public string Transport => Format.Transport(Profile);
+
+    /// <summary>Ядро сервера: выбранное пользователем или найденное проверкой.</summary>
+    public string CoreLabel { get; init; } = "";
 
     [ObservableProperty]
     public partial bool IsActive { get; set; }
@@ -177,7 +185,12 @@ internal sealed partial class ServersViewModel : ObservableObject
         {
             if (tab is { All: false } && (tab.Manual ? sp.Profile.SubscriptionId is not null : sp.Profile.SubscriptionId != tab.SubscriptionId))
                 continue;
-            var item = new ServerItemViewModel(sp.Profile) { IsActive = sp.Profile.Id == s.ActiveProfileId, Removed = sp.RemovedByProvider is not null };
+            var item = new ServerItemViewModel(sp.Profile)
+            {
+                IsActive = sp.Profile.Id == s.ActiveProfileId,
+                Removed = sp.RemovedByProvider is not null,
+                CoreLabel = CoreText(sp),
+            };
             if (ProfileCompat.Issues(sp.Profile) is { Count: > 0 } issues)
                 (item.Status, item.StatusKind, item.Explanation) = ("Несовместимые параметры", "bad", issues[0]);
             else if (sp.Profile.Security.AllowInsecure)
@@ -313,4 +326,16 @@ internal sealed partial class ServersViewModel : ObservableObject
 
     [RelayCommand]
     private void ShowInfo(string key) => _info.Show(key);
+
+    /// <summary>«Ядро: Xray (выбрано)», «Ядро: sing-box (найдено проверкой)», «Ядро: определится при проверке».</summary>
+    private static string CoreText(StoredProfile sp)
+    {
+        if (sp.Profile.Protocol == Core.Model.Protocol.Hysteria2)
+            return "Ядро: sing-box (Hysteria2 есть только в нём)";
+        if (sp.Profile.Transport.Type == TransportType.Xhttp)
+            return "Ядро: Xray (XHTTP есть только в нём)";
+        if (sp.Core != CoreChoice.Auto)
+            return "Ядро: " + CoreTexts.Name(sp.Core) + " (выбрано вами)";
+        return sp.DetectedCore is { } d ? "Ядро: " + CoreTexts.Name(d) + " (найдено проверкой)" : "Ядро: определится при проверке (сначала Xray)";
+    }
 }

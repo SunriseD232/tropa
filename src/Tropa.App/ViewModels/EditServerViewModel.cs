@@ -90,6 +90,10 @@ internal sealed partial class EditServerViewModel : ObservableObject
     [ObservableProperty] public partial string SpiderX { get; set; } = "/";
     [ObservableProperty] public partial ChainChoice? Chain { get; set; }
     [ObservableProperty] public partial string SsMethod { get; set; } = "2022-blake3-aes-128-gcm";
+    /// <summary>0 — автоматически (сначала Xray, потом sing-box), 1 — sing-box, 2 — Xray.</summary>
+    [ObservableProperty] public partial int CoreIndex { get; set; }
+    public IReadOnlyList<string> CoreOptions { get; } = ["Автоматически (сначала Xray, потом sing-box)", "Всегда sing-box", "Всегда Xray"];
+    private CoreChoice? _detectedCore;
     [ObservableProperty] public partial string ObfsPassword { get; set; } = "";
     [ObservableProperty] public partial string Link { get; set; } = "";
     [ObservableProperty] public partial string? Error { get; set; }
@@ -159,6 +163,9 @@ internal sealed partial class EditServerViewModel : ObservableObject
         ShortId = p?.Security.Reality?.ShortId ?? "";
         SpiderX = p?.Security.Reality?.SpiderX ?? "/";
         SsMethod = p?.SsMethod ?? "2022-blake3-aes-128-gcm";
+        var stored = p is null ? null : _engine.State.Profiles.FirstOrDefault(x => x.Profile.Id == p.Id);
+        CoreIndex = stored?.Core switch { CoreChoice.SingBox => 1, CoreChoice.Xray => 2, _ => 0 };
+        _detectedCore = stored?.DetectedCore;
         ObfsPassword = p?.Obfs?.Reveal() ?? "";
 
         Check(Protocols, p?.Protocol switch
@@ -281,7 +288,10 @@ internal sealed partial class EditServerViewModel : ObservableObject
 
         CoreNote = Transport == "xhttp" ? "Ядро: Xray (XHTTP есть только в Xray)"
             : IsHysteria2 ? "Ядро: sing-box (Hysteria2 есть только в sing-box)"
-            : "Ядро: sing-box (авто)";
+            : CoreIndex == 1 ? "Ядро: sing-box (выбрано)"
+            : CoreIndex == 2 ? "Ядро: Xray (выбрано)"
+            : _detectedCore is { } d ? $"Ядро: {CoreTexts.Name(d)} (найдено проверкой; сначала проверяется Xray)"
+            : "Ядро: определится при первой проверке — сначала Xray, потом sing-box";
 
         var (profile, error) = Build();
         Error = error;
@@ -459,6 +469,7 @@ internal sealed partial class EditServerViewModel : ObservableObject
         }
 
         await _engine.SaveProfileAsync(profile);
+        await _engine.SetServerCoreAsync(profile.Id, CoreIndex switch { 1 => CoreChoice.SingBox, 2 => CoreChoice.Xray, _ => CoreChoice.Auto });
         IsOpen = false;
     }
 }

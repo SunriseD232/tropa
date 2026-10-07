@@ -109,6 +109,7 @@
         <StackPanel Spacing="12" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
           <TextBlock Text="{Binding Selected.Name}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
           <TextBlock Classes="muted" Text="{Binding Selected.Transport}" />
+          <TextBlock Classes="muted" Text="{Binding Selected.CoreLabel}" />
           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
             <Grid.Styles>
               <Style Selector="TextBlock"><Setter Property="Margin" Value="0,3" /><Setter Property="TextWrapping" Value="Wrap" /></Style>

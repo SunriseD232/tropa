@@ -12,23 +12,37 @@ public sealed record CorePlan(IReadOnlyList<Profile> XrayProfiles, bool XrayDire
     public bool NeedsXray => XrayProfiles.Count > 0 || XrayDirect;
 
     /// <param name="used">Серверы, которые попадут в конфиг: активный, группа авто-выбора, цепочки, правила.</param>
-    public static CorePlan Make(AppSettings settings, IEnumerable<Profile> used)
+    /// <param name="coreFor">
+    /// Ядро конкретного сервера (выбор пользователя или найденное проверкой). Auto — по общей настройке.
+    /// </param>
+    public static CorePlan Make(AppSettings settings, IEnumerable<Profile> used, Func<Guid, CoreChoice>? coreFor = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(used);
         var s = CompatRules.Evaluate(settings).Effective;
         var profiles = used.DistinctBy(p => p.Id).ToList();
 
-        List<Profile> viaXray = s.Cores.CoreChoice switch
+        var viaXray = new List<Profile>();
+        foreach (var p in profiles)
         {
-            // Hysteria2 Тропа запускает только в sing-box, даже при «Всегда Xray».
-            CoreChoice.Xray => profiles.Where(p => p.Protocol != Protocol.Hysteria2).ToList(),
-            _ => profiles.Where(p => p.Transport.Type == TransportType.Xhttp).ToList(),
-        };
-
-        if (s.Cores.CoreChoice == CoreChoice.SingBox && viaXray.Count > 0)
-            throw new UnsupportedProfileException(
-                $"Сервер «{viaXray[0].Name}» использует XHTTP, а в настройках выбрано «Всегда sing-box». Выберите «Автоматически».");
+            // Hysteria2 Тропа запускает только в sing-box, XHTTP есть только в Xray.
+            if (p.Protocol == Protocol.Hysteria2)
+                continue;
+            var choice = coreFor?.Invoke(p.Id) ?? CoreChoice.Auto;
+            if (choice == CoreChoice.Auto)
+                choice = s.Cores.CoreChoice;
+            if (p.Transport.Type == TransportType.Xhttp)
+            {
+                if (choice == CoreChoice.SingBox)
+                    throw new UnsupportedProfileException(
+                        $"Сервер «{p.Name}» использует XHTTP, а для него выбрано ядро sing-box. Выберите «Автоматически» или Xray.");
+                viaXray.Add(p);
+            }
+            else if (choice == CoreChoice.Xray)
+            {
+                viaXray.Add(p);
+            }
+        }
 
         // Шум есть только в Xray: прямой UDP пойдёт через его вход «напрямую».
         return new CorePlan(viaXray, s.Dpi.Noise);

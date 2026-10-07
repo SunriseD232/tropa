@@ -212,6 +212,8 @@ public sealed class StateStore(string directory)
                 Favorite = sp.Favorite,
                 Order = sp.Order,
                 LastTest = sp.LastTest,
+                Core = sp.Core,
+                DetectedCore = sp.DetectedCore,
             }).ToList(),
         };
     }
@@ -268,6 +270,8 @@ public sealed class StateStore(string directory)
                 Favorite = p.Favorite,
                 Order = p.Order,
                 LastTest = p.LastTest,
+                Core = p.Core,
+                DetectedCore = p.DetectedCore,
             });
         }
 
@@ -317,6 +321,8 @@ internal sealed record StoredProfileDto
     public bool Favorite { get; init; }
     public int Order { get; init; }
     public Core.Testing.ServerTestResult? LastTest { get; init; }
+    public CoreChoice Core { get; init; } = CoreChoice.Auto;
+    public CoreChoice? DetectedCore { get; init; }
 }
 
 [JsonSourceGenerationOptions(
