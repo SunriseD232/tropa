@@ -24,7 +24,14 @@ public static class XrayConfigBuilder
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, IndentSize = 2, NewLine = "\n" };
 
     /// <param name="directPort">Порт входа «напрямую» (фрагментация и шум для прямого трафика); null — не нужен.</param>
-    public static string Build(IReadOnlyList<XrayTarget> targets, AppSettings settings, LocalAuth auth, int? directPort = null)
+    /// <param name="bindInterface">
+    /// Имя физического адаптера для выхода «напрямую». Нужно только при подборе параметров обхода
+    /// (ядро Xray работает одно, без sing-box перед ним): иначе его трафик ушёл бы в чужой или свой
+    /// активный TUN, и проверка мерила бы обход «через туннель». В обычной работе null — маршрут
+    /// задаёт sing-box (process_path=xray.exe → direct).
+    /// </param>
+    public static string Build(IReadOnlyList<XrayTarget> targets, AppSettings settings, LocalAuth auth, int? directPort = null,
+        string? bindInterface = null)
     {
         ArgumentNullException.ThrowIfNull(targets);
         ArgumentNullException.ThrowIfNull(auth);
@@ -77,7 +84,10 @@ public static class XrayConfigBuilder
                 });
             }
 
-            outbounds.Add((JsonNode)new JsonObject { ["tag"] = "direct", ["protocol"] = "freedom", ["settings"] = freedom });
+            var directOut = new JsonObject { ["tag"] = "direct", ["protocol"] = "freedom", ["settings"] = freedom };
+            if (bindInterface is { Length: > 0 } iface)
+                directOut["streamSettings"] = new JsonObject { ["sockopt"] = new JsonObject { ["interface"] = iface } };
+            outbounds.Add((JsonNode)directOut);
             rules.Add((JsonNode)new JsonObject { ["type"] = "field", ["inboundTag"] = Arr([DirectInboundTag]), ["outboundTag"] = "direct" });
         }
 

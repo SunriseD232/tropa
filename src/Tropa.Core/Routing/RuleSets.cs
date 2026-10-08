@@ -28,7 +28,8 @@ public static class RuleSets
     /// Домены, которые при обходе DPI без сервера идут напрямую с фрагментацией: список блокировок
     /// и сервисы, которые чаще всего замедляют (YouTube, Discord, Telegram).
     /// </summary>
-    public static IReadOnlyList<string> BypassDomains { get; } = [GeositeRuBlocked, "geosite-youtube", "geosite-discord", "geosite-telegram"];
+    public static IReadOnlyList<string> BypassDomains { get; } =
+        [GeositeRuBlocked, "geosite-youtube", "geosite-discord", "geosite-telegram", "geosite-facebook", "geosite-instagram", "geosite-x"];
 
     /// <summary>Сайты, к которым по умолчанию применяется фрагментация (набор «Мягко»).</summary>
     public static IReadOnlyList<string> FragmentDefaults { get; } =

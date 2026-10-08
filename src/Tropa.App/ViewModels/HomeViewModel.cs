@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Tropa.App.Services;
 using Tropa.Core.Model;
 using Tropa.Infrastructure;
+using Tropa.Infrastructure.Cores;
 using Tropa.Infrastructure.Net;
 
 namespace Tropa.App.ViewModels;
@@ -316,6 +317,33 @@ internal sealed partial class HomeViewModel : ObservableObject
             (true, false, true) => "Работает без сервера: заблокированные сайты идут напрямую, начало соединения дробится. Сайты, закрытые по IP-адресу, так не откроются — для них нужен сервер.",
             _ => "Не запущен: " + (_engine.DpiOnlyMessage ?? "нажмите ещё раз или подключитесь к серверу."),
         };
+    }
+
+    /// <summary>Идёт подбор параметров обхода: кнопки заблокированы.</summary>
+    [ObservableProperty]
+    public partial bool DpiTuning { get; set; }
+
+    [RelayCommand]
+    private async Task TuneDpiAsync()
+    {
+        if (DpiTuning || DpiBusy)
+            return;
+        DpiTuning = true;
+        try
+        {
+            var progress = new Progress<string>(line => Dispatcher.UIThread.Post(() => DpiStateText = line));
+            DpiStateText = "Подбираю параметры обхода на YouTube и Discord… это займёт до минуты.";
+            Message = await _engine.TuneDpiAsync(progress);
+        }
+        catch (Exception ex) when (ex is CoreStartException or IntegrityException or System.IO.IOException or InvalidOperationException)
+        {
+            Message = "Подбор не удался: " + ex.Message;
+        }
+        finally
+        {
+            DpiTuning = false;
+            RefreshDpi();
+        }
     }
 
     [RelayCommand]

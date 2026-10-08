@@ -127,7 +127,7 @@
                     Command="{Binding ToggleDpiCommand}" IsEnabled="{Binding !DpiBusy}"
                     Background="{DynamicResource PowerOff}" Foreground="{DynamicResource Text}"
                     Classes.on="{Binding DpiOn}"
-                    ToolTip.Tip="Открывает сайты, которые провайдер режет по содержимому трафика (LinkedIn, замедленный YouTube), без сервера">
+                    ToolTip.Tip="Открывает сайты, которые провайдер режет по содержимому трафика (замедленный YouTube, Facebook), без сервера">
               <Button.Styles>
                 <Style Selector="Button.on">
                   <Setter Property="Background" Value="{DynamicResource Accent}" />
@@ -136,6 +136,14 @@
               </Button.Styles>
               <TextBlock Text="{Binding DpiButtonText}" FontSize="16" FontWeight="Bold" />
             </Button>
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="info" VerticalAlignment="Center" Margin="8,0,0,0"
+                      Command="{Binding ShowInfoCommand}" CommandParameter="dpiTune" />
+              <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                      Command="{Binding TuneDpiCommand}" IsEnabled="{Binding !DpiTuning}"
+                      Content="Подобрать настройки обхода"
+                      ToolTip.Tip="Перебирает варианты обхода на YouTube и Discord и сохраняет рабочий — у разных провайдеров помогают разные настройки" />
+            </DockPanel>
             <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding DpiStateText}" />
           </StackPanel>
         </Border>

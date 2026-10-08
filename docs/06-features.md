@@ -105,6 +105,7 @@
 | Ключ | Тип | По умолчанию |
 |---|---|---|
 | dpiBypass | bool (большая кнопка на главной; без сервера — ядро только для обхода, ADR-033) | false |
+| dpiTune | кнопка «Подобрать»: перебор вариантов фрагментации на YouTube/Discord (ADR-036) | — |
 | dpiPreset | off/soft/hard/custom | off |
 | fragment | bool | false |
 | fragPackets | tlshello/1-3 | tlshello |

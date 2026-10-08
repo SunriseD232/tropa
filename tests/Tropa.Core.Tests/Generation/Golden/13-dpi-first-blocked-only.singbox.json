@@ -164,6 +164,36 @@
     },
     {
       "type": "selector",
+      "tag": "dpi-facebook",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-instagram",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-twitter",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "selector",
       "tag": "dpi-blocked",
       "outbounds": [
         "dpi-direct",
@@ -225,6 +255,18 @@
       },
       {
         "type": "local",
+        "tag": "geosite-facebook",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-facebook.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-instagram",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-instagram.srs"
+      },
+      {
+        "type": "local",
         "tag": "geosite-ru-available-only-inside",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-ru-available-only-inside.srs"
@@ -240,6 +282,12 @@
         "tag": "geosite-telegram",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-telegram.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-x",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-x.srs"
       },
       {
         "type": "local",
@@ -368,6 +416,30 @@
         ],
         "action": "route",
         "outbound": "dpi-telegram",
+        "tls_fragment": true
+      },
+      {
+        "rule_set": [
+          "geosite-facebook"
+        ],
+        "action": "route",
+        "outbound": "dpi-facebook",
+        "tls_fragment": true
+      },
+      {
+        "rule_set": [
+          "geosite-instagram"
+        ],
+        "action": "route",
+        "outbound": "dpi-instagram",
+        "tls_fragment": true
+      },
+      {
+        "rule_set": [
+          "geosite-x"
+        ],
+        "action": "route",
+        "outbound": "dpi-twitter",
         "tls_fragment": true
       },
       {

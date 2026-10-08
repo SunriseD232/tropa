@@ -46,7 +46,10 @@
           "geosite-ru-blocked",
           "geosite-youtube",
           "geosite-discord",
-          "geosite-telegram"
+          "geosite-telegram",
+          "geosite-facebook",
+          "geosite-instagram",
+          "geosite-x"
         ],
         "server": "remote"
       },
@@ -135,6 +138,18 @@
       },
       {
         "type": "local",
+        "tag": "geosite-facebook",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-facebook.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-instagram",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-instagram.srs"
+      },
+      {
+        "type": "local",
         "tag": "geosite-ru-available-only-inside",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-ru-available-only-inside.srs"
@@ -150,6 +165,12 @@
         "tag": "geosite-telegram",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-telegram.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-x",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-x.srs"
       },
       {
         "type": "local",
@@ -269,7 +290,10 @@
           "geosite-ru-blocked",
           "geosite-youtube",
           "geosite-discord",
-          "geosite-telegram"
+          "geosite-telegram",
+          "geosite-facebook",
+          "geosite-instagram",
+          "geosite-x"
         ],
         "action": "route",
         "outbound": "dpi-direct",

@@ -122,7 +122,25 @@ public sealed record DpiSettings
         DpiPreset.Custom => this with { DpiPreset = preset },
         _ => this with { DpiPreset = DpiPreset.Off, Fragment = false, Noise = false },
     };
+
+    /// <summary>
+    /// Варианты фрагментации для кнопки «Подобрать» (info.ru.json: dpiTune). У разных провайдеров
+    /// работают разные значения (как стратегии ALT у zapret-сборок). Первым — проверенный у владельца
+    /// в РФ набор, чтобы при равном результате выбирался он.
+    /// </summary>
+    public static IReadOnlyList<FragmentVariant> TuningVariants { get; } =
+    [
+        new("tlshello", "1-5", "1-3"),
+        new("tlshello", "1-2", "1-2"),
+        new("tlshello", "1-3", "0-1"),
+        new("tlshello", "2-4", "2-4"),
+        new("1-3", "1-5", "1-3"),
+        new("tlshello", "1-1", "1"),
+    ];
 }
+
+/// <summary>Один вариант фрагментации для подбора: какие пакеты дробить, длина кусков и пауза.</summary>
+public sealed record FragmentVariant(string Packets, string Len, string Interval);
 
 public sealed record CoreSettings
 {

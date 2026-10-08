@@ -154,6 +154,29 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Dpi_tune_picks_a_working_fragment_variant()
+    {
+        if (_server is null)
+            Assert.Skip("Ядра или наборы правил не скачаны: tools/fetch-cores.ps1, tools/fetch-geo.ps1");
+
+        await using var engine = OpenEngine(new FakeProxyStore());
+        // Локальный «сайт» вместо YouTube/Discord; без привязки к адаптеру — он на 127.0.0.1.
+        engine.TuneProbesOverride = [new Uri($"http://127.0.0.1:{_sitePort}/generate_204")];
+        engine.TuneInterfaceOverride = "";
+        var ct = TestContext.Current.CancellationToken;
+
+        var message = await engine.TuneDpiAsync(null, ct);
+
+        // Через обход (фрагментация к локальному HTTP) сайт открывается — вариант найден и сохранён.
+        Assert.Contains("Подобрано", message, StringComparison.Ordinal);
+        Assert.Equal(DpiPreset.Custom, engine.State.Settings.Dpi.DpiPreset);
+        Assert.True(engine.State.Settings.Dpi.Fragment);
+        Assert.Contains(
+            DpiSettings.TuningVariants,
+            v => v.Len == engine.State.Settings.Dpi.FragLen && v.Interval == engine.State.Settings.Dpi.FragInt);
+    }
+
+    [Fact]
     public async Task Dpi_bypass_runs_without_server_and_survives_connect_and_disconnect()
     {
         if (_server is null)

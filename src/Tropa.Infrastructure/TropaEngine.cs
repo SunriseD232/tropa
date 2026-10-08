@@ -631,6 +631,43 @@ public sealed class TropaEngine : IAsyncDisposable
         await RestartDpiOnlyAsync(ct).ConfigureAwait(false);
     }
 
+    /// <summary>Для тестов: подменить проверочные адреса подбора параметров обхода.</summary>
+    internal IReadOnlyList<Uri>? TuneProbesOverride { get; set; }
+
+    /// <summary>Для тестов: не привязывать ядро подбора к физическому адаптеру (локальный сервер на 127.0.0.1).</summary>
+    internal string? TuneInterfaceOverride { get; set; }
+
+    /// <summary>
+    /// Кнопка «Подобрать»: перебирает варианты фрагментации на YouTube и Discord мимо туннеля,
+    /// сохраняет открывший больше всего и применяет его. Возвращает текст для пользователя.
+    /// </summary>
+    public async Task<string> TuneDpiAsync(IProgress<string>? progress, CancellationToken ct = default)
+    {
+        var probes = TuneProbesOverride ??
+            [new Uri("https://www.youtube.com/generate_204"), new Uri("https://discord.com/api/v10/gateway")];
+        var best = await ServerTester.TuneFragmentAsync(State.Settings, Auth, _locations, _paths.RunDirectory,
+            Scrubber, line => Log?.Invoke(this, line), probes, progress, ct, bindInterfaceOverride: TuneInterfaceOverride).ConfigureAwait(false);
+        if (best is null || best.Opened == 0)
+            return "Ни один вариант обхода не открыл YouTube и Discord. Похоже, у вашего провайдера обход DPI не помогает — для заблокированного нужен сервер.";
+
+        UpdateSettings(s => s with
+        {
+            Dpi = s.Dpi with
+            {
+                Fragment = true,
+                DpiPreset = DpiPreset.Custom,
+                FragPackets = best.Variant.Packets,
+                FragLen = best.Variant.Len,
+                FragInt = best.Variant.Interval,
+            },
+        });
+        // Подобранные параметры сразу вступают в силу (обход без сервера или подключение).
+        await ApplyIfConnectedAsync(ct).ConfigureAwait(false);
+        return best.Opened == best.Total
+            ? $"Подобрано: куски {best.Variant.Len} байт, пауза {best.Variant.Interval} мс — открылись и YouTube, и Discord."
+            : $"Подобрано лучшее из возможного: куски {best.Variant.Len} байт, пауза {best.Variant.Interval} мс (открылось {best.Opened} из {best.Total}). Остальное пойдёт через сервер.";
+    }
+
     /// <summary>Приводит ядро «только обход DPI» в соответствие с настройкой (при запуске Тропы, после смены настроек).</summary>
     public async Task RestartDpiOnlyAsync(CancellationToken ct = default)
     {
