@@ -257,20 +257,6 @@
       },
       {
         "rule_set": [
-          "geoip-ru-blocked"
-        ],
-        "action": "route",
-        "outbound": "proxy"
-      },
-      {
-        "rule_set": [
-          "geoip-ru-blocked-community"
-        ],
-        "action": "route",
-        "outbound": "proxy"
-      },
-      {
-        "rule_set": [
           "geosite-category-ru"
         ],
         "action": "route",
@@ -284,6 +270,24 @@
         ],
         "action": "route",
         "outbound": "direct"
+      },
+      {
+        "action": "resolve",
+        "server": "remote"
+      },
+      {
+        "rule_set": [
+          "geoip-ru-blocked"
+        ],
+        "action": "route",
+        "outbound": "proxy"
+      },
+      {
+        "rule_set": [
+          "geoip-ru-blocked-community"
+        ],
+        "action": "route",
+        "outbound": "proxy"
       },
       {
         "rule_set": [

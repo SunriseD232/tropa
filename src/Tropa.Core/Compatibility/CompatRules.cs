@@ -51,6 +51,8 @@ public static class CompatRules
             s => s with { Dns = s.Dns with { RouteOnly = false } }),
         new("sniffProto", (s, _) => !s.Dns.Sniffing, "определение домена выключено в разделе DNS",
             s => s with { Expert = s.Expert with { SniffHttp = false, SniffTls = false, SniffQuic = false } }),
+        new("fragment", (s, _) => s.Dpi.Bypass, "фрагментацию включает кнопка «Обход DPI» на главной",
+            s => s with { Dpi = s.Dpi with { Fragment = true } }),
         new("fragParams", (s, _) => !s.Dpi.Fragment, "включите фрагментацию"),
         new("noise", (s, _) => s.Cores.CoreChoice == CoreChoice.SingBox, "шум есть только в ядре Xray, а выбрано «Всегда sing-box»",
             s => s with { Dpi = s.Dpi with { Noise = false } }),

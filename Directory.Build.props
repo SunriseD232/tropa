@@ -19,6 +19,6 @@
     <NuGetAuditLevel>low</NuGetAuditLevel>
     <Company>Tropa</Company>
     <Product>Тропа</Product>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
   </PropertyGroup>
 </Project>

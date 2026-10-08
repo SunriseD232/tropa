@@ -106,7 +106,7 @@ internal sealed partial class RulesViewModel : ObservableObject
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() =>
         {
             OnPropertyChanged(nameof(DpiFirstStatus));
-            if (s.State != ConnectionState.Connected)
+            if (!_engine.CoreRunning)
                 NeedsApply = false;
         });
         Load();
@@ -169,7 +169,7 @@ internal sealed partial class RulesViewModel : ObservableObject
                 list.Add(sid);
             return s with { Connection = s.Connection with { UwpLoopback = list } };
         });
-        NeedsApply = _engine.Status.State == ConnectionState.Connected;
+        NeedsApply = _engine.CoreRunning;
     }
 
     public IReadOnlyList<string> Actions { get; } = ["Через сервер", "Напрямую", "Блокировать"];
@@ -277,7 +277,7 @@ internal sealed partial class RulesViewModel : ObservableObject
         if (_loading)
             return;
         _engine.UpdateSettings(s => s with { Routing = change(s.Routing) });
-        NeedsApply = _engine.Status.State == ConnectionState.Connected;
+        NeedsApply = _engine.CoreRunning;
     }
 
     private void Change(Rule rule) =>
@@ -295,7 +295,7 @@ internal sealed partial class RulesViewModel : ObservableObject
         if (_loading)
             return;
         _engine.UpdateSettings(s => s with { Dpi = s.Dpi.WithPreset((DpiPreset)Math.Clamp(value, 0, 3)) });
-        NeedsApply = _engine.Status.State == ConnectionState.Connected;
+        NeedsApply = _engine.CoreRunning;
     }
 
     partial void OnUdpProxyChanged(bool value) => Update(r => r with { UdpProxy = value });

@@ -154,6 +154,47 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Dpi_bypass_runs_without_server_and_survives_connect_and_disconnect()
+    {
+        if (_server is null)
+            Assert.Skip("Ядра или наборы правил не скачаны: tools/fetch-cores.ps1, tools/fetch-geo.ps1");
+
+        var proxyStore = new FakeProxyStore();
+        var original = proxyStore.Read();
+        await using var engine = OpenEngine(proxyStore);
+        var port = FreePort();
+        engine.UpdateSettings(s => s with { Connection = s.Connection with { SocksPort = port, AutoSelect = false } });
+        await engine.ImportTextAsync($"vless://{Uuid}@127.0.0.1:{_serverPort}?security=none#local", null, TestContext.Current.CancellationToken);
+        var ct = TestContext.Current.CancellationToken;
+
+        // Кнопка «Обход DPI» без подключения: ядро работает, сервер не нужен.
+        await engine.SetDpiBypassAsync(true, ct);
+        Assert.True(engine.DpiOnlyActive, engine.DpiOnlyMessage);
+        Assert.Equal(ConnectionState.Disconnected, engine.Status.State);
+        Assert.Equal($"127.0.0.1:{port}", proxyStore.Values["ProxyServer"]);
+        using (var client = new HttpClient(new SocketsHttpHandler { Proxy = new WebProxy($"http://127.0.0.1:{port}"), UseProxy = true }))
+        using (var response = await client.GetAsync($"http://127.0.0.1:{_sitePort}/x", ct))
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        // Подключение к серверу заменяет ядро обхода, отключение возвращает его.
+        await engine.ConnectAsync(ct);
+        Assert.True(engine.Status.State == ConnectionState.Connected, engine.Status.Message);
+        Assert.False(engine.DpiOnlyActive);
+        await engine.DisconnectAsync();
+        Assert.Equal(ConnectionState.Disconnected, engine.Status.State);
+        Assert.True(engine.DpiOnlyActive, engine.DpiOnlyMessage);
+        Assert.Equal($"127.0.0.1:{port}", proxyStore.Values["ProxyServer"]);
+
+        // «Применить сейчас» перезапускает ядро обхода, а не запускает второе.
+        await engine.ApplyIfConnectedAsync(ct);
+        Assert.True(engine.DpiOnlyActive, engine.DpiOnlyMessage);
+
+        await engine.SetDpiBypassAsync(false, ct);
+        Assert.False(engine.DpiOnlyActive);
+        Assert.Equal(original, proxyStore.Values);
+    }
+
+    [Fact]
     public async Task Crash_leaves_no_proxy_behind()
     {
         if (_server is null)

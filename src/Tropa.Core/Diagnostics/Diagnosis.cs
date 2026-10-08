@@ -22,6 +22,9 @@ public static partial class Diagnosis
     /// <summary>Адреса TUN самой Тропы (SingBoxConfigBuilder): такой адаптер — наш.</summary>
     public static readonly IPAddress OwnTunAddress = IPAddress.Parse("172.19.0.1");
 
+    /// <summary>Имя адаптера TUN Тропы.</summary>
+    public const string OwnTunName = "Tropa";
+
     public static StepResult Clock(TimeSpan skew)
     {
         var abs = skew.Duration();
@@ -103,6 +106,7 @@ public static partial class Diagnosis
     public static IReadOnlyList<AdapterInfo> ForeignVpnAdapters(IEnumerable<AdapterInfo> adapters) =>
         adapters.Where(a => a.IsUp
                 && !a.Addresses.Contains(OwnTunAddress)
+                && !a.Name.Equals(OwnTunName, StringComparison.OrdinalIgnoreCase)
                 && !FilterPseudoAdapter().IsMatch(a.Name) && !FilterPseudoAdapter().IsMatch(a.Description)
                 && (VpnAdapterPattern().IsMatch(a.Description) || VpnAdapterPattern().IsMatch(a.Name)))
             .ToList();

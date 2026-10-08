@@ -138,6 +138,43 @@ public sealed class SingBoxGoldenTests
             XrayPath = @"C:\Program Files\Tropa\cores\xray.exe",
         },
 
+        // Обход DPI без сервера (TUN): заблокированное напрямую с фрагментацией, «через сервер» в правилах — тоже.
+        ["14-dpi-only-tun"] = () => Input(
+            Defaults with
+            {
+                Dpi = Defaults.Dpi with { Bypass = true },
+                Routing = Defaults.Routing with
+                {
+                    Rules =
+                    [
+                        new Rule
+                        {
+                            Id = new Guid(20, 0, 0, new byte[8]),
+                            Match = new RuleMatch { DomainSuffixes = ["linkedin.com", "licdn.com"] },
+                            Tcp = RuleAction.Proxy,
+                            Udp = RuleAction.Proxy,
+                        },
+                    ],
+                },
+            },
+            Reality) with { Active = null, Profiles = [] },
+
+        // Обход DPI без сервера в режиме «Только браузеры», «всем прямым HTTPS» и шум через Xray.
+        ["15-dpi-only-proxy-noise"] = () => Input(
+            Defaults with
+            {
+                Connection = Defaults.Connection with { Mode = CaptureMode.SystemProxy },
+                Dpi = Defaults.Dpi with { Bypass = true, FragScope = FragmentScope.All, Noise = true },
+            },
+            Reality) with
+        {
+            Active = null,
+            Profiles = [],
+            XrayDirectPort = 31201,
+            XrayAuth = XrayAuth,
+            XrayPath = @"C:\Program Files\Tropa\cores\xray.exe",
+        },
+
         // Шум: прямой UDP — через Xray, прямой TCP — в sing-box с фрагментацией.
         ["11-noise-direct-udp"] = () => Input(
             Defaults with

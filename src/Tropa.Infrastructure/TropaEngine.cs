@@ -525,6 +525,16 @@ public sealed class TropaEngine : IAsyncDisposable
             if (Status.State == ConnectionState.Connected)
                 return;
             SetStatus(new ConnectionStatus(ConnectionState.Connecting));
+            if (_dpiOnly)
+            {
+                // Ядро «только обход DPI» заменяется подключением к серверу. Через службу — одной
+                // командой Start: она сама остановит прежнее ядро.
+                var viaService = _runningViaService;
+                await StopCoreAsync(sendStop: !viaService).ConfigureAwait(false);
+                _servicePending = viaService;
+                SetDpiOnly(false);
+            }
+
             await AttachServiceAsync(ct).ConfigureAwait(false);
             // Ядро для сервера ещё не определено — быстро проверяем: сначала Xray, потом sing-box.
             if (State.ActiveProfile is { } active && CoreFor(active.Id) == CoreChoice.Auto
@@ -556,13 +566,103 @@ public sealed class TropaEngine : IAsyncDisposable
             // Переподключение без Stop не удалось: старое ядро службы останавливаем, но при включённом
             // kill switch блокировку не снимаем — служба держит её до «Отключить».
             _runningViaService |= _servicePending;
+            _servicePending = false;
             await StopCoreAsync(sendStop: !State.Settings.General.KillSwitch).ConfigureAwait(false);
             SetStatus(new ConnectionStatus(ConnectionState.Error, Scrubber.Scrub(ex.Message)));
+            // Сервер не подключился, но обход DPI без сервера возвращаем (kill switch держит блокировку — тогда нет).
+            if (State.Settings.Dpi.Bypass && !State.Settings.General.KillSwitch)
+                await StartDpiOnlyLockedAsync(CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
             _servicePending = false;
             _gate.Release();
+        }
+    }
+
+    // ---------------- Обход DPI без сервера ----------------
+
+    private bool _dpiOnly;
+
+    /// <summary>Работает ядро «только обход DPI» (кнопка «Обход DPI» при отключённом сервере).</summary>
+    public bool DpiOnlyActive => _dpiOnly;
+
+    /// <summary>Ядро работает (подключение к серверу или обход DPI): изменённые настройки нужно применить.</summary>
+    public bool CoreRunning => Status.State == ConnectionState.Connected || _dpiOnly;
+
+    /// <summary>Почему обход DPI без сервера не запустился или остановился (null — всё в порядке).</summary>
+    public string? DpiOnlyMessage { get; private set; }
+
+    public event EventHandler? DpiOnlyChanged;
+
+    private void SetDpiOnly(bool active, string? message = null)
+    {
+        _dpiOnly = active;
+        DpiOnlyMessage = message;
+        DpiOnlyChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Большая кнопка «Обход DPI». Подключено к серверу — переподключается с фрагментацией прямого
+    /// трафика; не подключено — запускает (или останавливает) ядро только для обхода.
+    /// </summary>
+    public async Task SetDpiBypassAsync(bool on, CancellationToken ct = default)
+    {
+        if (State.Settings.Dpi.Bypass != on)
+            UpdateSettings(s => s with { Dpi = s.Dpi with { Bypass = on } });
+        if (Status.State == ConnectionState.Connected)
+        {
+            await ReconnectAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        await RestartDpiOnlyAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Приводит ядро «только обход DPI» в соответствие с настройкой (при запуске Тропы, после смены настроек).</summary>
+    public async Task RestartDpiOnlyAsync(CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // Пока подключаемся или подключены к серверу, обход идёт внутри этого подключения.
+            if (Status.State is ConnectionState.Connected or ConnectionState.Connecting or ConnectionState.Disconnecting)
+                return;
+            if (_dpiOnly)
+            {
+                var viaService = _runningViaService;
+                var keep = State.Settings.Dpi.Bypass;
+                await StopCoreAsync(sendStop: !(viaService && keep)).ConfigureAwait(false);
+                _servicePending = viaService && keep;
+                SetDpiOnly(false);
+            }
+
+            if (State.Settings.Dpi.Bypass)
+                await StartDpiOnlyLockedAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _servicePending = false;
+            _gate.Release();
+        }
+    }
+
+    private async Task StartDpiOnlyLockedAsync(CancellationToken ct)
+    {
+        try
+        {
+            await AttachServiceAsync(ct).ConfigureAwait(false);
+            await StartCoreAsync(ct, noServer: true).ConfigureAwait(false);
+            SetDpiOnly(true);
+            Log?.Invoke(this, "Обход DPI без сервера включён.");
+        }
+        catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException or ServiceException or TimeoutException)
+        {
+            _runningViaService |= _servicePending;
+            await StopCoreAsync().ConfigureAwait(false);
+            var message = Scrubber.Scrub(ex.Message);
+            Log?.Invoke(this, "Обход DPI не запустился: " + message);
+            SetDpiOnly(false, message);
         }
     }
 
@@ -706,7 +806,7 @@ public sealed class TropaEngine : IAsyncDisposable
             var signature = NetworkSignature();
             var changed = signature != _networkSignature;
             _networkSignature = signature;
-            if (!(slept || changed) || !State.Settings.General.Reconnect || Status.State != ConnectionState.Connected)
+            if (!(slept || changed) || !State.Settings.General.Reconnect || !(Status.State == ConnectionState.Connected || DpiOnlyActive))
                 return;
             // Сеть после пробуждения поднимается не сразу.
             await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
@@ -733,7 +833,7 @@ public sealed class TropaEngine : IAsyncDisposable
             var props = ni.GetIPProperties();
             var gateways = props.GatewayAddresses.Select(g => g.Address).Where(a => !a.Equals(IPAddress.Any) && !a.Equals(IPAddress.IPv6Any)).ToList();
             var addresses = props.UnicastAddresses.Select(u => u.Address).ToList();
-            if (gateways.Count == 0 || addresses.Contains(Diagnosis.OwnTunAddress))
+            if (gateways.Count == 0 || addresses.Contains(Diagnosis.OwnTunAddress) || ni.Name.Equals(Diagnosis.OwnTunName, StringComparison.OrdinalIgnoreCase))
                 continue;
             parts.Add(ni.Id + "=" + string.Join(",", addresses.Where(a => a.AddressFamily == AddressFamily.InterNetwork).OrderBy(a => a.ToString(), StringComparer.Ordinal))
                 + "@" + string.Join(",", gateways.OrderBy(a => a.ToString(), StringComparer.Ordinal)));
@@ -827,6 +927,8 @@ public sealed class TropaEngine : IAsyncDisposable
             _runningViaService = false;
             await StopCoreAsync().ConfigureAwait(false);
             _systemProxy.Restore();
+            if (_dpiOnly)
+                SetDpiOnly(false);
             SetStatus(new ConnectionStatus(ConnectionState.Disconnected));
         }
         finally
@@ -856,11 +958,19 @@ public sealed class TropaEngine : IAsyncDisposable
         try
         {
             SetStatus(new ConnectionStatus(ConnectionState.Disconnecting));
-            await StopCoreAsync().ConfigureAwait(false);
+            // Включён «Обход DPI» — после отключения от сервера ядро остаётся работать только ради обхода.
+            // Через службу — сразу командой Start, без промежутка без обхода.
+            var bypass = State.Settings.Dpi.Bypass;
+            var viaService = _runningViaService;
+            await StopCoreAsync(sendStop: !(viaService && bypass)).ConfigureAwait(false);
+            _servicePending = viaService && bypass;
             SetStatus(new ConnectionStatus(ConnectionState.Disconnected));
+            if (bypass)
+                await StartDpiOnlyLockedAsync(CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
+            _servicePending = false;
             _gate.Release();
         }
     }
@@ -870,6 +980,8 @@ public sealed class TropaEngine : IAsyncDisposable
     {
         if (Status.State == ConnectionState.Connected)
             await ReconnectAsync(ct).ConfigureAwait(false);
+        else if (_dpiOnly)
+            await RestartDpiOnlyAsync(ct).ConfigureAwait(false);
     }
 
     private async Task ReconnectAsync(CancellationToken ct)
@@ -893,9 +1005,10 @@ public sealed class TropaEngine : IAsyncDisposable
         await ConnectAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task StartCoreAsync(CancellationToken ct)
+    /// <param name="noServer">Только обход DPI: без сервера, весь трафик напрямую.</param>
+    private async Task StartCoreAsync(CancellationToken ct, bool noServer = false)
     {
-        var active = State.ActiveProfile ?? throw new InvalidOperationException("Сначала добавьте и выберите сервер.");
+        var active = noServer ? null : State.ActiveProfile ?? throw new InvalidOperationException("Сначала добавьте и выберите сервер.");
         var settings = State.Settings with
         {
             Connection = State.Settings.Connection with
@@ -920,22 +1033,22 @@ public sealed class TropaEngine : IAsyncDisposable
         }
 
         var clashPort = ServerTester.FreePort();
-        var dpiProbePort = effective.Routing.DpiFirst ? ServerTester.FreePort() : (int?)null;
+        var dpiProbePort = effective.Routing.DpiFirst && active is not null ? ServerTester.FreePort() : (int?)null;
         var clashSecret = SecretStore.NewRandomToken();
-        var group = effective.Connection.AutoSelect
-            ? State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null
+        var group = effective.Connection.AutoSelect && active is not null
+            ? State.Profiles.Where(p => p.Profile.SubscriptionId == active!.SubscriptionId && p.RemovedByProvider is null
                     && ProfileCompat.Issues(p.Profile).Count == 0
                     && !(p.Profile.Transport.Type == TransportType.Xhttp && p.Profile.ChainVia is not null)
                     // urltest видит только задержку и «заморозку» не замечает — такие серверы убираем сами.
                     && !ServerHealth.ShouldExclude(p.LastTest, _now())
                     // allowInsecureWarn: сервер без проверки сертификата — только если вы выбрали его сами.
-                    && !(effective.Dpi.AllowInsecureWarn && p.Profile.Security.AllowInsecure && p.Profile.Id != active.Id))
+                    && !(effective.Dpi.AllowInsecureWarn && p.Profile.Security.AllowInsecure && p.Profile.Id != active!.Id))
                 .Select(p => p.Profile).ToList()
             : [];
 
         // Гибрид (docs/05-config-generation.md, §1): серверы с XHTTP — через Xray, шум — тоже через Xray.
         var allProfiles = State.Profiles.Select(p => p.Profile).ToList();
-        var plan = CorePlan.Make(settings, UsedProfiles(active, group, allProfiles, effective), CoreFor);
+        var plan = CorePlan.Make(settings, active is null ? [] : UsedProfiles(active, group, allProfiles, effective), CoreFor);
         string? xrayConfig = null;
         var xrayPorts = new Dictionary<Guid, int>();
         int? xrayDirectPort = null;
@@ -1020,7 +1133,8 @@ public sealed class TropaEngine : IAsyncDisposable
 
         _trafficCts = new CancellationTokenSource();
         _ = PumpTrafficAsync(new ClashApi(clashPort, clashSecret), _trafficCts.Token);
-        _ = MonitorAsync(active.Id, _trafficCts.Token);
+        if (active is not null)
+            _ = MonitorAsync(active.Id, _trafficCts.Token);
         if (dpiProbePort is { } probe)
             _ = DpiMonitorAsync(new ClashApi(clashPort, clashSecret), probe, _trafficCts.Token);
         else
@@ -1221,7 +1335,7 @@ public sealed class TropaEngine : IAsyncDisposable
             try
             {
                 await StopCoreAsync().ConfigureAwait(false);
-                SetStatus(new ConnectionStatus(ConnectionState.Error, $"Ядро неожиданно остановилось (код {exitCode}). Подробности — в журнале."));
+                ReportStopped(ConnectionState.Error, $"Ядро неожиданно остановилось (код {exitCode}). Подробности — в журнале.");
             }
             finally
             {
@@ -1292,7 +1406,7 @@ public sealed class TropaEngine : IAsyncDisposable
                 {
                     _runningViaService = false;
                     await StopCoreAsync(sendStop: false).ConfigureAwait(false);
-                    SetStatus(new ConnectionStatus(ConnectionState.Disconnected, status.Message));
+                    ReportStopped(ConnectionState.Disconnected, status.Message);
                 }
                 finally
                 {
@@ -1311,7 +1425,7 @@ public sealed class TropaEngine : IAsyncDisposable
             {
                 _runningViaService = false; // служба уже остановила ядро
                 await StopCoreAsync().ConfigureAwait(false);
-                SetStatus(new ConnectionStatus(ConnectionState.Error, status.Message ?? "Служба остановила подключение из-за сбоя ядра."));
+                ReportStopped(ConnectionState.Error, status.Message ?? "Служба остановила подключение из-за сбоя ядра.");
             }
             finally
             {
@@ -1339,7 +1453,7 @@ public sealed class TropaEngine : IAsyncDisposable
                 if (wasRunning)
                 {
                     await StopCoreAsync().ConfigureAwait(false);
-                    SetStatus(new ConnectionStatus(ConnectionState.Error, "Связь со службой Тропы потеряна. Подключение остановлено."));
+                    ReportStopped(ConnectionState.Error, "Связь со службой Тропы потеряна. Подключение остановлено.");
                 }
             }
             finally
@@ -1349,6 +1463,15 @@ public sealed class TropaEngine : IAsyncDisposable
 
             ServiceChanged?.Invoke(this, EventArgs.Empty);
         });
+    }
+
+    /// <summary>Ядро остановилось не по команде: сообщаем там, где оно работало, — в подключении или в обходе DPI.</summary>
+    private void ReportStopped(ConnectionState state, string? message)
+    {
+        if (_dpiOnly)
+            SetDpiOnly(false, message);
+        else
+            SetStatus(new ConnectionStatus(state, message));
     }
 
     private void SetStatus(ConnectionStatus status)

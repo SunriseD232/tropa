@@ -41,6 +41,9 @@ public sealed record RuleMatch
     [JsonIgnore]
     public bool HasProcessCondition => Processes.Count > 0 || ProcessPaths.Count > 0;
 
+    /// <summary>Есть условия по IP: для соединений по домену ядру нужно сначала узнать адрес.</summary>
+    public bool HasIpCondition => GeoIp.Count > 0 || IpCidrs.Count > 0;
+
     [JsonIgnore]
     public bool IsEmpty =>
         !HasProcessCondition && Domains.Count == 0 && DomainSuffixes.Count == 0 && DomainKeywords.Count == 0

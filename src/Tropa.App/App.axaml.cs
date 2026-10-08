@@ -71,6 +71,7 @@ internal sealed partial class App : Application
             });
             _subscriptionTimer.Start();
             _engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => UpdateTray(s));
+            _engine.DpiOnlyChanged += (_, _) => Dispatcher.UIThread.Post(() => { if (_engine is { } e) UpdateTray(e.Status); });
 
             // Выход из Windows или завершение сеанса: вернуть прокси до того, как процесс убьют.
             desktop.ShutdownRequested += (_, _) => ShutdownEngine();
@@ -82,6 +83,8 @@ internal sealed partial class App : Application
                 _window.Show();
             if (FromAutostart && settings.Autoconnect && _engine.State.ActiveProfile is not null)
                 _ = AutoconnectAsync(_engine, settings.WaitNet);
+            else if (_engine.State.Settings.Dpi.Bypass)
+                _ = _engine.RestartDpiOnlyAsync(); // кнопка «Обход DPI» включена — обход работает с запуска Тропы
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -139,6 +142,8 @@ internal sealed partial class App : Application
             ConnectionState.Error => (LoadIcon("tray-error.ico"), "Тропа — ошибка подключения", "Подключить"),
             _ => (LoadIcon("tray-off.ico"), "Тропа — отключено", "Подключить"),
         };
+        if (s.State != ConnectionState.Connected && _engine is { DpiOnlyActive: true })
+            _tray.ToolTipText = "Тропа — обход DPI без сервера";
     }
 
     /// <summary>Автозагрузка следует настройке autostart; только у установленной копии.</summary>

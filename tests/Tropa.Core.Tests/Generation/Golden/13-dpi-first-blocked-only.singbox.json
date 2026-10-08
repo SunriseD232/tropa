@@ -57,6 +57,7 @@
     {
       "type": "tun",
       "tag": "tun-in",
+      "interface_name": "Tropa",
       "address": [
         "172.19.0.1/30",
         "fdfe:dcba:9876::1/126"
@@ -363,7 +364,26 @@
       },
       {
         "rule_set": [
-          "geosite-telegram",
+          "geosite-telegram"
+        ],
+        "action": "route",
+        "outbound": "dpi-telegram",
+        "tls_fragment": true
+      },
+      {
+        "rule_set": [
+          "geosite-ru-blocked"
+        ],
+        "action": "route",
+        "outbound": "dpi-blocked",
+        "tls_fragment": true
+      },
+      {
+        "action": "resolve",
+        "server": "local"
+      },
+      {
+        "rule_set": [
           "geoip-telegram"
         ],
         "action": "route",
@@ -372,7 +392,6 @@
       },
       {
         "rule_set": [
-          "geosite-ru-blocked",
           "geoip-ru-blocked",
           "geoip-ru-blocked-community"
         ],

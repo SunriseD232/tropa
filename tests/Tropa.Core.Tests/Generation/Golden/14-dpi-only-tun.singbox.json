@@ -8,8 +8,7 @@
       {
         "type": "https",
         "tag": "remote",
-        "server": "1.1.1.1",
-        "detour": "proxy"
+        "server": "1.1.1.1"
       },
       {
         "type": "udp",
@@ -43,6 +42,15 @@
         "server": "local"
       },
       {
+        "rule_set": [
+          "geosite-ru-blocked",
+          "geosite-youtube",
+          "geosite-discord",
+          "geosite-telegram"
+        ],
+        "server": "remote"
+      },
+      {
         "query_type": [
           "A",
           "AAAA"
@@ -50,7 +58,7 @@
         "server": "fake"
       }
     ],
-    "final": "remote",
+    "final": "local",
     "strategy": "ipv4_only"
   },
   "inbounds": [
@@ -90,61 +98,17 @@
   ],
   "outbounds": [
     {
-      "type": "vless",
-      "tag": "proxy",
-      "server": "nl1.example.com",
-      "server_port": 443,
-      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
-      "flow": "xtls-rprx-vision",
-      "packet_encoding": "xudp",
-      "tls": {
-        "enabled": true,
-        "server_name": "www.microsoft.com",
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        },
-        "reality": {
-          "enabled": true,
-          "public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
-          "short_id": "a1b2c3"
-        }
-      }
-    },
-    {
       "type": "direct",
       "tag": "direct"
     },
     {
-      "type": "socks",
-      "tag": "direct-noise",
-      "server": "127.0.0.1",
-      "server_port": 31201,
-      "version": "5",
-      "username": "xray-user",
-      "password": "xray-pass"
+      "type": "direct",
+      "tag": "dpi-direct",
+      "domain_resolver": "remote"
     }
   ],
   "route": {
     "rule_set": [
-      {
-        "type": "local",
-        "tag": "geoip-ru-blocked",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geoip-ru-blocked.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geoip-ru-blocked-community",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geoip-ru-blocked-community.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-category-ai-noncn",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-category-ai-noncn.srs"
-      },
       {
         "type": "local",
         "tag": "geosite-category-bank-ru",
@@ -165,6 +129,12 @@
       },
       {
         "type": "local",
+        "tag": "geosite-discord",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-discord.srs"
+      },
+      {
+        "type": "local",
         "tag": "geosite-ru-available-only-inside",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-ru-available-only-inside.srs"
@@ -174,6 +144,18 @@
         "tag": "geosite-ru-blocked",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-ru-blocked.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-telegram",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-telegram.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-youtube",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-youtube.srs"
       },
       {
         "type": "inline",
@@ -237,13 +219,6 @@
         "action": "hijack-dns"
       },
       {
-        "process_path": [
-          "C:\\Program Files\\Tropa\\cores\\xray.exe"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
         "ip_version": 6,
         "action": "reject"
       },
@@ -264,62 +239,45 @@
           "geosite-ru-available-only-inside"
         ],
         "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "domain_suffix": [
+          "linkedin.com",
+          "licdn.com"
+        ],
+        "action": "route",
+        "outbound": "dpi-direct",
+        "tls_fragment": true
+      },
+      {
+        "domain_suffix": [
+          "youtube.com",
+          "googlevideo.com",
+          "ytimg.com",
+          "ggpht.com",
+          "youtu.be",
+          "youtube-nocookie.com",
+          "yt.be"
+        ],
+        "action": "route",
         "outbound": "direct",
-        "tls_fragment": true,
-        "network": "tcp"
+        "tls_fragment": true
       },
       {
         "rule_set": [
-          "ru-services",
-          "geosite-category-gov-ru",
-          "geosite-category-bank-ru",
-          "geosite-ru-available-only-inside"
+          "geosite-ru-blocked",
+          "geosite-youtube",
+          "geosite-discord",
+          "geosite-telegram"
         ],
         "action": "route",
-        "outbound": "direct-noise",
-        "network": "udp"
-      },
-      {
-        "rule_set": [
-          "geosite-category-ai-noncn"
-        ],
-        "action": "route",
-        "outbound": "proxy"
-      },
-      {
-        "rule_set": [
-          "geosite-ru-blocked"
-        ],
-        "action": "route",
-        "outbound": "proxy"
-      },
-      {
-        "action": "resolve",
-        "server": "local"
-      },
-      {
-        "rule_set": [
-          "geoip-ru-blocked"
-        ],
-        "action": "route",
-        "outbound": "proxy"
-      },
-      {
-        "rule_set": [
-          "geoip-ru-blocked-community"
-        ],
-        "action": "route",
-        "outbound": "proxy"
-      },
-      {
-        "network": "udp",
-        "action": "route",
-        "outbound": "direct-noise"
+        "outbound": "dpi-direct",
+        "tls_fragment": true
       }
     ],
     "final": "direct",
     "default_domain_resolver": "local",
-    "find_process": true,
     "auto_detect_interface": true
   },
   "experimental": {

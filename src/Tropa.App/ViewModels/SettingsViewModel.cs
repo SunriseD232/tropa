@@ -46,7 +46,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
         engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(Load);
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() =>
         {
-            if (s.State != ConnectionState.Connected)
+            if (!_engine.CoreRunning)
                 NeedsApply = false;
         });
         Load();
@@ -109,7 +109,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
     private void Commit(Func<AppSettings, AppSettings> change)
     {
         _engine.UpdateSettings(change);
-        NeedsApply = _engine.Status.State == ConnectionState.Connected;
+        NeedsApply = _engine.CoreRunning;
     }
 
     [RelayCommand]

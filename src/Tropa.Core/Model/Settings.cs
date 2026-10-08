@@ -87,6 +87,13 @@ public sealed record DnsSettings
 
 public sealed record DpiSettings
 {
+    /// <summary>
+    /// Большая кнопка «Обход DPI» на главной (info.ru.json: dpiBypass): без сервера Тропа запускает
+    /// ядро только ради обхода — заблокированное идёт напрямую с фрагментацией; с сервером включает
+    /// фрагментацию прямого трафика.
+    /// </summary>
+    public bool Bypass { get; init; }
+
     public DpiPreset DpiPreset { get; init; } = DpiPreset.Off;
     public bool Fragment { get; init; }
     public string FragPackets { get; init; } = "tlshello";

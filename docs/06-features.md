@@ -104,6 +104,7 @@
 ### Обход DPI (только прямой трафик, только средствами ядер)
 | Ключ | Тип | По умолчанию |
 |---|---|---|
+| dpiBypass | bool (большая кнопка на главной; без сервера — ядро только для обхода, ADR-033) | false |
 | dpiPreset | off/soft/hard/custom | off |
 | fragment | bool | false |
 | fragPackets | tlshello/1-3 | tlshello |
