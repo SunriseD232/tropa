@@ -25,10 +25,11 @@
       "tag": "direct",
       "protocol": "freedom",
       "settings": {
+        "domainStrategy": "UseIPv4",
         "fragment": {
           "packets": "tlshello",
-          "length": "100-200",
-          "interval": "10-20"
+          "length": "1-5",
+          "interval": "1-3"
         },
         "noises": [
           {
@@ -54,5 +55,11 @@
         "outboundTag": "direct"
       }
     ]
+  },
+  "dns": {
+    "servers": [
+      "https://1.1.1.1/dns-query"
+    ],
+    "queryStrategy": "UseIPv4"
   }
 }

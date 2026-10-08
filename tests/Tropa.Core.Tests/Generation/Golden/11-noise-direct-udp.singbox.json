@@ -123,6 +123,15 @@
       "version": "5",
       "username": "xray-user",
       "password": "xray-pass"
+    },
+    {
+      "type": "socks",
+      "tag": "dpi-direct",
+      "server": "127.0.0.1",
+      "server_port": 31201,
+      "version": "5",
+      "username": "xray-user",
+      "password": "xray-pass"
     }
   ],
   "route": {
@@ -264,20 +273,7 @@
           "geosite-ru-available-only-inside"
         ],
         "action": "route",
-        "outbound": "direct",
-        "tls_fragment": true,
-        "network": "tcp"
-      },
-      {
-        "rule_set": [
-          "ru-services",
-          "geosite-category-gov-ru",
-          "geosite-category-bank-ru",
-          "geosite-ru-available-only-inside"
-        ],
-        "action": "route",
-        "outbound": "direct-noise",
-        "network": "udp"
+        "outbound": "dpi-direct"
       },
       {
         "rule_set": [

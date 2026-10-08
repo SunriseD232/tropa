@@ -97,8 +97,13 @@ public sealed record DpiSettings
     public DpiPreset DpiPreset { get; init; } = DpiPreset.Off;
     public bool Fragment { get; init; }
     public string FragPackets { get; init; } = "tlshello";
-    public string FragLen { get; init; } = "100-200";
-    public string FragInt { get; init; } = "10-20";
+    // Проверено у провайдера в РФ 2026-10-09: мелкие куски с короткой паузой открывают YouTube,
+    // Facebook, BBC; прежние 100-200 / 10-20 — почти ничего (ADR-035).
+    public const string DefaultFragLen = "1-5";
+    public const string DefaultFragInt = "1-3";
+
+    public string FragLen { get; init; } = DefaultFragLen;
+    public string FragInt { get; init; } = DefaultFragInt;
     public FragmentScope FragScope { get; init; } = FragmentScope.List;
     public string Utls { get; init; } = "chrome";
     public bool AllowInsecureWarn { get; init; } = true;
@@ -112,8 +117,8 @@ public sealed record DpiSettings
     /// <summary>Наборы (docs/06-features.md, §5): soft — фрагментация по списку, hard — всё и шум; custom — как есть.</summary>
     public DpiSettings WithPreset(DpiPreset preset) => preset switch
     {
-        DpiPreset.Soft => this with { DpiPreset = preset, Fragment = true, FragScope = FragmentScope.List, Noise = false },
-        DpiPreset.Hard => this with { DpiPreset = preset, Fragment = true, FragScope = FragmentScope.All, Noise = true },
+        DpiPreset.Soft => this with { DpiPreset = preset, Fragment = true, FragScope = FragmentScope.List, Noise = false, FragPackets = "tlshello", FragLen = DefaultFragLen, FragInt = DefaultFragInt },
+        DpiPreset.Hard => this with { DpiPreset = preset, Fragment = true, FragScope = FragmentScope.All, Noise = true, FragPackets = "tlshello", FragLen = DefaultFragLen, FragInt = DefaultFragInt },
         DpiPreset.Custom => this with { DpiPreset = preset },
         _ => this with { DpiPreset = DpiPreset.Off, Fragment = false, Noise = false },
     };

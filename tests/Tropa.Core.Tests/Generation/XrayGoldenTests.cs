@@ -81,6 +81,9 @@ public sealed class XrayGoldenTests
         { "сертификат с диска", Base.Replace("\"allowInsecure\": false", "\"allowInsecure\": false, \"certificates\": [ { \"certificateFile\": \"C:\\\\x.pem\" } ]", StringComparison.Ordinal) },
         { "неизвестный выход", Base.Replace("\"protocol\": \"blackhole\"", "\"protocol\": \"dokodemo-door\"", StringComparison.Ordinal) },
         { "битый JSON", "{" },
+        { "DNS из файла", Base.Replace("\"log\": {", "\"dns\": { \"servers\": [ \"file:///C:/x\" ] }, \"log\": {", StringComparison.Ordinal) },
+        { "DNS hosts", Base.Replace("\"log\": {", "\"dns\": { \"hosts\": { \"a\": \"1.2.3.4\" } }, \"log\": {", StringComparison.Ordinal) },
+        { "DNS по http", Base.Replace("\"log\": {", "\"dns\": { \"servers\": [ \"http://1.1.1.1/dns-query\" ] }, \"log\": {", StringComparison.Ordinal) },
     };
 
     [Theory]

@@ -22,6 +22,23 @@ public sealed class CompatRulesTests
     }
 
     [Theory]
+    [InlineData(RoutePreset.ExceptRu)]
+    [InlineData(RoutePreset.All)]
+    public void Dpi_bypass_button_forces_fragment_and_dpi_first(RoutePreset preset)
+    {
+        var settings = Defaults with
+        {
+            Dpi = Defaults.Dpi with { Bypass = true },
+            Routing = Defaults.Routing with { Preset = preset },
+        };
+        var r = CompatRules.Evaluate(settings);
+        Assert.True(r.Effective.Dpi.Fragment);
+        Assert.True(r.Effective.Routing.DpiFirst); // с сервером — сначала обход, при неудаче сервер
+        Assert.Contains("Обход DPI", r.Disabled["dpiFirst"], StringComparison.Ordinal);
+        Assert.False(r.IsDisabled("fragParams"));
+    }
+
+    [Theory]
     [InlineData(CaptureMode.SystemProxy)]
     [InlineData(CaptureMode.PortsOnly)]
     public void Non_tun_mode_forces_off_tun_only_features(CaptureMode mode)

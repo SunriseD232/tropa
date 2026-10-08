@@ -79,6 +79,11 @@
     {
       "type": "direct",
       "tag": "direct"
+    },
+    {
+      "type": "direct",
+      "tag": "dpi-direct",
+      "domain_resolver": "remote"
     }
   ],
   "route": {
@@ -193,7 +198,7 @@
           "yt.be"
         ],
         "action": "route",
-        "outbound": "direct",
+        "outbound": "dpi-direct",
         "tls_fragment": true
       }
     ],

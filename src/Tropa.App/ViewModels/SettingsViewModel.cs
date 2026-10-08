@@ -251,7 +251,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new ChoiceRow("Каким сайтам", "fragScope", Opts("Из списка (YouTube и связанные)", "Всем прямым HTTPS"),
             s => (int)s.Dpi.FragScope, (s, i) => Custom(s, d => d with { FragScope = (FragmentScope)i }), compatKey: "fragParams"),
         new TextRow("Какие пакеты дробить", "fragment", s => s.Dpi.FragPackets, (s, v) => Custom(s, d => d with { FragPackets = v }), V.FragPackets,
-            compatKey: "fragParams", hint: "Длина, интервал и пакеты работают, когда прямой трафик идёт через Xray (включён шум)."),
+            compatKey: "fragParams", hint: "Дробит ядро Xray: по умолчанию куски 1–5 байт с паузой 1–3 мс — так у провайдеров в РФ открывается YouTube."),
         new TextRow("Длина фрагментов, байт", "fragment", s => s.Dpi.FragLen, (s, v) => Custom(s, d => d with { FragLen = v }), v => V.Range(v, 1, 1000),
             compatKey: "fragParams"),
         new TextRow("Интервал между фрагментами, мс", "fragment", s => s.Dpi.FragInt, (s, v) => Custom(s, d => d with { FragInt = v }), v => V.Range(v, 0, 1000),

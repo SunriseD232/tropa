@@ -44,7 +44,9 @@ public sealed record CorePlan(IReadOnlyList<Profile> XrayProfiles, bool XrayDire
             }
         }
 
-        // Шум есть только в Xray: прямой UDP пойдёт через его вход «напрямую».
-        return new CorePlan(viaXray, s.Dpi.Noise);
+        // Шум есть только в Xray: прямой UDP пойдёт через его вход «напрямую». Фрагментация — тоже
+        // через Xray: у него паузы между кусками, и на проверке у провайдера в РФ (2026-10-09) она
+        // открывала YouTube, а tls_fragment sing-box — ни одного сайта (ADR-035).
+        return new CorePlan(viaXray, s.Dpi.Noise || s.Dpi.Fragment);
     }
 }

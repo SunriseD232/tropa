@@ -54,7 +54,9 @@ public static class XrayConfigBuilder
         if (directPort is { } dp)
         {
             inbounds.Add((JsonNode)SocksInbound(DirectInboundTag, dp, auth));
-            var freedom = new JsonObject();
+            // Адреса узнаёт сам Xray через свой DNS: провайдерский подменяет заблокированное, а
+            // системный в режиме TUN отвечает адресами FakeIP.
+            var freedom = new JsonObject { ["domainStrategy"] = "UseIPv4" };
             if (s.Dpi.Fragment)
             {
                 freedom["fragment"] = new JsonObject
@@ -97,7 +99,17 @@ public static class XrayConfigBuilder
             ["outbounds"] = outbounds,
             ["routing"] = new JsonObject { ["rules"] = rules },
         };
+        if (directPort is not null)
+            config["dns"] = new JsonObject { ["servers"] = Arr([DirectDns(s.Dns.RemoteDns)]), ["queryStrategy"] = "UseIPv4" };
         return config.ToJsonString(Indented) + "\n";
+    }
+
+    /// <summary>Удалённый DNS из настроек в виде, понятном Xray: https:// или IP; иначе DoH Cloudflare.</summary>
+    internal static string DirectDns(string remote)
+    {
+        if (Uri.TryCreate(remote, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Query.Length == 0)
+            return uri.ToString();
+        return System.Net.IPAddress.TryParse(remote.Trim(), out var ip) ? ip.ToString() : "https://1.1.1.1/dns-query";
     }
 
     private static JsonObject SocksInbound(string tag, int port, LocalAuth auth) => new()

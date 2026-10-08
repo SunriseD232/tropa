@@ -10,7 +10,7 @@ namespace Tropa.Core.Security;
 /// </summary>
 public static class XrayConfigGuard
 {
-    private static readonly FrozenSet<string> RootKeys = new[] { "log", "inbounds", "outbounds", "routing" }.ToFrozenSet(StringComparer.Ordinal);
+    private static readonly FrozenSet<string> RootKeys = new[] { "log", "dns", "inbounds", "outbounds", "routing" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> LogKeys = new[] { "loglevel" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> OutboundProtocols = new[] { "vless", "vmess", "trojan", "shadowsocks", "freedom", "blackhole" }.ToFrozenSet(StringComparer.Ordinal);
 
@@ -47,6 +47,36 @@ public static class XrayConfigGuard
             }
 
             Scan(root, "", v);
+
+            // DNS нужен входу «напрямую с обходом»: иначе Xray спросит Windows, а в режиме TUN ответ
+            // придёт из FakeIP. Разрешены только адреса серверов: https://, IP и стратегия.
+            if (root.TryGetProperty("dns", out var dns))
+            {
+                if (dns.ValueKind != JsonValueKind.Object)
+                {
+                    v.Add("Xray: раздел dns должен быть объектом.");
+                }
+                else
+                {
+                    foreach (var p in dns.EnumerateObject())
+                    {
+                        if (p.Name is not ("servers" or "queryStrategy"))
+                            v.Add($"Xray: dns.{p.Name} запрещено.");
+                    }
+
+                    if (dns.TryGetProperty("servers", out var servers) && servers.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var server in servers.EnumerateArray())
+                        {
+                            var text = server.ValueKind == JsonValueKind.String ? server.GetString() ?? "" : "";
+                            var ok = System.Net.IPAddress.TryParse(text, out _)
+                                || Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Query.Length == 0;
+                            if (!ok)
+                                v.Add($"Xray: DNS-сервер «{text}» — разрешены только IP-адрес или https://.");
+                        }
+                    }
+                }
+            }
 
             if (root.TryGetProperty("log", out var log) && log.ValueKind == JsonValueKind.Object)
             {

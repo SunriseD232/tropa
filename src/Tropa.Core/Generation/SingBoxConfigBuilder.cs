@@ -489,9 +489,8 @@ public static class SingBoxConfigBuilder
         if (ctx.NoServer)
         {
             outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DirectTag });
-            // Адреса заблокированного — через удалённый DNS: провайдерский их подменяет.
-            outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DpiGroups.DirectTag, ["domain_resolver"] = "remote" });
-            if (ctx.Input.XrayDirectPort is { } noisePort)
+            outbounds.Push(DpiDirectOutbound(ctx));
+            if (ctx.Input.XrayDirectPort is { } noisePort && s.Dpi.Noise)
                 outbounds.Push(XraySocks(ctx, NoiseDirectTag, noisePort));
             return outbounds;
         }
@@ -532,13 +531,13 @@ public static class SingBoxConfigBuilder
         }
 
         outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DirectTag });
-        if (ctx.Input.XrayDirectPort is { } directPort)
+        if (ctx.Input.XrayDirectPort is { } directPort && s.Dpi.Noise)
             outbounds.Push(XraySocks(ctx, NoiseDirectTag, directPort));
+        if (s.Routing.DpiFirst || s.Dpi.Fragment)
+            outbounds.Push(DpiDirectOutbound(ctx));
 
         if (s.Routing.DpiFirst)
         {
-            // Адреса заблокированного узнаём через удалённый DNS: провайдерский их подменяет.
-            outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DpiGroups.DirectTag, ["domain_resolver"] = "remote" });
             foreach (var g in DpiGroups.All)
             {
                 outbounds.Push(new JsonObject
@@ -556,6 +555,25 @@ public static class SingBoxConfigBuilder
     }
 
     public const string NoiseDirectTag = "direct-noise";
+
+    /// <summary>
+    /// Выход «напрямую с обходом DPI». Есть вход Xray «напрямую» — через него: Xray дробит начало
+    /// TLS с паузами и сам узнаёт адреса через удалённый DNS (ADR-035). Нет — прямой выход sing-box,
+    /// адреса через удалённый DNS (провайдерский подменяет заблокированное), дробление tls_fragment.
+    /// </summary>
+    private static JsonObject DpiDirectOutbound(Context ctx) => ctx.Input.XrayDirectPort is { } port
+        ? XraySocks(ctx, DpiGroups.DirectTag, port)
+        : new JsonObject { ["type"] = "direct", ["tag"] = DpiGroups.DirectTag, ["domain_resolver"] = "remote" };
+
+    /// <summary>Отправляет совпавший трафик напрямую с обходом DPI.</summary>
+    private static JsonObject Bypass(Context ctx, JsonObject match)
+    {
+        match["action"] = "route";
+        match["outbound"] = DpiGroups.DirectTag;
+        if (ctx.Input.XrayDirectPort is null)
+            match["tls_fragment"] = true;
+        return match;
+    }
 
     /// <summary>SOCKS-выход в локальный Xray (гибрид: sing-box — фронт, Xray — протокол).</summary>
     private static JsonObject XraySocks(Context ctx, string tag, int port)
@@ -774,13 +792,7 @@ public static class SingBoxConfigBuilder
 
         if (s.Routing.DpiFirst && ctx.Input.DpiProbePort is not null)
         {
-            rules.Push(new JsonObject
-            {
-                ["inbound"] = StrArray([DpiGroups.ProbeInboundTag]),
-                ["action"] = "route",
-                ["outbound"] = DpiGroups.DirectTag,
-                ["tls_fragment"] = true,
-            });
+            rules.Push(Bypass(ctx, new JsonObject { ["inbound"] = StrArray([DpiGroups.ProbeInboundTag]) }));
         }
 
         if (s.General.Ipv6Block)
@@ -830,7 +842,8 @@ public static class SingBoxConfigBuilder
         if (!s.Routing.UdpProxy && !ctx.NoServer)
             rules.Push(Route(ctx, new JsonObject { ["network"] = "udp" }, RuleAction.Direct));
 
-        if (s.Dpi.Fragment && s.Dpi.FragScope == FragmentScope.List)
+        // При «сначала обход DPI» YouTube разбирает своя группа — с переходом на сервер, если обход не открывает.
+        if (s.Dpi.Fragment && s.Dpi.FragScope == FragmentScope.List && (ctx.NoServer || !s.Routing.DpiFirst))
         {
             rules.Push(Route(ctx, new JsonObject { ["domain_suffix"] = StrArray(RuleSets.FragmentDefaults) }, RuleAction.Direct,
                 forceFragment: true));
@@ -839,22 +852,16 @@ public static class SingBoxConfigBuilder
         if (ctx.NoServer)
         {
             // Только обход DPI: заблокированное — напрямую с фрагментацией и адресами от удалённого DNS.
-            rules.Push(new JsonObject
-            {
-                ["rule_set"] = StrArray(RuleSets.BypassDomains),
-                ["action"] = "route",
-                ["outbound"] = DpiGroups.DirectTag,
-                ["tls_fragment"] = true,
-            });
+            rules.Push(Bypass(ctx, new JsonObject { ["rule_set"] = StrArray(RuleSets.BypassDomains) }));
             if (s.Dpi.FragScope == FragmentScope.All)
-                rules.Push(new JsonObject { ["action"] = "route", ["outbound"] = DirectTag, ["tls_fragment"] = true });
+                rules.Push(Bypass(ctx, new JsonObject { ["network"] = "tcp" }));
         }
         else
         {
             AddServerRoute(ctx, rules, Resolve);
         }
 
-        if (ctx.Input.XrayDirectPort is not null)
+        if (ctx.Input.XrayDirectPort is not null && s.Dpi.Noise)
             rules = RouteDirectUdpThroughNoise(rules, final);
 
         var route = new JsonObject
@@ -901,13 +908,10 @@ public static class SingBoxConfigBuilder
                     continue;
                 foreach (var tag in sets)
                     ctx.RuleSetTags.Add(tag);
-                rules.Push(new JsonObject
-                {
-                    ["rule_set"] = StrArray(sets),
-                    ["action"] = "route",
-                    ["outbound"] = g.SelectorTag,
-                    ["tls_fragment"] = true,
-                });
+                var groupRule = new JsonObject { ["rule_set"] = StrArray(sets), ["action"] = "route", ["outbound"] = g.SelectorTag };
+                if (ctx.Input.XrayDirectPort is null)
+                    groupRule["tls_fragment"] = true;
+                rules.Push(groupRule);
             }
         }
 
@@ -939,6 +943,13 @@ public static class SingBoxConfigBuilder
                 Blocked(ipPart: false);
                 resolve();
                 Blocked(ipPart: true);
+                break;
+            default:
+                // «Всё через сервер»: с кнопкой «Обход DPI» группы сначала пробуют обход.
+                DpiGroupRules(ipPart: false);
+                if (s.Routing.DpiFirst)
+                    resolve();
+                DpiGroupRules(ipPart: true);
                 break;
         }
     }
@@ -1053,10 +1064,7 @@ public static class SingBoxConfigBuilder
         if (ctx.NoServer && action.Kind is RuleActionKind.Proxy or RuleActionKind.Server)
         {
             // Сервера нет: «через сервер» в правилах означает «напрямую с обходом DPI».
-            match["action"] = "route";
-            match["outbound"] = DpiGroups.DirectTag;
-            match["tls_fragment"] = true;
-            return match;
+            return Bypass(ctx, match);
         }
 
         switch (action.Kind)
@@ -1069,7 +1077,7 @@ public static class SingBoxConfigBuilder
                 match["outbound"] = DirectTag;
                 var s = ctx.S;
                 if (forceFragment || (s.Dpi.Fragment && s.Dpi.FragScope == FragmentScope.All))
-                    match["tls_fragment"] = true;
+                    return Bypass(ctx, match);
                 return match;
             case RuleActionKind.Server:
                 match["action"] = "route";

@@ -62,9 +62,13 @@
       "tag": "direct"
     },
     {
-      "type": "direct",
+      "type": "socks",
       "tag": "dpi-direct",
-      "domain_resolver": "remote"
+      "server": "127.0.0.1",
+      "server_port": 31201,
+      "version": "5",
+      "username": "xray-user",
+      "password": "xray-pass"
     },
     {
       "type": "socks",
@@ -204,20 +208,7 @@
           "geosite-ru-available-only-inside"
         ],
         "action": "route",
-        "outbound": "direct",
-        "tls_fragment": true,
-        "network": "tcp"
-      },
-      {
-        "rule_set": [
-          "ru-services",
-          "geosite-category-gov-ru",
-          "geosite-category-bank-ru",
-          "geosite-ru-available-only-inside"
-        ],
-        "action": "route",
-        "outbound": "direct-noise",
-        "network": "udp"
+        "outbound": "dpi-direct"
       },
       {
         "rule_set": [
@@ -227,19 +218,12 @@
           "geosite-telegram"
         ],
         "action": "route",
-        "outbound": "dpi-direct",
-        "tls_fragment": true
+        "outbound": "dpi-direct"
       },
       {
+        "network": "tcp",
         "action": "route",
-        "outbound": "direct",
-        "tls_fragment": true,
-        "network": "tcp"
-      },
-      {
-        "action": "route",
-        "outbound": "direct-noise",
-        "network": "udp"
+        "outbound": "dpi-direct"
       },
       {
         "network": "udp",

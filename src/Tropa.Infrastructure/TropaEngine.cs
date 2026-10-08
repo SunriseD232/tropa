@@ -200,7 +200,19 @@ public sealed class TropaEngine : IAsyncDisposable
         }
 
         engine.EnsureLocalAuth();
+        engine.MigrateFragmentDefaults();
         return engine;
+    }
+
+    /// <summary>
+    /// Прежние значения дробления по умолчанию (100-200 байт, 10-20 мс) у провайдеров в РФ почти не
+    /// работают (ADR-035). Если пользователь их не менял (набор не «Свои»), ставим новые.
+    /// </summary>
+    private void MigrateFragmentDefaults()
+    {
+        var d = State.Settings.Dpi;
+        if (d.DpiPreset != DpiPreset.Custom && d.FragLen == "100-200" && d.FragInt == "10-20")
+            UpdateSettings(s => s with { Dpi = s.Dpi with { FragLen = DpiSettings.DefaultFragLen, FragInt = DpiSettings.DefaultFragInt } });
     }
 
     private void EnsureLocalAuth()

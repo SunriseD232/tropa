@@ -175,6 +175,16 @@ public sealed class SingBoxGoldenTests
             XrayPath = @"C:\Program Files\Tropa\cores\xray.exe",
         },
 
+        // Подключено и кнопка «Обход DPI»: «сначала обход» включается сам, обход идёт через вход Xray.
+        ["16-bypass-with-server"] = () => Input(
+            Defaults with { Dpi = Defaults.Dpi with { Bypass = true } }, Reality) with
+        {
+            DpiProbePort = 19911,
+            XrayDirectPort = 31201,
+            XrayAuth = XrayAuth,
+            XrayPath = @"C:\Program Files\Tropa\cores\xray.exe",
+        },
+
         // Шум: прямой UDP — через Xray, прямой TCP — в sing-box с фрагментацией.
         ["11-noise-direct-udp"] = () => Input(
             Defaults with

@@ -8,7 +8,8 @@
       {
         "type": "https",
         "tag": "remote",
-        "server": "1.1.1.1"
+        "server": "1.1.1.1",
+        "detour": "proxy"
       },
       {
         "type": "udp",
@@ -42,15 +43,6 @@
         "server": "local"
       },
       {
-        "rule_set": [
-          "geosite-ru-blocked",
-          "geosite-youtube",
-          "geosite-discord",
-          "geosite-telegram"
-        ],
-        "server": "remote"
-      },
-      {
         "query_type": [
           "A",
           "AAAA"
@@ -58,7 +50,7 @@
         "server": "fake"
       }
     ],
-    "final": "local",
+    "final": "remote",
     "strategy": "ipv4_only"
   },
   "inbounds": [
@@ -94,21 +86,129 @@
           "password": "tropa-pass"
         }
       ]
+    },
+    {
+      "type": "socks",
+      "tag": "probe-dpi",
+      "listen": "127.0.0.1",
+      "listen_port": 19911,
+      "users": [
+        {
+          "username": "tropa-user",
+          "password": "tropa-pass"
+        }
+      ]
     }
   ],
   "outbounds": [
+    {
+      "type": "vless",
+      "tag": "proxy",
+      "server": "nl1.example.com",
+      "server_port": 443,
+      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+      "flow": "xtls-rprx-vision",
+      "packet_encoding": "xudp",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+          "short_id": "a1b2c3"
+        }
+      }
+    },
     {
       "type": "direct",
       "tag": "direct"
     },
     {
-      "type": "direct",
+      "type": "socks",
       "tag": "dpi-direct",
-      "domain_resolver": "remote"
+      "server": "127.0.0.1",
+      "server_port": 31201,
+      "version": "5",
+      "username": "xray-user",
+      "password": "xray-pass"
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-youtube",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-discord",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-telegram",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "selector",
+      "tag": "dpi-blocked",
+      "outbounds": [
+        "dpi-direct",
+        "proxy"
+      ],
+      "default": "dpi-direct",
+      "interrupt_exist_connections": true
     }
   ],
   "route": {
     "rule_set": [
+      {
+        "type": "local",
+        "tag": "geoip-ru",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geoip-ru.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geoip-ru-blocked",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geoip-ru-blocked.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geoip-ru-blocked-community",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geoip-ru-blocked-community.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geoip-telegram",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geoip-telegram.srs"
+      },
+      {
+        "type": "local",
+        "tag": "geosite-category-ai-noncn",
+        "format": "binary",
+        "path": "C:\\tropa-test-geo\\geosite-category-ai-noncn.srs"
+      },
       {
         "type": "local",
         "tag": "geosite-category-bank-ru",
@@ -219,6 +319,20 @@
         "action": "hijack-dns"
       },
       {
+        "process_path": [
+          "C:\\Program Files\\Tropa\\cores\\xray.exe"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "inbound": [
+          "probe-dpi"
+        ],
+        "action": "route",
+        "outbound": "dpi-direct"
+      },
+      {
         "ip_version": 6,
         "action": "reject"
       },
@@ -242,42 +356,86 @@
         "outbound": "direct"
       },
       {
-        "domain_suffix": [
-          "linkedin.com",
-          "licdn.com"
+        "rule_set": [
+          "geosite-category-ai-noncn"
         ],
         "action": "route",
-        "outbound": "dpi-direct",
-        "tls_fragment": true
-      },
-      {
-        "domain_suffix": [
-          "youtube.com",
-          "googlevideo.com",
-          "ytimg.com",
-          "ggpht.com",
-          "youtu.be",
-          "youtube-nocookie.com",
-          "yt.be"
-        ],
-        "action": "route",
-        "outbound": "dpi-direct",
-        "tls_fragment": true
+        "outbound": "proxy"
       },
       {
         "rule_set": [
-          "geosite-ru-blocked",
-          "geosite-youtube",
-          "geosite-discord",
+          "geosite-youtube"
+        ],
+        "action": "route",
+        "outbound": "dpi-youtube"
+      },
+      {
+        "rule_set": [
+          "geosite-discord"
+        ],
+        "action": "route",
+        "outbound": "dpi-discord"
+      },
+      {
+        "rule_set": [
           "geosite-telegram"
         ],
         "action": "route",
-        "outbound": "dpi-direct",
-        "tls_fragment": true
+        "outbound": "dpi-telegram"
+      },
+      {
+        "rule_set": [
+          "geosite-ru-blocked"
+        ],
+        "action": "route",
+        "outbound": "dpi-blocked"
+      },
+      {
+        "rule_set": [
+          "geosite-category-ru"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "domain_suffix": [
+          "ru",
+          "su",
+          "xn--p1ai"
+        ],
+        "action": "route",
+        "outbound": "direct"
+      },
+      {
+        "action": "resolve",
+        "server": "remote"
+      },
+      {
+        "rule_set": [
+          "geoip-telegram"
+        ],
+        "action": "route",
+        "outbound": "dpi-telegram"
+      },
+      {
+        "rule_set": [
+          "geoip-ru-blocked",
+          "geoip-ru-blocked-community"
+        ],
+        "action": "route",
+        "outbound": "dpi-blocked"
+      },
+      {
+        "rule_set": [
+          "geoip-ru"
+        ],
+        "action": "route",
+        "outbound": "direct"
       }
     ],
-    "final": "direct",
+    "final": "proxy",
     "default_domain_resolver": "local",
+    "find_process": true,
     "auto_detect_interface": true
   },
   "experimental": {
