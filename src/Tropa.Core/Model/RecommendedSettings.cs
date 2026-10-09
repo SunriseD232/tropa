@@ -34,8 +34,7 @@ public static class RecommendedSettings
             // Без службы Тропа сама перейдёт на «Только браузеры» при подключении.
             Connection = defaults.Connection with { Mode = CaptureMode.Tun, UwpLoopback = current.Connection.UwpLoopback },
             Dns = defaults.Dns with { Hosts = current.Dns.Hosts },
-            // Мягкий обход DPI: фрагментация только для YouTube и связанных доменов, когда они идут напрямую.
-            Dpi = defaults.Dpi.WithPreset(DpiPreset.Soft),
+            Dpi = defaults.Dpi,
             Cores = defaults.Cores with
             {
                 LastManifestSequence = current.Cores.LastManifestSequence,
@@ -46,8 +45,6 @@ public static class RecommendedSettings
             Routing = current.Routing with
             {
                 Preset = RoutePreset.ExceptRu,
-                // Основной способ для заблокированного внутри страны — обход DPI, сервер подстрахует.
-                DpiFirst = true,
                 BlockQuic = true,
                 UdpProxy = true,
             },

@@ -102,11 +102,9 @@ internal sealed partial class RulesViewModel : ObservableObject
             OnPropertyChanged(nameof(AppRulesNote));
             OnPropertyChanged(nameof(StoreAppsVisible));
         });
-        engine.DpiStatusChanged += (_, _) => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(DpiFirstStatus)));
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() =>
         {
-            OnPropertyChanged(nameof(DpiFirstStatus));
-            if (!_engine.CoreRunning)
+            if (s.State != ConnectionState.Connected)
                 NeedsApply = false;
         });
         Load();
@@ -169,7 +167,7 @@ internal sealed partial class RulesViewModel : ObservableObject
                 list.Add(sid);
             return s with { Connection = s.Connection with { UwpLoopback = list } };
         });
-        NeedsApply = _engine.CoreRunning;
+        NeedsApply = _engine.Status.State == ConnectionState.Connected;
     }
 
     public IReadOnlyList<string> Actions { get; } = ["Через сервер", "Напрямую", "Блокировать"];
@@ -180,51 +178,8 @@ internal sealed partial class RulesViewModel : ObservableObject
     [ObservableProperty]
     public partial bool BlockQuic { get; set; }
 
-    /// <summary>0 — выключено, 1 — мягко, 2 — агрессивно, 3 — свои (info.ru.json: dpiPreset).</summary>
-    [ObservableProperty]
-    public partial int DpiIndex { get; set; }
-
-    public string DpiDescription => DpiIndex switch
-    {
-        1 => "Фрагментация TLS-приветствия только для YouTube и связанных доменов, которые идут напрямую.",
-        2 => "Фрагментация всех прямых HTTPS-соединений и UDP-шум (шум работает через ядро Xray).",
-        3 => "Свои параметры (настраиваются в разделе «Настройки → Обход DPI»).",
-        _ => "Приёмы обхода DPI для прямого трафика выключены. На трафик через сервер они не влияют.",
-    };
-
     [ObservableProperty]
     public partial bool UdpProxy { get; set; }
-
-    /// <summary>Сначала обход DPI, при неудаче — через сервер (info.ru.json: dpiFirst).</summary>
-    [ObservableProperty]
-    public partial bool DpiFirst { get; set; }
-
-    public string? DpiFirstReason => Core.Compatibility.CompatRules.Evaluate(_engine.State.Settings).Disabled.GetValueOrDefault("dpiFirst");
-
-    public bool DpiFirstEnabled => DpiFirstReason is null;
-
-    /// <summary>Как сейчас идёт каждая группа: напрямую с обходом или через сервер.</summary>
-    public string? DpiFirstStatus
-    {
-        get
-        {
-            if (!DpiFirst)
-                return null;
-            var status = _engine.DpiStatus;
-            if (status.Count == 0)
-                return _engine.Status.State == ConnectionState.Connected
-                    ? "Проверяю, где обход работает…"
-                    : "После подключения Тропа проверит каждую группу и для неработающих сама включит сервер.";
-            return string.Join(" · ", Core.Routing.DpiGroups.All.Where(g => status.ContainsKey(g.Key))
-                .Select(g => g.Title + ": " + (status[g.Key] ? "обход DPI" : "через сервер")));
-        }
-    }
-
-    partial void OnDpiFirstChanged(bool value)
-    {
-        OnPropertyChanged(nameof(DpiFirstStatus));
-        Update(r => r with { DpiFirst = value });
-    }
 
     [ObservableProperty]
     public partial string? NewApp { get; set; }
@@ -248,13 +203,7 @@ internal sealed partial class RulesViewModel : ObservableObject
         var routing = _engine.State.Settings.Routing;
         PresetIndex = (int)routing.Preset;
         BlockQuic = routing.BlockQuic;
-        DpiIndex = (int)_engine.State.Settings.Dpi.DpiPreset;
-        OnPropertyChanged(nameof(DpiDescription));
         UdpProxy = routing.UdpProxy;
-        DpiFirst = routing.DpiFirst;
-        OnPropertyChanged(nameof(DpiFirstReason));
-        OnPropertyChanged(nameof(DpiFirstEnabled));
-        OnPropertyChanged(nameof(DpiFirstStatus));
         Apps.Clear();
         Sites.Clear();
         foreach (var rule in routing.Rules)
@@ -277,7 +226,7 @@ internal sealed partial class RulesViewModel : ObservableObject
         if (_loading)
             return;
         _engine.UpdateSettings(s => s with { Routing = change(s.Routing) });
-        NeedsApply = _engine.CoreRunning;
+        NeedsApply = _engine.Status.State == ConnectionState.Connected;
     }
 
     private void Change(Rule rule) =>
@@ -288,15 +237,6 @@ internal sealed partial class RulesViewModel : ObservableObject
     partial void OnPresetIndexChanged(int value) => Update(r => r with { Preset = (RoutePreset)Math.Clamp(value, 0, 2) });
 
     partial void OnBlockQuicChanged(bool value) => Update(r => r with { BlockQuic = value });
-
-    partial void OnDpiIndexChanged(int value)
-    {
-        OnPropertyChanged(nameof(DpiDescription));
-        if (_loading)
-            return;
-        _engine.UpdateSettings(s => s with { Dpi = s.Dpi.WithPreset((DpiPreset)Math.Clamp(value, 0, 3)) });
-        NeedsApply = _engine.CoreRunning;
-    }
 
     partial void OnUdpProxyChanged(bool value) => Update(r => r with { UdpProxy = value });
 

@@ -46,7 +46,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
         engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(Load);
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() =>
         {
-            if (!_engine.CoreRunning)
+            if (s.State != ConnectionState.Connected)
                 NeedsApply = false;
         });
         Load();
@@ -109,7 +109,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
     private void Commit(Func<AppSettings, AppSettings> change)
     {
         _engine.UpdateSettings(change);
-        NeedsApply = _engine.CoreRunning;
+        NeedsApply = _engine.Status.State == ConnectionState.Connected;
     }
 
     [RelayCommand]
@@ -237,36 +237,13 @@ internal sealed partial class SettingsViewModel : ObservableObject
             ("Открыть «Диагностику»", new RelayCommand(() => _navigate("diagnostics")))),
     ]);
 
-    // Ручная правка любого приёма обхода переводит набор в «Свои» (docs/06-features.md, §5).
-    private static AppSettings Custom(AppSettings s, Func<DpiSettings, DpiSettings> change) =>
-        s with { Dpi = change(s.Dpi) with { DpiPreset = DpiPreset.Custom } };
-
-    private static SettingsSection Dpi() => new("dpi", "Обход DPI", "Только для трафика, который идёт напрямую, и только средствами ядер — без сторонних драйверов.",
+    private static SettingsSection Dpi() => new("dpi", "Соединение", "Как выглядит само подключение к серверу.",
     [
-        new ToggleRow("Сначала обход DPI, при неудаче — через сервер", "dpiFirst", s => s.Routing.DpiFirst,
-            (s, v) => s with { Routing = s.Routing with { DpiFirst = v } }),
-        new ChoiceRow("Набор", "dpiPreset", Opts("Выключено", "Мягко", "Агрессивно", "Свои"),
-            s => (int)s.Dpi.DpiPreset, (s, i) => s with { Dpi = s.Dpi.WithPreset((DpiPreset)i) }),
-        new ToggleRow("Фрагментация TLS", "fragment", s => s.Dpi.Fragment, (s, v) => Custom(s, d => d with { Fragment = v })),
-        new ChoiceRow("Каким сайтам", "fragScope", Opts("Из списка (YouTube и связанные)", "Всем прямым HTTPS"),
-            s => (int)s.Dpi.FragScope, (s, i) => Custom(s, d => d with { FragScope = (FragmentScope)i }), compatKey: "fragParams"),
-        new TextRow("Какие пакеты дробить", "fragment", s => s.Dpi.FragPackets, (s, v) => Custom(s, d => d with { FragPackets = v }), V.FragPackets,
-            compatKey: "fragParams", hint: "Дробит ядро Xray: по умолчанию куски 1–5 байт с паузой 1–3 мс — так у провайдеров в РФ открывается YouTube."),
-        new TextRow("Длина фрагментов, байт", "fragment", s => s.Dpi.FragLen, (s, v) => Custom(s, d => d with { FragLen = v }), v => V.Range(v, 1, 1000),
-            compatKey: "fragParams"),
-        new TextRow("Интервал между фрагментами, мс", "fragment", s => s.Dpi.FragInt, (s, v) => Custom(s, d => d with { FragInt = v }), v => V.Range(v, 0, 1000),
-            compatKey: "fragParams"),
         new ChoiceRow("Отпечаток браузера (uTLS)", "utls", Opts("Chrome", "Firefox", "Edge", "Safari", "Случайный"),
             s => s.Dpi.Utls switch { "firefox" => 1, "edge" => 2, "safari" => 3, "random" or "randomized" => 4, _ => 0 },
             (s, i) => s with { Dpi = s.Dpi with { Utls = i switch { 1 => "firefox", 2 => "edge", 3 => "safari", 4 => "random", _ => "chrome" } } }),
         new ToggleRow("Предупреждать о серверах без проверки сертификата", "allowInsecureWarn", s => s.Dpi.AllowInsecureWarn,
             (s, v) => s with { Dpi = s.Dpi with { AllowInsecureWarn = v } }, hint: "Такие серверы не попадают в авто-выбор."),
-        new ToggleRow("UDP-шум", "noise", s => s.Dpi.Noise, (s, v) => Custom(s, d => d with { Noise = v })),
-        new ChoiceRow("Вид шума", "noise", Opts("Случайные байты", "Строка", "Base64"),
-            s => s.Dpi.NoiseType switch { "str" => 1, "base64" => 2, _ => 0 },
-            (s, i) => Custom(s, d => d with { NoiseType = i switch { 1 => "str", 2 => "base64", _ => "rand" } }), compatKey: "noiseParams"),
-        new TextRow("Длина шума, байт", "noise", s => s.Dpi.NoiseLen, (s, v) => Custom(s, d => d with { NoiseLen = v }), v => V.Range(v, 1, 2000), compatKey: "noiseParams"),
-        new TextRow("Задержка шума, мс", "noise", s => s.Dpi.NoiseDelay, (s, v) => Custom(s, d => d with { NoiseDelay = v }), v => V.Range(v, 0, 1000), compatKey: "noiseParams"),
         new ToggleRow("Mux (несколько соединений в одном)", "mux", s => s.Dpi.Mux, (s, v) => s with { Dpi = s.Dpi with { Mux = v } }),
         TextRow.Number("Соединений в одном Mux", "muxConc", s => s.Dpi.MuxConc, (s, v) => s with { Dpi = s.Dpi with { MuxConc = v } },
             v => v is >= 1 and <= 128 ? null : "От 1 до 128."),

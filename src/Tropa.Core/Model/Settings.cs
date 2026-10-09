@@ -8,10 +8,6 @@ public enum TunStackKind { Mixed, Gvisor, System }
 
 public enum CoreChoice { Auto, SingBox, Xray }
 
-public enum DpiPreset { Off, Soft, Hard, Custom }
-
-public enum FragmentScope { List, All }
-
 public enum UserAgentMode { Tropa, V2rayN, SingBox, Custom }
 
 public enum DomainStrategy { AsIs, IpIfNonMatch, IpOnDemand }
@@ -85,62 +81,18 @@ public sealed record DnsSettings
     public string Hosts { get; init; } = "";
 }
 
+/// <summary>
+/// Параметры самого TLS-соединения: отпечаток uTLS (нужен для Reality и обычного TLS) и мультиплексирование.
+/// Не обход DPI сторонними средствами — только то, что неотделимо от подключения.
+/// </summary>
 public sealed record DpiSettings
 {
-    /// <summary>
-    /// Большая кнопка «Обход DPI» на главной (info.ru.json: dpiBypass): без сервера Тропа запускает
-    /// ядро только ради обхода — заблокированное идёт напрямую с фрагментацией; с сервером включает
-    /// фрагментацию прямого трафика.
-    /// </summary>
-    public bool Bypass { get; init; }
-
-    public DpiPreset DpiPreset { get; init; } = DpiPreset.Off;
-    public bool Fragment { get; init; }
-    public string FragPackets { get; init; } = "tlshello";
-    // Проверено у провайдера в РФ 2026-10-09: мелкие куски с короткой паузой открывают YouTube,
-    // Facebook, BBC; прежние 100-200 / 10-20 — почти ничего (ADR-035).
-    public const string DefaultFragLen = "1-5";
-    public const string DefaultFragInt = "1-3";
-
-    public string FragLen { get; init; } = DefaultFragLen;
-    public string FragInt { get; init; } = DefaultFragInt;
-    public FragmentScope FragScope { get; init; } = FragmentScope.List;
+    /// <summary>Отпечаток TLS-рукопожатия (uTLS). Нужен Reality и помогает обычному VLESS+TLS выглядеть как браузер.</summary>
     public string Utls { get; init; } = "chrome";
     public bool AllowInsecureWarn { get; init; } = true;
-    public bool Noise { get; init; }
-    public string NoiseType { get; init; } = "rand";
-    public string NoiseLen { get; init; } = "10-20";
-    public string NoiseDelay { get; init; } = "10-16";
     public bool Mux { get; init; }
     public int MuxConc { get; init; } = 8;
-
-    /// <summary>Наборы (docs/06-features.md, §5): soft — фрагментация по списку, hard — всё и шум; custom — как есть.</summary>
-    public DpiSettings WithPreset(DpiPreset preset) => preset switch
-    {
-        DpiPreset.Soft => this with { DpiPreset = preset, Fragment = true, FragScope = FragmentScope.List, Noise = false, FragPackets = "tlshello", FragLen = DefaultFragLen, FragInt = DefaultFragInt },
-        DpiPreset.Hard => this with { DpiPreset = preset, Fragment = true, FragScope = FragmentScope.All, Noise = true, FragPackets = "tlshello", FragLen = DefaultFragLen, FragInt = DefaultFragInt },
-        DpiPreset.Custom => this with { DpiPreset = preset },
-        _ => this with { DpiPreset = DpiPreset.Off, Fragment = false, Noise = false },
-    };
-
-    /// <summary>
-    /// Варианты фрагментации для кнопки «Подобрать» (info.ru.json: dpiTune). У разных провайдеров
-    /// работают разные значения (как стратегии ALT у zapret-сборок). Первым — проверенный у владельца
-    /// в РФ набор, чтобы при равном результате выбирался он.
-    /// </summary>
-    public static IReadOnlyList<FragmentVariant> TuningVariants { get; } =
-    [
-        new("tlshello", "1-5", "1-3"),
-        new("tlshello", "1-2", "1-2"),
-        new("tlshello", "1-3", "0-1"),
-        new("tlshello", "2-4", "2-4"),
-        new("1-3", "1-5", "1-3"),
-        new("tlshello", "1-1", "1"),
-    ];
 }
-
-/// <summary>Один вариант фрагментации для подбора: какие пакеты дробить, длина кусков и пауза.</summary>
-public sealed record FragmentVariant(string Packets, string Len, string Interval);
 
 public sealed record CoreSettings
 {

@@ -106,7 +106,6 @@ public sealed class PinnedFilesTests : IDisposable
         var pinned = PinnedFiles.Geo.Files.Select(f => f.Name).ToHashSet();
         var used = Core.Routing.RuleSets.AlwaysDirect.Where(t => t != Core.Routing.RuleSets.RuServices)
             .Concat(Core.Routing.RuleSets.Blocked)
-            .Concat(Core.Routing.DpiGroups.All.SelectMany(g => g.RuleSets))
             .Concat([Core.Routing.RuleSets.GeositeCategoryRu, Core.Routing.RuleSets.GeoipRu, Core.Routing.RuleSets.GeositeAiNonCn]);
         Assert.All(used, tag => Assert.Contains(tag, pinned));
         // Все — из одного источника и закреплены по коммиту.

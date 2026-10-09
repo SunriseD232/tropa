@@ -79,11 +79,6 @@
     {
       "type": "direct",
       "tag": "direct"
-    },
-    {
-      "type": "direct",
-      "tag": "dpi-direct",
-      "domain_resolver": "remote"
     }
   ],
   "route": {
@@ -186,20 +181,6 @@
         "network": "udp",
         "action": "route",
         "outbound": "direct"
-      },
-      {
-        "domain_suffix": [
-          "youtube.com",
-          "googlevideo.com",
-          "ytimg.com",
-          "ggpht.com",
-          "youtu.be",
-          "youtube-nocookie.com",
-          "yt.be"
-        ],
-        "action": "route",
-        "outbound": "dpi-direct",
-        "tls_fragment": true
       }
     ],
     "final": "proxy",

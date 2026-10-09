@@ -83,7 +83,7 @@ public static partial class ServerTester
         IReadOnlyList<Profile> viaXray;
         try
         {
-            viaXray = CorePlan.Make(settings with { Dpi = settings.Dpi with { Noise = false } }, testable).XrayProfiles;
+            viaXray = CorePlan.Make(settings, testable).XrayProfiles;
         }
         catch (UnsupportedProfileException ex)
         {
@@ -149,7 +149,7 @@ public static partial class ServerTester
         if (server is not null && ProfileCompat.Issues(server).Count == 0)
         {
             serverPort = FreePort();
-            var viaXray = CorePlan.Make(settings with { Dpi = settings.Dpi with { Noise = false } }, [server]).XrayProfiles.Count > 0;
+            var viaXray = CorePlan.Make(settings, [server]).XrayProfiles.Count > 0;
             if (viaXray)
                 xrayTargets.Add(new XrayTarget(server, serverPort.Value));
             else
@@ -173,79 +173,6 @@ public static partial class ServerTester
     }
 
     /// <summary>HTTP-клиент через локальный SOCKS-вход временного ядра.</summary>
-    /// <summary>Результат подбора: вариант фрагментации и сколько проверочных адресов он открыл.</summary>
-    public sealed record FragmentTuneResult(FragmentVariant Variant, int Opened, int Total);
-
-    /// <summary>
-    /// Подбор параметров обхода DPI (info.ru.json: dpiTune). Для каждого варианта фрагментации
-    /// поднимает одиночное ядро Xray «напрямую» на физическом адаптере (мимо туннеля) и проверяет,
-    /// открываются ли проверочные адреса. Возвращает вариант, открывший больше всего (null — ни один
-    /// вариант не запустился). Текущее подключение не трогается.
-    /// </summary>
-    /// <param name="bindInterfaceOverride">
-    /// Адаптер для выхода Xray. null — определить физический сам (мимо туннеля). Пустая строка —
-    /// не привязывать (для тестов с локальным сервером на 127.0.0.1).
-    /// </param>
-    public static async Task<FragmentTuneResult?> TuneFragmentAsync(
-        AppSettings settings, LocalAuth auth, CoreLocations locations, string runDirectory,
-        SecretScrubber scrubber, Action<string> log, IReadOnlyList<Uri> probes,
-        IProgress<string>? progress, CancellationToken ct, TesterOptions? options = null,
-        string? bindInterfaceOverride = null)
-    {
-        ArgumentNullException.ThrowIfNull(probes);
-        var o = options ?? new TesterOptions();
-        var iface = bindInterfaceOverride ?? Diagnostics.LocalNetwork.PhysicalInterfaceName();
-        FragmentTuneResult? best = null;
-        foreach (var v in DpiSettings.TuningVariants)
-        {
-            ct.ThrowIfCancellationRequested();
-            progress?.Report($"Проверяю: куски {v.Len} байт, пауза {v.Interval} мс…");
-            var port = FreePort();
-            // Шум выключаем: подбираем именно фрагментацию, чтобы результат был однозначным.
-            var tuned = settings with { Dpi = settings.Dpi with { Fragment = true, Noise = false, FragPackets = v.Packets, FragLen = v.Len, FragInt = v.Interval } };
-            var config = XrayConfigBuilder.Build([], tuned, auth, port, iface);
-            var violations = XrayConfigGuard.Check(config);
-            if (violations.Count > 0)
-            {
-                log("Подбор: конфиг не прошёл проверку безопасности: " + violations[0]);
-                continue;
-            }
-
-            var opened = 0;
-            try
-            {
-                await using var core = await CoreProcess.StartXrayAsync(locations, config, port, runDirectory, scrubber, log, ct).ConfigureAwait(false);
-                using var client = ProbeClient(port, auth, o.RequestTimeout, allowRedirect: false);
-                foreach (var url in probes)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    try
-                    {
-                        using var r = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-                        if ((int)r.StatusCode < 500)
-                            opened++;
-                    }
-                    catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
-                    {
-                    }
-                }
-            }
-            catch (Exception ex) when (ex is CoreStartException or IntegrityException or IOException)
-            {
-                log("Подбор: " + scrubber.Scrub(ex.Message));
-                continue;
-            }
-
-            progress?.Report($"куски {v.Len} / пауза {v.Interval}: открылось {opened} из {probes.Count}");
-            if (best is null || opened > best.Opened)
-                best = new FragmentTuneResult(v, opened, probes.Count);
-            if (best.Opened == probes.Count)
-                break; // всё открылось — дальше искать нечего
-        }
-
-        return best;
-    }
-
     public static HttpClient ProbeClient(int port, LocalAuth auth, TimeSpan timeout, bool allowRedirect = true) => new(new SocketsHttpHandler
     {
         UseProxy = true,

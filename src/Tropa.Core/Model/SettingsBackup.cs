@@ -101,13 +101,7 @@ public static class SettingsBackup
         var p = s.Dpi;
         var dpi = p with
         {
-            FragPackets = Check(p.FragPackets ?? "", current.Dpi.FragPackets, SettingsValidation.FragPackets(p.FragPackets ?? ""), "Пакеты фрагментации"),
-            FragLen = Check(p.FragLen ?? "", current.Dpi.FragLen, SettingsValidation.Range(p.FragLen ?? "", 1, 1000), "Длина фрагментов"),
-            FragInt = Check(p.FragInt ?? "", current.Dpi.FragInt, SettingsValidation.Range(p.FragInt ?? "", 0, 1000), "Интервал фрагментов"),
-            NoiseLen = Check(p.NoiseLen ?? "", current.Dpi.NoiseLen, SettingsValidation.Range(p.NoiseLen ?? "", 1, 2000), "Длина шума"),
-            NoiseDelay = Check(p.NoiseDelay ?? "", current.Dpi.NoiseDelay, SettingsValidation.Range(p.NoiseDelay ?? "", 0, 1000), "Задержка шума"),
             Utls = Parsing.Validation.Fingerprint(p.Utls, []) ?? current.Dpi.Utls,
-            NoiseType = p.NoiseType is "rand" or "str" or "base64" ? p.NoiseType : current.Dpi.NoiseType,
             MuxConc = Math.Clamp(p.MuxConc, 1, 128),
         };
         var g = s.General;

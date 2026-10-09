@@ -64,55 +64,6 @@
             "sha256": "a80280140f3d573ed96a2b63a1697e944e46d8f5f93ca632d84cdbc3580710ce",
             "size": 1936,
             "license": "GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)"
-        },
-        {
-            "name": "geosite-youtube",
-            "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/e1fc08b7b332894411cbbccdd22fcbd540b98e3a/sing-box/rule-set-geosite/geosite-youtube.srs",
-            "sha256": "4621516414508f34fc1dfa132c6a58e9133c0c3378e5efa635094f0e745b13c5",
-            "size": 1286,
-            "license": "GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)"
-        },
-        {
-            "name": "geosite-discord",
-            "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/e1fc08b7b332894411cbbccdd22fcbd540b98e3a/sing-box/rule-set-geosite/geosite-discord.srs",
-            "sha256": "1618659024eafaca4be453c81523e833ef441faec6eb21fdf39342382ac48cf4",
-            "size": 440,
-            "license": "GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)"
-        },
-        {
-            "name": "geosite-telegram",
-            "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/e1fc08b7b332894411cbbccdd22fcbd540b98e3a/sing-box/rule-set-geosite/geosite-telegram.srs",
-            "sha256": "0966b150d07ea2f5025904e0e87eda11a3c11dad31c9c6bbece7443c5aaf9b94",
-            "size": 267,
-            "license": "GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)"
-        },
-        {
-            "name": "geoip-telegram",
-            "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/e1fc08b7b332894411cbbccdd22fcbd540b98e3a/sing-box/rule-set-geoip/geoip-telegram.srs",
-            "sha256": "124b6decbcd871517927c15857b26c6898fe614cb2ef5e711d83835e9c700c2b",
-            "size": 127,
-            "license": "GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)"
-        },
-        {
-            "name": "geosite-facebook",
-            "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/e1fc08b7b332894411cbbccdd22fcbd540b98e3a/sing-box/rule-set-geosite/geosite-facebook.srs",
-            "sha256": "3ba0c88692afb1c07144e08a2363a3ce06590a79a9ca9da52bbce2b9f154cbe9",
-            "size": 3468,
-            "license": "GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)"
-        },
-        {
-            "name": "geosite-instagram",
-            "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/e1fc08b7b332894411cbbccdd22fcbd540b98e3a/sing-box/rule-set-geosite/geosite-instagram.srs",
-            "sha256": "92a06536ce03c5f1c54f7701d2d6b8d39e0c1e6c82f10aa3aa305d449f7e98c3",
-            "size": 805,
-            "license": "GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)"
-        },
-        {
-            "name": "geosite-x",
-            "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/e1fc08b7b332894411cbbccdd22fcbd540b98e3a/sing-box/rule-set-geosite/geosite-x.srs",
-            "sha256": "2f5d47e4b57a5af06f9f66072cebcd8b272aae024965a7c8bb39a98413c29c5b",
-            "size": 337,
-            "license": "GPL-3.0 (runetfreedom/russia-v2ray-rules-dat)"
         }
     ]
 }

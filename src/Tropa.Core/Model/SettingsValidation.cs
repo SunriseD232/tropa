@@ -29,7 +29,7 @@ public static partial class SettingsValidation
 
     public static string? Mtu(int mtu) => mtu is < 1280 or > 9000 ? "MTU должен быть от 1280 до 9000." : null;
 
-    /// <summary>Диапазон вида «100-200» (длина фрагмента, интервал, шум).</summary>
+    /// <summary>Диапазон вида «100-200».</summary>
     public static string? Range(string value, int min, int max)
     {
         var m = RangePattern().Match(value?.Trim() ?? "");
@@ -41,10 +41,6 @@ public static partial class SettingsValidation
             return "Начало диапазона больше конца.";
         return a < min || b > max ? $"Значения должны быть от {min} до {max}." : null;
     }
-
-    /// <summary>Пакеты для фрагментации Xray: «tlshello» или диапазон номеров «1-3».</summary>
-    public static string? FragPackets(string value) =>
-        value?.Trim() == "tlshello" ? null : Range(value ?? "", 1, 10) is null ? null : "Укажите «tlshello» или номера пакетов, например 1-3.";
 
     public static string? HttpUrl(string value, bool httpsOnly)
     {

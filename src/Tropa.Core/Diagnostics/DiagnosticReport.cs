@@ -43,7 +43,7 @@ public static class DiagnosticReport
         sb.AppendLine(inv, $"- Режим: {s.Connection.Mode}, стек TUN: {s.Connection.TunStack}, строгий маршрут: {OnOff(s.Connection.StrictRoute)}");
         sb.AppendLine(inv, $"- Основа правил: {s.Routing.Preset}, QUIC блокируется: {OnOff(s.Routing.BlockQuic)}, UDP через сервер: {OnOff(s.Routing.UdpProxy)}");
         sb.AppendLine(inv, $"- DNS: удалённый {Host(s.Dns.RemoteDns)}, FakeIP {OnOff(s.Dns.Fakeip)}, перехват {OnOff(s.Dns.DnsHijack)}");
-        sb.AppendLine(inv, $"- Обход DPI: {s.Dpi.DpiPreset}, фрагментация {OnOff(s.Dpi.Fragment)}, шум {OnOff(s.Dpi.Noise)}, Mux {OnOff(s.Dpi.Mux)}");
+        sb.AppendLine(inv, $"- Соединение: uTLS {s.Dpi.Utls}, Mux {OnOff(s.Dpi.Mux)}");
         sb.AppendLine(inv, $"- Kill switch: {OnOff(s.General.KillSwitch)}, ядро: {s.Cores.CoreChoice}");
         sb.AppendLine();
 

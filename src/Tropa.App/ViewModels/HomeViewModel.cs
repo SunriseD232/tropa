@@ -4,7 +4,6 @@ using CommunityToolkit.Mvvm.Input;
 using Tropa.App.Services;
 using Tropa.Core.Model;
 using Tropa.Infrastructure;
-using Tropa.Infrastructure.Cores;
 using Tropa.Infrastructure.Net;
 
 namespace Tropa.App.ViewModels;
@@ -33,7 +32,6 @@ internal sealed partial class HomeViewModel : ObservableObject
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => OnStatus(s));
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(Refresh);
         engine.Traffic += (_, t) => Dispatcher.UIThread.Post(() => OnTraffic(t));
-        engine.DpiOnlyChanged += (_, _) => Dispatcher.UIThread.Post(RefreshDpi);
         engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(() =>
         {
             OnPropertyChanged(nameof(TunAvailable));
@@ -224,7 +222,6 @@ internal sealed partial class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(KillSwitchEnabled));
         RouteIndex = (int)s.Settings.Routing.Preset;
         RouteDescription = RouteText(s.Settings.Routing.Preset);
-        RefreshDpi();
     }
 
     internal static string SubscriptionText(Subscription sub)
@@ -272,80 +269,6 @@ internal sealed partial class HomeViewModel : ObservableObject
             await _engine.ConnectAsync();
     }
 
-    // ---------------- Обход DPI ----------------
-
-    [ObservableProperty]
-    public partial bool DpiOn { get; set; }
-
-    [ObservableProperty]
-    public partial bool DpiBusy { get; set; }
-
-    [ObservableProperty]
-    public partial string DpiButtonText { get; set; } = "Обход DPI выключен";
-
-    [ObservableProperty]
-    public partial string DpiStateText { get; set; } = "";
-
-    [RelayCommand]
-    private async Task ToggleDpiAsync()
-    {
-        DpiBusy = true;
-        DpiStateText = DpiOn ? "Выключаю…" : "Включаю…";
-        try
-        {
-            await _engine.SetDpiBypassAsync(!_engine.State.Settings.Dpi.Bypass);
-        }
-        finally
-        {
-            DpiBusy = false;
-            RefreshDpi();
-        }
-    }
-
-    private void RefreshDpi()
-    {
-        var on = _engine.State.Settings.Dpi.Bypass;
-        DpiOn = on;
-        DpiButtonText = on ? "Обход DPI включён" : "Обход DPI выключен";
-        if (DpiBusy)
-            return;
-        var connected = _engine.Status.State == ConnectionState.Connected;
-        DpiStateText = (on, connected, _engine.DpiOnlyActive) switch
-        {
-            (false, _, _) => "Без сервера: сайты, которые провайдер режет по содержимому трафика, открываются напрямую — Тропа дробит начало соединения. Нажмите, чтобы включить.",
-            (true, true, _) => "Работает вместе с подключением: YouTube, Discord, Telegram и заблокированное сначала идут напрямую с обходом, а если так не открывается — Тропа сама переключает их на сервер.",
-            (true, false, true) => "Работает без сервера: заблокированные сайты идут напрямую, начало соединения дробится. Сайты, закрытые по IP-адресу, так не откроются — для них нужен сервер.",
-            _ => "Не запущен: " + (_engine.DpiOnlyMessage ?? "нажмите ещё раз или подключитесь к серверу."),
-        };
-    }
-
-    /// <summary>Идёт подбор параметров обхода: кнопки заблокированы.</summary>
-    [ObservableProperty]
-    public partial bool DpiTuning { get; set; }
-
-    [RelayCommand]
-    private async Task TuneDpiAsync()
-    {
-        if (DpiTuning || DpiBusy)
-            return;
-        DpiTuning = true;
-        try
-        {
-            var progress = new Progress<string>(line => Dispatcher.UIThread.Post(() => DpiStateText = line));
-            DpiStateText = "Подбираю параметры обхода на YouTube и Discord… это займёт до минуты.";
-            Message = await _engine.TuneDpiAsync(progress);
-        }
-        catch (Exception ex) when (ex is CoreStartException or IntegrityException or System.IO.IOException or InvalidOperationException)
-        {
-            Message = "Подбор не удался: " + ex.Message;
-        }
-        finally
-        {
-            DpiTuning = false;
-            RefreshDpi();
-        }
-    }
-
     [RelayCommand]
     private void ShowInfo(string key) => _info.Show(key);
 
@@ -356,7 +279,6 @@ internal sealed partial class HomeViewModel : ObservableObject
         IsError = s.State == ConnectionState.Error;
         Message = s.Message;
         OnPropertyChanged(nameof(Blocking));
-        RefreshDpi();
         StateText = s.State switch
         {
             ConnectionState.Connected => "Подключено",

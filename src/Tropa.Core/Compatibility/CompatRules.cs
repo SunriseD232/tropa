@@ -51,12 +51,6 @@ public static class CompatRules
             s => s with { Dns = s.Dns with { RouteOnly = false } }),
         new("sniffProto", (s, _) => !s.Dns.Sniffing, "определение домена выключено в разделе DNS",
             s => s with { Expert = s.Expert with { SniffHttp = false, SniffTls = false, SniffQuic = false } }),
-        new("fragment", (s, _) => s.Dpi.Bypass, "фрагментацию включает кнопка «Обход DPI» на главной",
-            s => s with { Dpi = s.Dpi with { Fragment = true } }),
-        new("fragParams", (s, _) => !s.Dpi.Fragment, "включите фрагментацию"),
-        new("noise", (s, _) => s.Cores.CoreChoice == CoreChoice.SingBox, "шум есть только в ядре Xray, а выбрано «Всегда sing-box»",
-            s => s with { Dpi = s.Dpi with { Noise = false } }),
-        new("noiseParams", (s, _) => !s.Dpi.Noise, "включите шум"),
         new("mux", (_, p) => p?.Flow == VlessFlow.XtlsRprxVision,
             "активный сервер использует XTLS Vision, а Vision с Mux не работает",
             s => s with { Dpi = s.Dpi with { Mux = false } }),
@@ -68,10 +62,6 @@ public static class CompatRules
             s => s with { Dpi = s.Dpi with { Mux = false } }),
         new("muxConc", (s, _) => !s.Dpi.Mux, "Mux выключен"),
         new("templateText", (s, _) => !s.Expert.Template, "включите свой шаблон"),
-        new("dpiFirst", (s, _) => s.Dpi.Bypass, "включено кнопкой «Обход DPI» на главной",
-            s => s with { Routing = s.Routing with { DpiFirst = true } }),
-        new("dpiFirst", (s, _) => s.Routing.Preset == RoutePreset.All, "при «Всё через сервер» обход DPI не используется",
-            s => s with { Routing = s.Routing with { DpiFirst = false } }),
         new("subUACustom", (s, _) => s.Subscriptions.SubUA != UserAgentMode.Custom, "выберите «Свой»"),
     ];
 

@@ -65,12 +65,6 @@ public sealed record RoutingSettings
 {
     public RoutePreset Preset { get; init; } = RoutePreset.ExceptRu;
 
-    /// <summary>
-    /// Сначала обход DPI (info.ru.json: dpiFirst): заблокированное идёт напрямую с фрагментацией,
-    /// а если обход перестал открывать сервис — Тропа сама переключает его группу на сервер.
-    /// Явные правила пользователя важнее.
-    /// </summary>
-    public bool DpiFirst { get; init; }
     public bool BlockQuic { get; init; } = true;
     public bool UdpProxy { get; init; } = true;
     public IReadOnlyList<Rule> Rules { get; init; } = [];

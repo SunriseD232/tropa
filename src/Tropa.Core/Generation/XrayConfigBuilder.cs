@@ -19,23 +19,14 @@ public sealed record XrayTarget(Profile Profile, int Port);
 /// </summary>
 public static class XrayConfigBuilder
 {
-    public const string DirectInboundTag = "direct-in";
 
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, IndentSize = 2, NewLine = "\n" };
 
-    /// <param name="directPort">Порт входа «напрямую» (фрагментация и шум для прямого трафика); null — не нужен.</param>
-    /// <param name="bindInterface">
-    /// Имя физического адаптера для выхода «напрямую». Нужно только при подборе параметров обхода
-    /// (ядро Xray работает одно, без sing-box перед ним): иначе его трафик ушёл бы в чужой или свой
-    /// активный TUN, и проверка мерила бы обход «через туннель». В обычной работе null — маршрут
-    /// задаёт sing-box (process_path=xray.exe → direct).
-    /// </param>
-    public static string Build(IReadOnlyList<XrayTarget> targets, AppSettings settings, LocalAuth auth, int? directPort = null,
-        string? bindInterface = null)
+    public static string Build(IReadOnlyList<XrayTarget> targets, AppSettings settings, LocalAuth auth)
     {
         ArgumentNullException.ThrowIfNull(targets);
         ArgumentNullException.ThrowIfNull(auth);
-        if (targets.Count == 0 && directPort is null)
+        if (targets.Count == 0)
             throw new ArgumentException("Xray нечего обслуживать.", nameof(targets));
         var s = CompatRules.Evaluate(settings).Effective;
 
@@ -58,39 +49,6 @@ public static class XrayConfigBuilder
             rules.Add((JsonNode)new JsonObject { ["type"] = "field", ["inboundTag"] = Arr([inTag]), ["outboundTag"] = tag });
         }
 
-        if (directPort is { } dp)
-        {
-            inbounds.Add((JsonNode)SocksInbound(DirectInboundTag, dp, auth));
-            // Адреса узнаёт сам Xray через свой DNS: провайдерский подменяет заблокированное, а
-            // системный в режиме TUN отвечает адресами FakeIP.
-            var freedom = new JsonObject { ["domainStrategy"] = "UseIPv4" };
-            if (s.Dpi.Fragment)
-            {
-                freedom["fragment"] = new JsonObject
-                {
-                    ["packets"] = s.Dpi.FragPackets,
-                    ["length"] = s.Dpi.FragLen,
-                    ["interval"] = s.Dpi.FragInt,
-                };
-            }
-
-            if (s.Dpi.Noise)
-            {
-                freedom["noises"] = new JsonArray((JsonNode)new JsonObject
-                {
-                    ["type"] = s.Dpi.NoiseType,
-                    ["packet"] = s.Dpi.NoiseLen,
-                    ["delay"] = s.Dpi.NoiseDelay,
-                });
-            }
-
-            var directOut = new JsonObject { ["tag"] = "direct", ["protocol"] = "freedom", ["settings"] = freedom };
-            if (bindInterface is { Length: > 0 } iface)
-                directOut["streamSettings"] = new JsonObject { ["sockopt"] = new JsonObject { ["interface"] = iface } };
-            outbounds.Add((JsonNode)directOut);
-            rules.Add((JsonNode)new JsonObject { ["type"] = "field", ["inboundTag"] = Arr([DirectInboundTag]), ["outboundTag"] = "direct" });
-        }
-
         // Всё, что не подошло ни под одно правило, отбрасываем.
         outbounds.Add((JsonNode)new JsonObject { ["tag"] = "block", ["protocol"] = "blackhole" });
 
@@ -109,17 +67,7 @@ public static class XrayConfigBuilder
             ["outbounds"] = outbounds,
             ["routing"] = new JsonObject { ["rules"] = rules },
         };
-        if (directPort is not null)
-            config["dns"] = new JsonObject { ["servers"] = Arr([DirectDns(s.Dns.RemoteDns)]), ["queryStrategy"] = "UseIPv4" };
         return config.ToJsonString(Indented) + "\n";
-    }
-
-    /// <summary>Удалённый DNS из настроек в виде, понятном Xray: https:// или IP; иначе DoH Cloudflare.</summary>
-    internal static string DirectDns(string remote)
-    {
-        if (Uri.TryCreate(remote, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Query.Length == 0)
-            return uri.ToString();
-        return System.Net.IPAddress.TryParse(remote.Trim(), out var ip) ? ip.ToString() : "https://1.1.1.1/dns-query";
     }
 
     private static JsonObject SocksInbound(string tag, int port, LocalAuth auth) => new()

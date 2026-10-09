@@ -151,8 +151,6 @@ public sealed class SettingsValidationTests
         Assert.NotNull(SettingsValidation.HostPort("stun.l.google.com"));
         Assert.Null(SettingsValidation.Hosts("# мой роутер\nrouter.lan 192.168.1.1\n10.0.0.2 nas.lan"));
         Assert.NotNull(SettingsValidation.Hosts("router.lan"));
-        Assert.Null(SettingsValidation.FragPackets("tlshello"));
-        Assert.Null(SettingsValidation.FragPackets("1-3"));
         Assert.NotNull(SettingsValidation.SysBypass("localhost;\"evil\""));
         Assert.NotNull(SettingsValidation.HttpUrl("http://speed.example", httpsOnly: true));
     }
@@ -233,7 +231,6 @@ public sealed class RecommendedSettingsTests
         Assert.True(r.Dns.DnsHijack);
         Assert.Equal(RoutePreset.ExceptRu, r.Routing.Preset);
         Assert.True(r.Routing.BlockQuic);
-        Assert.Equal(DpiPreset.Soft, r.Dpi.DpiPreset);
         // Своё не трогаем.
         Assert.Equal("Ctrl+Alt+K", r.General.Hotkey);
         Assert.Equal(AppTheme.Light, r.General.Theme);

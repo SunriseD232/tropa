@@ -101,27 +101,15 @@
 | hosts | текст | — |
 | dnsCheck | инструмент | — |
 
-### Обход DPI (только прямой трафик, только средствами ядер)
+### Соединение (раздел «Настройки → Соединение»)
+Параметры самого подключения к серверу. Обход DPI (фрагментация, шум, «сначала обход», кнопки на главной) удалён целиком (ADR-037) — Тропа чистый VPN.
+
 | Ключ | Тип | По умолчанию |
 |---|---|---|
-| dpiBypass | bool (большая кнопка на главной; без сервера — ядро только для обхода, ADR-033) | false |
-| dpiTune | кнопка «Подобрать»: перебор вариантов фрагментации на YouTube/Discord (ADR-036) | — |
-| dpiPreset | off/soft/hard/custom | off |
-| fragment | bool | false |
-| fragPackets | tlshello/1-3 | tlshello |
-| fragLen | диапазон | 100-200 |
-| fragInt | диапазон, мс | 10-20 |
-| fragScope | list/all | list |
-| utls | chrome/firefox/edge/random | chrome |
+| utls | chrome/firefox/edge/safari/random | chrome |
 | allowInsecureWarn | bool | true |
-| noise | bool | false |
-| noiseType | rand/str/base64 | rand |
-| noiseLen | диапазон | 10-20 |
-| noiseDelay | диапазон, мс | 10-16 |
 | mux | bool | false |
 | muxConc | число | 8 |
-
-Наборы: `soft` = fragment on, scope list, noise off; `hard` = fragment on, scope all, noise on; ручная правка → `custom`.
 
 ### Ядра и обновления
 Таблица версий (из подписанного манифеста), `coreChoice` (auto/singbox/xray) с предупреждением о последствиях, таблица возможностей, гео-базы (`geoUpdate`, `geoViaProxy`), обновление Тропы (`appChannel`, `appCheck`).

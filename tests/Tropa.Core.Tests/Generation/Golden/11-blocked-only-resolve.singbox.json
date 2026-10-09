@@ -86,18 +86,6 @@
           "password": "tropa-pass"
         }
       ]
-    },
-    {
-      "type": "socks",
-      "tag": "probe-dpi",
-      "listen": "127.0.0.1",
-      "listen_port": 19911,
-      "users": [
-        {
-          "username": "tropa-user",
-          "password": "tropa-pass"
-        }
-      ]
     }
   ],
   "outbounds": [
@@ -126,95 +114,10 @@
     {
       "type": "direct",
       "tag": "direct"
-    },
-    {
-      "type": "socks",
-      "tag": "dpi-direct",
-      "server": "127.0.0.1",
-      "server_port": 31201,
-      "version": "5",
-      "username": "xray-user",
-      "password": "xray-pass"
-    },
-    {
-      "type": "selector",
-      "tag": "dpi-youtube",
-      "outbounds": [
-        "dpi-direct",
-        "proxy"
-      ],
-      "default": "dpi-direct",
-      "interrupt_exist_connections": true
-    },
-    {
-      "type": "selector",
-      "tag": "dpi-discord",
-      "outbounds": [
-        "dpi-direct",
-        "proxy"
-      ],
-      "default": "dpi-direct",
-      "interrupt_exist_connections": true
-    },
-    {
-      "type": "selector",
-      "tag": "dpi-telegram",
-      "outbounds": [
-        "dpi-direct",
-        "proxy"
-      ],
-      "default": "dpi-direct",
-      "interrupt_exist_connections": true
-    },
-    {
-      "type": "selector",
-      "tag": "dpi-facebook",
-      "outbounds": [
-        "dpi-direct",
-        "proxy"
-      ],
-      "default": "dpi-direct",
-      "interrupt_exist_connections": true
-    },
-    {
-      "type": "selector",
-      "tag": "dpi-instagram",
-      "outbounds": [
-        "dpi-direct",
-        "proxy"
-      ],
-      "default": "dpi-direct",
-      "interrupt_exist_connections": true
-    },
-    {
-      "type": "selector",
-      "tag": "dpi-twitter",
-      "outbounds": [
-        "dpi-direct",
-        "proxy"
-      ],
-      "default": "dpi-direct",
-      "interrupt_exist_connections": true
-    },
-    {
-      "type": "selector",
-      "tag": "dpi-blocked",
-      "outbounds": [
-        "dpi-direct",
-        "proxy"
-      ],
-      "default": "dpi-direct",
-      "interrupt_exist_connections": true
     }
   ],
   "route": {
     "rule_set": [
-      {
-        "type": "local",
-        "tag": "geoip-ru",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geoip-ru.srs"
-      },
       {
         "type": "local",
         "tag": "geoip-ru-blocked",
@@ -226,12 +129,6 @@
         "tag": "geoip-ru-blocked-community",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geoip-ru-blocked-community.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geoip-telegram",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geoip-telegram.srs"
       },
       {
         "type": "local",
@@ -259,24 +156,6 @@
       },
       {
         "type": "local",
-        "tag": "geosite-discord",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-discord.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-facebook",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-facebook.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-instagram",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-instagram.srs"
-      },
-      {
-        "type": "local",
         "tag": "geosite-ru-available-only-inside",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-ru-available-only-inside.srs"
@@ -286,24 +165,6 @@
         "tag": "geosite-ru-blocked",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-ru-blocked.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-telegram",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-telegram.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-x",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-x.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-youtube",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-youtube.srs"
       },
       {
         "type": "inline",
@@ -367,20 +228,6 @@
         "action": "hijack-dns"
       },
       {
-        "process_path": [
-          "C:\\Program Files\\Tropa\\cores\\xray.exe"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "inbound": [
-          "probe-dpi"
-        ],
-        "action": "route",
-        "outbound": "dpi-direct"
-      },
-      {
         "ip_version": 6,
         "action": "reject"
       },
@@ -412,99 +259,32 @@
       },
       {
         "rule_set": [
-          "geosite-youtube"
-        ],
-        "action": "route",
-        "outbound": "dpi-youtube"
-      },
-      {
-        "rule_set": [
-          "geosite-discord"
-        ],
-        "action": "route",
-        "outbound": "dpi-discord"
-      },
-      {
-        "rule_set": [
-          "geosite-telegram"
-        ],
-        "action": "route",
-        "outbound": "dpi-telegram"
-      },
-      {
-        "rule_set": [
-          "geosite-facebook"
-        ],
-        "action": "route",
-        "outbound": "dpi-facebook"
-      },
-      {
-        "rule_set": [
-          "geosite-instagram"
-        ],
-        "action": "route",
-        "outbound": "dpi-instagram"
-      },
-      {
-        "rule_set": [
-          "geosite-x"
-        ],
-        "action": "route",
-        "outbound": "dpi-twitter"
-      },
-      {
-        "rule_set": [
           "geosite-ru-blocked"
         ],
         "action": "route",
-        "outbound": "dpi-blocked"
-      },
-      {
-        "rule_set": [
-          "geosite-category-ru"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "domain_suffix": [
-          "ru",
-          "su",
-          "xn--p1ai"
-        ],
-        "action": "route",
-        "outbound": "direct"
+        "outbound": "proxy"
       },
       {
         "action": "resolve",
-        "server": "remote"
+        "server": "local"
       },
       {
         "rule_set": [
-          "geoip-telegram"
+          "geoip-ru-blocked"
         ],
         "action": "route",
-        "outbound": "dpi-telegram"
+        "outbound": "proxy"
       },
       {
         "rule_set": [
-          "geoip-ru-blocked",
           "geoip-ru-blocked-community"
         ],
         "action": "route",
-        "outbound": "dpi-blocked"
-      },
-      {
-        "rule_set": [
-          "geoip-ru"
-        ],
-        "action": "route",
-        "outbound": "direct"
+        "outbound": "proxy"
       }
     ],
-    "final": "proxy",
+    "final": "direct",
     "default_domain_resolver": "local",
-    "find_process": true,
     "auto_detect_interface": true
   },
   "experimental": {

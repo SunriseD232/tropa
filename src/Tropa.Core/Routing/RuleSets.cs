@@ -24,17 +24,6 @@ public static class RuleSets
     /// <summary>Заблокированное в России (runetfreedom/russia-v2ray-rules-dat).</summary>
     public static IReadOnlyList<string> Blocked { get; } = [GeositeRuBlocked, GeoipRuBlocked, GeoipRuBlockedCommunity];
 
-    /// <summary>
-    /// Домены, которые при обходе DPI без сервера идут напрямую с фрагментацией: список блокировок
-    /// и сервисы, которые чаще всего замедляют (YouTube, Discord, Telegram).
-    /// </summary>
-    public static IReadOnlyList<string> BypassDomains { get; } =
-        [GeositeRuBlocked, "geosite-youtube", "geosite-discord", "geosite-telegram", "geosite-facebook", "geosite-instagram", "geosite-x"];
-
-    /// <summary>Сайты, к которым по умолчанию применяется фрагментация (набор «Мягко»).</summary>
-    public static IReadOnlyList<string> FragmentDefaults { get; } =
-        ["youtube.com", "googlevideo.com", "ytimg.com", "ggpht.com", "youtu.be", "youtube-nocookie.com", "yt.be"];
-
     /// <summary>Тег для geosite:X / geoip:X из пользовательских правил.</summary>
     public static string GeositeTag(string name) => "geosite-" + Normalize(name);
 

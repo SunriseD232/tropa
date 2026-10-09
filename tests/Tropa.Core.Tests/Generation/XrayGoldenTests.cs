@@ -27,8 +27,6 @@ public sealed class XrayGoldenTests
     {
         ["x01-servers"] = () => XrayConfigBuilder.Build(
             [new(Xhttp, 31200), new(Ws, 31201), new(Trojan, 31202), new(Vision, 31203)], Defaults, Auth),
-        ["x02-direct-noise-fragment"] = () => XrayConfigBuilder.Build(
-            [], Defaults with { Dpi = Defaults.Dpi with { Fragment = true, Noise = true, NoiseLen = "5-10" } }, Auth, directPort: 31210),
         ["x04-shadowsocks"] = () => XrayConfigBuilder.Build(
             [new(SingBoxGoldenTests.Ss2022, 31220)], Defaults, Auth),
         ["x03-mux"] = () => XrayConfigBuilder.Build(

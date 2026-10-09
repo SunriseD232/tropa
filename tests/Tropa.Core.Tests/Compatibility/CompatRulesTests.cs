@@ -17,25 +17,8 @@ public sealed class CompatRulesTests
         var r = CompatRules.Evaluate(Defaults);
         // По умолчанию TUN: недоступны только настройки системного прокси и зависимые от выключенных опций.
         Assert.Equal(
-            ["fragParams", "lanPort", "muxConc", "noiseParams", "subUACustom", "sysBypass", "templateText", "uwpLoopback"],
+            ["lanPort", "muxConc", "subUACustom", "sysBypass", "templateText", "uwpLoopback"],
             r.Disabled.Keys.Order(StringComparer.Ordinal));
-    }
-
-    [Theory]
-    [InlineData(RoutePreset.ExceptRu)]
-    [InlineData(RoutePreset.All)]
-    public void Dpi_bypass_button_forces_fragment_and_dpi_first(RoutePreset preset)
-    {
-        var settings = Defaults with
-        {
-            Dpi = Defaults.Dpi with { Bypass = true },
-            Routing = Defaults.Routing with { Preset = preset },
-        };
-        var r = CompatRules.Evaluate(settings);
-        Assert.True(r.Effective.Dpi.Fragment);
-        Assert.True(r.Effective.Routing.DpiFirst); // с сервером — сначала обход, при неудаче сервер
-        Assert.Contains("Обход DPI", r.Disabled["dpiFirst"], StringComparison.Ordinal);
-        Assert.False(r.IsDisabled("fragParams"));
     }
 
     [Theory]
@@ -96,21 +79,6 @@ public sealed class CompatRulesTests
         Assert.True(r.IsDisabled("sniffProto"));
         Assert.False(r.Effective.Dns.RouteOnly);
         Assert.False(r.Effective.Expert.SniffQuic);
-    }
-
-    [Fact]
-    public void Sing_box_only_core_disables_noise_and_its_params()
-    {
-        var settings = Defaults with
-        {
-            Cores = Defaults.Cores with { CoreChoice = CoreChoice.SingBox },
-            Dpi = Defaults.Dpi with { Noise = true },
-        };
-        var r = CompatRules.Evaluate(settings);
-        Assert.True(r.IsDisabled("noise"));
-        Assert.False(r.Effective.Dpi.Noise);
-        // Цепочка: шум принудительно выключен → его параметры тоже недоступны.
-        Assert.True(r.IsDisabled("noiseParams"));
     }
 
     [Fact]

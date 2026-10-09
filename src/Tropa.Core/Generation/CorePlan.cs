@@ -4,12 +4,12 @@ using Tropa.Core.Model;
 namespace Tropa.Core.Generation;
 
 /// <summary>
-/// Какие серверы обслуживает Xray и нужен ли ему вход «напрямую» (docs/05-config-generation.md, §1).
-/// sing-box всегда остаётся «фронтом»: TUN, DNS, правила по процессам.
+/// Какие серверы обслуживает Xray (docs/05-config-generation.md, §1): XHTTP и серверы, которым явно
+/// выбрано ядро Xray. sing-box всегда остаётся «фронтом»: TUN, DNS, правила по процессам.
 /// </summary>
-public sealed record CorePlan(IReadOnlyList<Profile> XrayProfiles, bool XrayDirect)
+public sealed record CorePlan(IReadOnlyList<Profile> XrayProfiles)
 {
-    public bool NeedsXray => XrayProfiles.Count > 0 || XrayDirect;
+    public bool NeedsXray => XrayProfiles.Count > 0;
 
     /// <param name="used">Серверы, которые попадут в конфиг: активный, группа авто-выбора, цепочки, правила.</param>
     /// <param name="coreFor">
@@ -44,9 +44,6 @@ public sealed record CorePlan(IReadOnlyList<Profile> XrayProfiles, bool XrayDire
             }
         }
 
-        // Шум есть только в Xray: прямой UDP пойдёт через его вход «напрямую». Фрагментация — тоже
-        // через Xray: у него паузы между кусками, и на проверке у провайдера в РФ (2026-10-09) она
-        // открывала YouTube, а tls_fragment sing-box — ни одного сайта (ADR-035).
-        return new CorePlan(viaXray, s.Dpi.Noise || s.Dpi.Fragment);
+        return new CorePlan(viaXray);
     }
 }

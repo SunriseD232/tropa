@@ -200,19 +200,7 @@ public sealed class TropaEngine : IAsyncDisposable
         }
 
         engine.EnsureLocalAuth();
-        engine.MigrateFragmentDefaults();
         return engine;
-    }
-
-    /// <summary>
-    /// Прежние значения дробления по умолчанию (100-200 байт, 10-20 мс) у провайдеров в РФ почти не
-    /// работают (ADR-035). Если пользователь их не менял (набор не «Свои»), ставим новые.
-    /// </summary>
-    private void MigrateFragmentDefaults()
-    {
-        var d = State.Settings.Dpi;
-        if (d.DpiPreset != DpiPreset.Custom && d.FragLen == "100-200" && d.FragInt == "10-20")
-            UpdateSettings(s => s with { Dpi = s.Dpi with { FragLen = DpiSettings.DefaultFragLen, FragInt = DpiSettings.DefaultFragInt } });
     }
 
     private void EnsureLocalAuth()
@@ -537,16 +525,6 @@ public sealed class TropaEngine : IAsyncDisposable
             if (Status.State == ConnectionState.Connected)
                 return;
             SetStatus(new ConnectionStatus(ConnectionState.Connecting));
-            if (_dpiOnly)
-            {
-                // Ядро «только обход DPI» заменяется подключением к серверу. Через службу — одной
-                // командой Start: она сама остановит прежнее ядро.
-                var viaService = _runningViaService;
-                await StopCoreAsync(sendStop: !viaService).ConfigureAwait(false);
-                _servicePending = viaService;
-                SetDpiOnly(false);
-            }
-
             await AttachServiceAsync(ct).ConfigureAwait(false);
             // Ядро для сервера ещё не определено — быстро проверяем: сначала Xray, потом sing-box.
             if (State.ActiveProfile is { } active && CoreFor(active.Id) == CoreChoice.Auto
@@ -581,137 +559,11 @@ public sealed class TropaEngine : IAsyncDisposable
             _servicePending = false;
             await StopCoreAsync(sendStop: !State.Settings.General.KillSwitch).ConfigureAwait(false);
             SetStatus(new ConnectionStatus(ConnectionState.Error, Scrubber.Scrub(ex.Message)));
-            // Сервер не подключился, но обход DPI без сервера возвращаем (kill switch держит блокировку — тогда нет).
-            if (State.Settings.Dpi.Bypass && !State.Settings.General.KillSwitch)
-                await StartDpiOnlyLockedAsync(CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
             _servicePending = false;
             _gate.Release();
-        }
-    }
-
-    // ---------------- Обход DPI без сервера ----------------
-
-    private bool _dpiOnly;
-
-    /// <summary>Работает ядро «только обход DPI» (кнопка «Обход DPI» при отключённом сервере).</summary>
-    public bool DpiOnlyActive => _dpiOnly;
-
-    /// <summary>Ядро работает (подключение к серверу или обход DPI): изменённые настройки нужно применить.</summary>
-    public bool CoreRunning => Status.State == ConnectionState.Connected || _dpiOnly;
-
-    /// <summary>Почему обход DPI без сервера не запустился или остановился (null — всё в порядке).</summary>
-    public string? DpiOnlyMessage { get; private set; }
-
-    public event EventHandler? DpiOnlyChanged;
-
-    private void SetDpiOnly(bool active, string? message = null)
-    {
-        _dpiOnly = active;
-        DpiOnlyMessage = message;
-        DpiOnlyChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <summary>
-    /// Большая кнопка «Обход DPI». Подключено к серверу — переподключается с фрагментацией прямого
-    /// трафика; не подключено — запускает (или останавливает) ядро только для обхода.
-    /// </summary>
-    public async Task SetDpiBypassAsync(bool on, CancellationToken ct = default)
-    {
-        if (State.Settings.Dpi.Bypass != on)
-            UpdateSettings(s => s with { Dpi = s.Dpi with { Bypass = on } });
-        if (Status.State == ConnectionState.Connected)
-        {
-            await ReconnectAsync(ct).ConfigureAwait(false);
-            return;
-        }
-
-        await RestartDpiOnlyAsync(ct).ConfigureAwait(false);
-    }
-
-    /// <summary>Для тестов: подменить проверочные адреса подбора параметров обхода.</summary>
-    internal IReadOnlyList<Uri>? TuneProbesOverride { get; set; }
-
-    /// <summary>Для тестов: не привязывать ядро подбора к физическому адаптеру (локальный сервер на 127.0.0.1).</summary>
-    internal string? TuneInterfaceOverride { get; set; }
-
-    /// <summary>
-    /// Кнопка «Подобрать»: перебирает варианты фрагментации на YouTube и Discord мимо туннеля,
-    /// сохраняет открывший больше всего и применяет его. Возвращает текст для пользователя.
-    /// </summary>
-    public async Task<string> TuneDpiAsync(IProgress<string>? progress, CancellationToken ct = default)
-    {
-        var probes = TuneProbesOverride ??
-            [new Uri("https://www.youtube.com/generate_204"), new Uri("https://discord.com/api/v10/gateway")];
-        var best = await ServerTester.TuneFragmentAsync(State.Settings, Auth, _locations, _paths.RunDirectory,
-            Scrubber, line => Log?.Invoke(this, line), probes, progress, ct, bindInterfaceOverride: TuneInterfaceOverride).ConfigureAwait(false);
-        if (best is null || best.Opened == 0)
-            return "Ни один вариант обхода не открыл YouTube и Discord. Похоже, у вашего провайдера обход DPI не помогает — для заблокированного нужен сервер.";
-
-        UpdateSettings(s => s with
-        {
-            Dpi = s.Dpi with
-            {
-                Fragment = true,
-                DpiPreset = DpiPreset.Custom,
-                FragPackets = best.Variant.Packets,
-                FragLen = best.Variant.Len,
-                FragInt = best.Variant.Interval,
-            },
-        });
-        // Подобранные параметры сразу вступают в силу (обход без сервера или подключение).
-        await ApplyIfConnectedAsync(ct).ConfigureAwait(false);
-        return best.Opened == best.Total
-            ? $"Подобрано: куски {best.Variant.Len} байт, пауза {best.Variant.Interval} мс — открылись и YouTube, и Discord."
-            : $"Подобрано лучшее из возможного: куски {best.Variant.Len} байт, пауза {best.Variant.Interval} мс (открылось {best.Opened} из {best.Total}). Остальное пойдёт через сервер.";
-    }
-
-    /// <summary>Приводит ядро «только обход DPI» в соответствие с настройкой (при запуске Тропы, после смены настроек).</summary>
-    public async Task RestartDpiOnlyAsync(CancellationToken ct = default)
-    {
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            // Пока подключаемся или подключены к серверу, обход идёт внутри этого подключения.
-            if (Status.State is ConnectionState.Connected or ConnectionState.Connecting or ConnectionState.Disconnecting)
-                return;
-            if (_dpiOnly)
-            {
-                var viaService = _runningViaService;
-                var keep = State.Settings.Dpi.Bypass;
-                await StopCoreAsync(sendStop: !(viaService && keep)).ConfigureAwait(false);
-                _servicePending = viaService && keep;
-                SetDpiOnly(false);
-            }
-
-            if (State.Settings.Dpi.Bypass)
-                await StartDpiOnlyLockedAsync(ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            _servicePending = false;
-            _gate.Release();
-        }
-    }
-
-    private async Task StartDpiOnlyLockedAsync(CancellationToken ct)
-    {
-        try
-        {
-            await AttachServiceAsync(ct).ConfigureAwait(false);
-            await StartCoreAsync(ct, noServer: true).ConfigureAwait(false);
-            SetDpiOnly(true);
-            Log?.Invoke(this, "Обход DPI без сервера включён.");
-        }
-        catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException or ServiceException or TimeoutException)
-        {
-            _runningViaService |= _servicePending;
-            await StopCoreAsync().ConfigureAwait(false);
-            var message = Scrubber.Scrub(ex.Message);
-            Log?.Invoke(this, "Обход DPI не запустился: " + message);
-            SetDpiOnly(false, message);
         }
     }
 
@@ -855,7 +707,7 @@ public sealed class TropaEngine : IAsyncDisposable
             var signature = NetworkSignature();
             var changed = signature != _networkSignature;
             _networkSignature = signature;
-            if (!(slept || changed) || !State.Settings.General.Reconnect || !(Status.State == ConnectionState.Connected || DpiOnlyActive))
+            if (!(slept || changed) || !State.Settings.General.Reconnect || Status.State != ConnectionState.Connected)
                 return;
             // Сеть после пробуждения поднимается не сразу.
             await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
@@ -976,8 +828,6 @@ public sealed class TropaEngine : IAsyncDisposable
             _runningViaService = false;
             await StopCoreAsync().ConfigureAwait(false);
             _systemProxy.Restore();
-            if (_dpiOnly)
-                SetDpiOnly(false);
             SetStatus(new ConnectionStatus(ConnectionState.Disconnected));
         }
         finally
@@ -1007,19 +857,11 @@ public sealed class TropaEngine : IAsyncDisposable
         try
         {
             SetStatus(new ConnectionStatus(ConnectionState.Disconnecting));
-            // Включён «Обход DPI» — после отключения от сервера ядро остаётся работать только ради обхода.
-            // Через службу — сразу командой Start, без промежутка без обхода.
-            var bypass = State.Settings.Dpi.Bypass;
-            var viaService = _runningViaService;
-            await StopCoreAsync(sendStop: !(viaService && bypass)).ConfigureAwait(false);
-            _servicePending = viaService && bypass;
+            await StopCoreAsync().ConfigureAwait(false);
             SetStatus(new ConnectionStatus(ConnectionState.Disconnected));
-            if (bypass)
-                await StartDpiOnlyLockedAsync(CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
-            _servicePending = false;
             _gate.Release();
         }
     }
@@ -1029,8 +871,6 @@ public sealed class TropaEngine : IAsyncDisposable
     {
         if (Status.State == ConnectionState.Connected)
             await ReconnectAsync(ct).ConfigureAwait(false);
-        else if (_dpiOnly)
-            await RestartDpiOnlyAsync(ct).ConfigureAwait(false);
     }
 
     private async Task ReconnectAsync(CancellationToken ct)
@@ -1054,10 +894,9 @@ public sealed class TropaEngine : IAsyncDisposable
         await ConnectAsync(ct).ConfigureAwait(false);
     }
 
-    /// <param name="noServer">Только обход DPI: без сервера, весь трафик напрямую.</param>
-    private async Task StartCoreAsync(CancellationToken ct, bool noServer = false)
+    private async Task StartCoreAsync(CancellationToken ct)
     {
-        var active = noServer ? null : State.ActiveProfile ?? throw new InvalidOperationException("Сначала добавьте и выберите сервер.");
+        var active = State.ActiveProfile ?? throw new InvalidOperationException("Сначала добавьте и выберите сервер.");
         var settings = State.Settings with
         {
             Connection = State.Settings.Connection with
@@ -1082,33 +921,30 @@ public sealed class TropaEngine : IAsyncDisposable
         }
 
         var clashPort = ServerTester.FreePort();
-        var dpiProbePort = effective.Routing.DpiFirst && active is not null ? ServerTester.FreePort() : (int?)null;
         var clashSecret = SecretStore.NewRandomToken();
-        var group = effective.Connection.AutoSelect && active is not null
-            ? State.Profiles.Where(p => p.Profile.SubscriptionId == active!.SubscriptionId && p.RemovedByProvider is null
+        var group = effective.Connection.AutoSelect
+            ? State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null
                     && ProfileCompat.Issues(p.Profile).Count == 0
                     && !(p.Profile.Transport.Type == TransportType.Xhttp && p.Profile.ChainVia is not null)
                     // urltest видит только задержку и «заморозку» не замечает — такие серверы убираем сами.
                     && !ServerHealth.ShouldExclude(p.LastTest, _now())
                     // allowInsecureWarn: сервер без проверки сертификата — только если вы выбрали его сами.
-                    && !(effective.Dpi.AllowInsecureWarn && p.Profile.Security.AllowInsecure && p.Profile.Id != active!.Id))
+                    && !(effective.Dpi.AllowInsecureWarn && p.Profile.Security.AllowInsecure && p.Profile.Id != active.Id))
                 .Select(p => p.Profile).ToList()
             : [];
 
-        // Гибрид (docs/05-config-generation.md, §1): серверы с XHTTP — через Xray, шум — тоже через Xray.
+        // Гибрид (docs/05-config-generation.md, §1): серверы с XHTTP и те, кому выбрано ядро Xray.
         var allProfiles = State.Profiles.Select(p => p.Profile).ToList();
-        var plan = CorePlan.Make(settings, active is null ? [] : UsedProfiles(active, group, allProfiles, effective), CoreFor);
+        var plan = CorePlan.Make(settings, UsedProfiles(active, group, allProfiles, effective), CoreFor);
         string? xrayConfig = null;
         var xrayPorts = new Dictionary<Guid, int>();
-        int? xrayDirectPort = null;
         LocalAuth? xrayAuth = null;
         if (plan.NeedsXray)
         {
             xrayAuth = new LocalAuth("xray-" + SecretStore.NewRandomToken(4), SecretStore.NewRandomToken());
             foreach (var p in plan.XrayProfiles)
                 xrayPorts[p.Id] = ServerTester.FreePort();
-            xrayDirectPort = plan.XrayDirect ? ServerTester.FreePort() : null;
-            xrayConfig = XrayConfigBuilder.Build(plan.XrayProfiles.Select(p => new XrayTarget(p, xrayPorts[p.Id])).ToList(), settings, xrayAuth, xrayDirectPort);
+            xrayConfig = XrayConfigBuilder.Build(plan.XrayProfiles.Select(p => new XrayTarget(p, xrayPorts[p.Id])).ToList(), settings, xrayAuth);
             var xrayViolations = XrayConfigGuard.Check(xrayConfig);
             if (xrayViolations.Count > 0)
                 throw new IntegrityException("Конфиг Xray не прошёл проверку безопасности: " + xrayViolations[0]);
@@ -1124,13 +960,11 @@ public sealed class TropaEngine : IAsyncDisposable
             LocalAuth = Auth,
             ClashApiPort = clashPort,
             ClashApiSecret = clashSecret,
-            DpiProbePort = dpiProbePort,
             XrayPorts = xrayPorts,
-            XrayDirectPort = xrayDirectPort,
             XrayAuth = xrayAuth,
             XrayPath = service?.XrayPath ?? CoreProcess.ExecutablePath(_locations, "xray"),
         });
-        var xrayReadiness = xrayPorts.Values.Concat(xrayDirectPort is { } dp ? [dp] : []).FirstOrDefault();
+        var xrayReadiness = xrayPorts.Values.FirstOrDefault();
 
         var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy
         {
@@ -1182,12 +1016,7 @@ public sealed class TropaEngine : IAsyncDisposable
 
         _trafficCts = new CancellationTokenSource();
         _ = PumpTrafficAsync(new ClashApi(clashPort, clashSecret), _trafficCts.Token);
-        if (active is not null)
-            _ = MonitorAsync(active.Id, _trafficCts.Token);
-        if (dpiProbePort is { } probe)
-            _ = DpiMonitorAsync(new ClashApi(clashPort, clashSecret), probe, _trafficCts.Token);
-        else
-            SetDpiStatus(new Dictionary<string, bool>());
+        _ = MonitorAsync(active.Id, _trafficCts.Token);
     }
 
     /// <summary>Серверы, которые попадут в конфиг: активный, группа, промежуточные звенья цепочек и серверы из правил.</summary>
@@ -1280,79 +1109,6 @@ public sealed class TropaEngine : IAsyncDisposable
         }
     }
 
-    // ---------------- Сначала обход DPI ----------------
-
-    /// <summary>Группа → идёт ли она сейчас напрямую с обходом (true) или через сервер (false).</summary>
-    public IReadOnlyDictionary<string, bool> DpiStatus { get; private set; } = new Dictionary<string, bool>();
-
-    public event EventHandler? DpiStatusChanged;
-
-    private void SetDpiStatus(IReadOnlyDictionary<string, bool> status)
-    {
-        DpiStatus = status;
-        DpiStatusChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <summary>Как часто перепроверять обход DPI (в тестах — чаще).</summary>
-    internal TimeSpan DpiCheckInterval { get; set; } = TimeSpan.FromMinutes(3);
-
-    /// <summary>Только для тестов: свой адрес проверки группы вместо настоящего сервиса.</summary>
-    internal Func<Core.Routing.DpiGroup, Uri>? DpiProbeUrlOverride { get; set; }
-
-    /// <summary>
-    /// Проверяет каждую группу через вход проверки (тот же путь, что у обычного трафика: напрямую
-    /// с фрагментацией). Не открылось — группа переключается на сервер; заработало снова — обратно.
-    /// Переключение мгновенное (Clash API), без переподключения.
-    /// </summary>
-    private async Task DpiMonitorAsync(ClashApi api, int probePort, CancellationToken ct)
-    {
-        using (api)
-        {
-            var current = new Dictionary<string, bool>();
-            try
-            {
-                while (!ct.IsCancellationRequested)
-                {
-                    foreach (var g in Core.Routing.DpiGroups.All)
-                    {
-                        var works = await ProbeDpiAsync(probePort, DpiProbeUrlOverride?.Invoke(g) ?? g.ProbeUrl, ct).ConfigureAwait(false);
-                        if (!current.TryGetValue(g.Key, out var was) || was != works)
-                        {
-                            await api.SelectAsync(g.SelectorTag, works ? Core.Routing.DpiGroups.DirectTag : SingBoxConfigBuilder.ProxyTag, ct).ConfigureAwait(false);
-                            current[g.Key] = works;
-                            Log?.Invoke(this, $"Обход DPI для «{g.Title}»: " + (works ? "работает, напрямую." : "не открывается, через сервер."));
-                            SetDpiStatus(new Dictionary<string, bool>(current));
-                        }
-                    }
-
-                    await Task.Delay(DpiCheckInterval, ct).ConfigureAwait(false);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (HttpRequestException ex)
-            {
-                Log?.Invoke(this, "Проверка обхода DPI остановилась: " + Scrubber.Scrub(ex.Message));
-            }
-        }
-    }
-
-    /// <summary>Открывается ли адрес через вход проверки: ответ с заголовками за 8 секунд.</summary>
-    private async Task<bool> ProbeDpiAsync(int probePort, Uri url, CancellationToken ct)
-    {
-        using var client = ServerTester.ProbeClient(probePort, Auth, TimeSpan.FromSeconds(8), allowRedirect: false);
-        try
-        {
-            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            return (int)response.StatusCode < 500;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
-        {
-            return false;
-        }
-    }
-
     private async Task PumpTrafficAsync(ClashApi api, CancellationToken ct)
     {
         using (api)
@@ -1384,7 +1140,7 @@ public sealed class TropaEngine : IAsyncDisposable
             try
             {
                 await StopCoreAsync().ConfigureAwait(false);
-                ReportStopped(ConnectionState.Error, $"Ядро неожиданно остановилось (код {exitCode}). Подробности — в журнале.");
+                SetStatus(new ConnectionStatus(ConnectionState.Error, $"Ядро неожиданно остановилось (код {exitCode}). Подробности — в журнале."));
             }
             finally
             {
@@ -1455,7 +1211,7 @@ public sealed class TropaEngine : IAsyncDisposable
                 {
                     _runningViaService = false;
                     await StopCoreAsync(sendStop: false).ConfigureAwait(false);
-                    ReportStopped(ConnectionState.Disconnected, status.Message);
+                    SetStatus(new ConnectionStatus(ConnectionState.Disconnected, status.Message));
                 }
                 finally
                 {
@@ -1474,7 +1230,7 @@ public sealed class TropaEngine : IAsyncDisposable
             {
                 _runningViaService = false; // служба уже остановила ядро
                 await StopCoreAsync().ConfigureAwait(false);
-                ReportStopped(ConnectionState.Error, status.Message ?? "Служба остановила подключение из-за сбоя ядра.");
+                SetStatus(new ConnectionStatus(ConnectionState.Error, status.Message ?? "Служба остановила подключение из-за сбоя ядра."));
             }
             finally
             {
@@ -1502,7 +1258,7 @@ public sealed class TropaEngine : IAsyncDisposable
                 if (wasRunning)
                 {
                     await StopCoreAsync().ConfigureAwait(false);
-                    ReportStopped(ConnectionState.Error, "Связь со службой Тропы потеряна. Подключение остановлено.");
+                    SetStatus(new ConnectionStatus(ConnectionState.Error, "Связь со службой Тропы потеряна. Подключение остановлено."));
                 }
             }
             finally
@@ -1512,15 +1268,6 @@ public sealed class TropaEngine : IAsyncDisposable
 
             ServiceChanged?.Invoke(this, EventArgs.Empty);
         });
-    }
-
-    /// <summary>Ядро остановилось не по команде: сообщаем там, где оно работало, — в подключении или в обходе DPI.</summary>
-    private void ReportStopped(ConnectionState state, string? message)
-    {
-        if (_dpiOnly)
-            SetDpiOnly(false, message);
-        else
-            SetStatus(new ConnectionStatus(state, message));
     }
 
     private void SetStatus(ConnectionStatus status)

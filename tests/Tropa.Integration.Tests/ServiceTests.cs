@@ -343,53 +343,6 @@ public sealed class ServiceTests : IAsyncLifetime
         Assert.True(await Eventually(async () => !await PortOpen(port)));
     }
 
-    /// <summary>
-    /// «Сначала обход DPI»: группа, чей адрес проверки открывается напрямую, остаётся на обходе;
-    /// группа, где проверка не проходит, сама переключается на сервер (Clash API, без переподключения).
-    /// </summary>
-    [Fact]
-    public async Task Dpi_first_switches_failing_groups_to_proxy()
-    {
-        if (!CoresPresent)
-            Assert.Skip("Ядра не скачаны");
-        var ct = TestContext.Current.CancellationToken;
-        using var site = new TcpListener(IPAddress.Loopback, 0);
-        site.Start();
-        var sitePort = ((IPEndPoint)site.LocalEndpoint).Port;
-        _ = Task.Run(async () =>
-        {
-            while (true)
-            {
-                using var c = await site.AcceptTcpClientAsync(ct);
-                var s = c.GetStream();
-                var buf = new byte[4096];
-                _ = await s.ReadAsync(buf, ct);
-                await s.WriteAsync("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n"u8.ToArray(), ct);
-            }
-        }, ct);
-        var dead = FreePort(); // никто не слушает — «обход не открыл сервис»
-
-        await using var engine = TropaEngine.Open(
-            new EnginePaths(Path.Combine(_work.FullName, "dr"), Path.Combine(_work.FullName, "dl")), new FakeProxyStore(), Cores);
-        engine.DpiCheckInterval = TimeSpan.FromSeconds(1);
-        engine.DpiProbeUrlOverride = g => new Uri($"http://127.0.0.1:{(g.Key == "youtube" ? sitePort : dead)}/");
-        var port = FreePort();
-        engine.UpdateSettings(s => s with
-        {
-            Connection = s.Connection with { Mode = CaptureMode.SystemProxy, SocksPort = port, AutoSelect = false },
-            Routing = s.Routing with { Preset = RoutePreset.BlockedOnly, DpiFirst = true },
-        });
-        await engine.ImportTextAsync($"vless://{Uuid}@127.0.0.1:{_vlessPort}?security=none#local", null, ct);
-        await engine.ConnectAsync(ct);
-        Assert.True(engine.Status.State == ConnectionState.Connected, engine.Status.Message);
-
-        Assert.True(await Eventually(() => Task.FromResult(engine.DpiStatus.Count == Core.Routing.DpiGroups.All.Count), 30));
-        Assert.True(engine.DpiStatus["youtube"]);
-        Assert.False(engine.DpiStatus["discord"]);
-        Assert.False(engine.DpiStatus["blocked"]);
-        await engine.DisconnectAsync();
-    }
-
     /// <summary>Ядро «Автоматически»: проверка сначала через Xray; заработал — запоминается Xray.</summary>
     [Fact]
     public async Task Auto_core_is_detected_xray_first()
