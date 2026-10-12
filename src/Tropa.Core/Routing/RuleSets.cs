@@ -24,6 +24,9 @@ public static class RuleSets
     /// <summary>Заблокированное в России (runetfreedom/russia-v2ray-rules-dat).</summary>
     public static IReadOnlyList<string> Blocked { get; } = [GeositeRuBlocked, GeoipRuBlocked, GeoipRuBlockedCommunity];
 
+    /// <summary>Набор адресов (geoip-…), а не сайтов: срабатывает только когда известен IP.</summary>
+    public static bool IsIpSet(string tag) => tag.StartsWith("geoip-", StringComparison.Ordinal);
+
     /// <summary>Тег для geosite:X / geoip:X из пользовательских правил.</summary>
     public static string GeositeTag(string name) => "geosite-" + Normalize(name);
 

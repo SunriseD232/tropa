@@ -25,7 +25,8 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Home = new HomeViewModel(engine, Info);
         Edit = new EditServerViewModel(engine, Info);
         Servers = new ServersViewModel(engine, Info, () => Import.Open(), Edit);
-        Rules = new RulesViewModel(engine, Info);
+        GeoEditor = new GeoListEditorViewModel(engine, Info);
+        Rules = new RulesViewModel(engine, Info, GeoEditor);
         Diagnostics = new DiagnosticsViewModel(engine, Info);
         Settings = new SettingsViewModel(engine, Info, page => Navigate(page));
         Onboarding = new OnboardingViewModel(engine, Info);
@@ -39,6 +40,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public EditServerViewModel Edit { get; }
     public HomeViewModel Home { get; }
     public ServersViewModel Servers { get; }
+    public GeoListEditorViewModel GeoEditor { get; }
     public RulesViewModel Rules { get; }
     public DiagnosticsViewModel Diagnostics { get; }
     public SettingsViewModel Settings { get; }

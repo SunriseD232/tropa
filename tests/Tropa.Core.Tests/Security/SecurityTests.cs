@@ -120,6 +120,7 @@ public sealed class ConfigGuardTests
         { "ссылка в никуда", With("\"final\": \"direct\"", "\"final\": \"proxy\"") },
         { "socks на чужой сервер", With(DirectOutbound, """{ "type": "socks", "tag": "s", "server": "evil.example", "server_port": 1080 }, """ + DirectOutbound) },
         { "чтение hosts-файла", With(LocalDns, LocalDns + """, { "type": "hosts", "tag": "h", "path": ["C:\\Windows\\System32\\drivers\\etc\\hosts"] }""") },
+        { "неописанный набор внутри логического правила", With("\"rules\": []", """ "rules": [ { "type": "logical", "mode": "and", "rules": [ { "rule_set": [ "ghost" ] } ], "outbound": "direct" } ] """) },
         { "битый JSON", "{ not json" },
     };
 

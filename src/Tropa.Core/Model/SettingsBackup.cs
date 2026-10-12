@@ -149,7 +149,7 @@ public static class SettingsBackup
             Subscriptions = subs,
             // Защита от отката обновлений не должна зависеть от импортированного файла.
             Cores = s.Cores with { LastManifestSequence = current.Cores.LastManifestSequence, LastUpdateCheck = current.Cores.LastUpdateCheck },
-            Routing = s.Routing with { Rules = rules },
+            Routing = s.Routing with { Rules = rules, GeoEdits = GeoEdits.Sanitize(s.Routing.GeoEdits) },
         };
         return (result, warnings);
     }

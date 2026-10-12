@@ -228,6 +228,9 @@ public static class SingBoxConfigBuilder
         public AppSettings S { get; } = settings;
         public bool Tun => S.Connection.Mode == CaptureMode.Tun;
         public SortedSet<string> RuleSetTags { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Правки гео-баз (ADR-039), уже очищенные: только известные наборы и проверенные записи.</summary>
+        public Dictionary<string, GeoListEdit> Edits { get; } = GeoEdits.Sanitize(settings.Routing.GeoEdits).ToDictionary(e => e.Tag, StringComparer.Ordinal);
         public Dictionary<Guid, string> ServerTags { get; } = [];
 
         public string TagFor(Profile p)
@@ -270,20 +273,11 @@ public static class SingBoxConfigBuilder
         switch (s.Dns.LocalDnsRule)
         {
             case LocalDnsRule.Russian:
-                foreach (var tag in RuleSets.AlwaysDirect)
-                    ctx.RuleSetTags.Add(tag);
-                ctx.RuleSetTags.Add(RuleSets.GeositeCategoryRu);
-                rules.Push(new JsonObject
-                {
-                    ["rule_set"] = StrArray([.. RuleSets.AlwaysDirect, RuleSets.GeositeCategoryRu]),
-                    ["server"] = "local",
-                });
+                rules.Push(With(SetsMatch(ctx, [.. RuleSets.AlwaysDirect, RuleSets.GeositeCategoryRu]), "server", "local"));
                 rules.Push(new JsonObject { ["domain_suffix"] = StrArray(["ru", "su", "xn--p1ai"]), ["server"] = "local" });
                 break;
             case LocalDnsRule.DirectRules:
-                foreach (var tag in RuleSets.AlwaysDirect)
-                    ctx.RuleSetTags.Add(tag);
-                rules.Push(new JsonObject { ["rule_set"] = StrArray(RuleSets.AlwaysDirect), ["server"] = "local" });
+                rules.Push(With(SetsMatch(ctx, RuleSets.AlwaysDirect), "server", "local"));
                 break;
             case LocalDnsRule.None:
                 break;
@@ -737,9 +731,7 @@ public static class SingBoxConfigBuilder
         rules.Push(new JsonObject { ["ip_is_private"] = true, ["outbound"] = DirectTag });
 
         // Госуслуги, банки и сайты, доступные только из России, — напрямую раньше всего остального.
-        foreach (var tag in RuleSets.AlwaysDirect)
-            ctx.RuleSetTags.Add(tag);
-        rules.Push(Route(ctx, new JsonObject { ["rule_set"] = StrArray(RuleSets.AlwaysDirect) }, RuleAction.Direct));
+        rules.Push(Route(ctx, SetsMatch(ctx, RuleSets.AlwaysDirect), RuleAction.Direct));
 
         var final = s.Routing.Preset == RoutePreset.BlockedOnly ? DirectTag : ProxyTag;
 
@@ -805,7 +797,7 @@ public static class SingBoxConfigBuilder
 
         void Blocked(bool ipPart)
         {
-            foreach (var tag in RuleSets.Blocked.Where(t => IsIpSet(t) == ipPart))
+            foreach (var tag in RuleSets.Blocked.Where(t => RuleSets.IsIpSet(t) == ipPart))
                 AddRuleSetRule(ctx, rules, tag, RuleAction.Proxy);
         }
 
@@ -828,12 +820,86 @@ public static class SingBoxConfigBuilder
         }
     }
 
-    private static bool IsIpSet(string tag) => tag.StartsWith("geoip-", StringComparison.Ordinal);
+    private static void AddRuleSetRule(Context ctx, JsonArray rules, string tag, RuleAction action) =>
+        rules.Push(Route(ctx, SetsMatch(ctx, [tag]), action));
 
-    private static void AddRuleSetRule(Context ctx, JsonArray rules, string tag, RuleAction action)
+    private const string AddedSuffix = "+added";
+    private const string RemovedSuffix = "+removed";
+
+    /// <summary>
+    /// Условие «адрес из этих наборов» с правками пользователя (ADR-039). Добавленное — отдельный
+    /// встроенный набор рядом с файлом; убранное — «файл И НЕ убранное» логическим правилом.
+    /// Без убранного получается обычное <c>{"rule_set": [...]}</c>.
+    /// </summary>
+    private static JsonObject SetsMatch(Context ctx, IEnumerable<string> tags)
     {
-        ctx.RuleSetTags.Add(tag);
-        rules.Push(Route(ctx, new JsonObject { ["rule_set"] = StrArray([tag]) }, action));
+        var plain = new List<string>();
+        var trimmed = new List<JsonObject>();
+        foreach (var tag in tags)
+        {
+            ctx.RuleSetTags.Add(tag);
+            ctx.Edits.TryGetValue(tag, out var edit);
+            if (edit is { Removed.Count: > 0 })
+            {
+                ctx.RuleSetTags.Add(tag + RemovedSuffix);
+                trimmed.Add(Logical("and",
+                    new JsonObject { ["rule_set"] = StrArray([tag]) },
+                    new JsonObject { ["rule_set"] = StrArray([tag + RemovedSuffix]), ["invert"] = true }));
+            }
+            else
+            {
+                plain.Add(tag);
+            }
+
+            if (edit is { Added.Count: > 0 })
+            {
+                ctx.RuleSetTags.Add(tag + AddedSuffix);
+                plain.Add(tag + AddedSuffix);
+            }
+        }
+
+        if (trimmed.Count == 0)
+            return new JsonObject { ["rule_set"] = StrArray(plain) };
+        if (plain.Count > 0)
+            trimmed.Insert(0, new JsonObject { ["rule_set"] = StrArray(plain) });
+        return trimmed.Count == 1 ? trimmed[0] : Logical("or", [.. trimmed]);
+    }
+
+    private static JsonObject Logical(string mode, params JsonObject[] rules) => new()
+    {
+        ["type"] = "logical",
+        ["mode"] = mode,
+        ["rules"] = new JsonArray(rules),
+    };
+
+    private static JsonObject With(JsonObject o, string key, string value)
+    {
+        o[key] = value;
+        return o;
+    }
+
+    private static bool IsEditTag(string tag) =>
+        tag.EndsWith(AddedSuffix, StringComparison.Ordinal) || tag.EndsWith(RemovedSuffix, StringComparison.Ordinal);
+
+    /// <summary>Встроенный набор с добавленными или убранными записями.</summary>
+    private static JsonObject EditRuleSet(Context ctx, string tag)
+    {
+        var plus = tag.LastIndexOf('+');
+        var edit = ctx.Edits[tag[..plus]];
+        var entries = tag.EndsWith(AddedSuffix, StringComparison.Ordinal) ? edit.Added : edit.Removed;
+        var rule = new JsonObject();
+        foreach (var (kind, key) in new[]
+        {
+            (GeoEntryKind.Cidr, "ip_cidr"), (GeoEntryKind.Domain, "domain"), (GeoEntryKind.Suffix, "domain_suffix"),
+            (GeoEntryKind.Keyword, "domain_keyword"), (GeoEntryKind.Regex, "domain_regex"),
+        })
+        {
+            var values = entries.Where(e => e.Kind == kind).Select(e => e.Value).ToList();
+            if (values.Count > 0)
+                rule[key] = StrArray(values);
+        }
+
+        return new JsonObject { ["type"] = "inline", ["tag"] = tag, ["rules"] = new JsonArray(rule) };
     }
 
     /// <summary>Раскрывает правило в одно (одинаковые действия) или два (TCP и UDP отдельно) правила ядра.</summary>
@@ -841,47 +907,70 @@ public static class SingBoxConfigBuilder
     {
         if (rule.Tcp == rule.Udp)
         {
-            yield return Route(ctx, MatchFields(ctx, rule.Match), rule.Tcp);
+            yield return Route(ctx, MatchFields(ctx, rule.Match, network: null), rule.Tcp);
             yield break;
         }
 
-        var tcp = MatchFields(ctx, rule.Match);
-        tcp["network"] = "tcp";
-        yield return Route(ctx, tcp, rule.Tcp);
-
-        var udp = MatchFields(ctx, rule.Match);
-        udp["network"] = "udp";
-        yield return Route(ctx, udp, rule.Udp);
+        yield return Route(ctx, MatchFields(ctx, rule.Match, "tcp"), rule.Tcp);
+        yield return Route(ctx, MatchFields(ctx, rule.Match, "udp"), rule.Udp);
     }
 
-    private static JsonObject MatchFields(Context ctx, RuleMatch m)
+    private static JsonObject MatchFields(Context ctx, RuleMatch m, string? network)
     {
-        var o = new JsonObject();
-        void Put(string key, IReadOnlyList<string> values)
+        // Группы sing-box: адрес назначения (домены, сети, наборы) — «ИЛИ» между собой, остальные — «И».
+        var dest = new JsonObject();
+        var rest = new JsonObject();
+        static void Put(JsonObject o, string key, IReadOnlyList<string> values)
         {
             if (values.Count > 0)
                 o[key] = StrArray(values);
         }
 
-        Put("process_name", m.Processes);
-        Put("process_path", m.ProcessPaths);
-        Put("domain", m.Domains);
-        Put("domain_suffix", m.DomainSuffixes);
-        Put("domain_keyword", m.DomainKeywords);
-        Put("domain_regex", m.DomainRegexes);
-        Put("ip_cidr", m.IpCidrs);
+        Put(rest, "process_name", m.Processes);
+        Put(rest, "process_path", m.ProcessPaths);
+        Put(dest, "domain", m.Domains);
+        Put(dest, "domain_suffix", m.DomainSuffixes);
+        Put(dest, "domain_keyword", m.DomainKeywords);
+        Put(dest, "domain_regex", m.DomainRegexes);
+        Put(dest, "ip_cidr", m.IpCidrs);
 
         var sets = m.GeoSite.Select(RuleSets.GeositeTag).Concat(m.GeoIp.Select(RuleSets.GeoipTag)).ToList();
-        foreach (var tag in sets)
-            ctx.RuleSetTags.Add(tag);
-        Put("rule_set", sets);
+        var setMatch = sets.Count > 0 ? SetsMatch(ctx, sets) : null;
+        if (setMatch?["rule_set"] is { } plainSets)
+        {
+            setMatch.Remove("rule_set");
+            dest["rule_set"] = plainSets;
+            setMatch = null;
+        }
 
         var single = m.Ports.Where(r => r.From == r.To).Select(r => r.From).ToList();
         var ranges = m.Ports.Where(r => r.From != r.To).Select(r => $"{r.From.ToString(CultureInfo.InvariantCulture)}:{r.To.ToString(CultureInfo.InvariantCulture)}").ToList();
         if (single.Count > 0)
-            o["port"] = new JsonArray(single.Select(p => (JsonNode)p).ToArray());
-        Put("port_range", ranges);
-        return o;
+            rest["port"] = new JsonArray(single.Select(p => (JsonNode)p).ToArray());
+        Put(rest, "port_range", ranges);
+        if (network is not null)
+            rest["network"] = network;
+
+        if (setMatch is null)
+        {
+            // Обычное правило: все поля одним объектом, в привычном порядке.
+            var o = new JsonObject();
+            foreach (var key in new[] { "process_name", "process_path", "domain", "domain_suffix", "domain_keyword", "domain_regex", "ip_cidr", "rule_set", "port", "port_range", "network" })
+            {
+                var from = dest.ContainsKey(key) ? dest : rest;
+                if (from[key] is { } value)
+                {
+                    from.Remove(key);
+                    o[key] = value;
+                }
+            }
+
+            return o;
+        }
+
+        // Из набора убраны записи — условие логическое, остальные поля оборачиваются вокруг него.
+        var address = dest.Count > 0 ? Logical("or", dest, setMatch) : setMatch;
+        return rest.Count > 0 ? Logical("and", rest, address) : address;
     }
 
     private static JsonObject Route(Context ctx, JsonObject match, RuleAction action)
@@ -911,6 +1000,12 @@ public static class SingBoxConfigBuilder
         var sets = new JsonArray();
         foreach (var tag in ctx.RuleSetTags)
         {
+            if (IsEditTag(tag))
+            {
+                sets.Push(EditRuleSet(ctx, tag));
+                continue;
+            }
+
             if (tag == RuleSets.RuServices)
             {
                 sets.Push(new JsonObject

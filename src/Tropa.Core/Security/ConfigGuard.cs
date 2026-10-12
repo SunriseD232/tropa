@@ -250,7 +250,14 @@ public static class ConfigGuard
 
     private static void CheckRuleSetRefs(JsonElement rule, HashSet<string> ruleSets, List<string> v)
     {
-        if (!rule.TryGetProperty("rule_set", out var refs) || refs.ValueKind != JsonValueKind.Array)
+        // Логическое правило (правки гео-баз, ADR-039): проверяем вложенные.
+        if (rule.ValueKind == JsonValueKind.Object && rule.TryGetProperty("rules", out var inner) && inner.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var r in inner.EnumerateArray())
+                CheckRuleSetRefs(r, ruleSets, v);
+        }
+
+        if (rule.ValueKind != JsonValueKind.Object || !rule.TryGetProperty("rule_set", out var refs) || refs.ValueKind != JsonValueKind.Array)
             return;
         foreach (var r in refs.EnumerateArray())
         {

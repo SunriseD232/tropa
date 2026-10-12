@@ -154,6 +154,38 @@
       </StackPanel>
     </Border>
 
+    <!-- Гео-базы -->
+    <Border Classes="card">
+      <StackPanel Spacing="12">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Text="Гео-базы" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="geoLists" />
+        </StackPanel>
+        <TextBlock Classes="muted" Text="Готовые списки адресов и сайтов, по которым работает маршрут. Откройте список, чтобы найти в нём адрес, добавить свой или убрать лишний." />
+        <ItemsControl ItemsSource="{Binding GeoLists}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:GeoListRow">
+              <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="4,10">
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Content="Открыть" Command="{Binding OpenCommand}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                  <Border DockPanel.Dock="Right" Classes="pill" Background="{DynamicResource InfoBg}" VerticalAlignment="Center" IsVisible="{Binding IsEdited}">
+                    <TextBlock Text="{Binding EditSummary}" Foreground="{DynamicResource InfoFg}" FontSize="12" />
+                  </Border>
+                  <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" />
+                      <TextBlock Text="{Binding Kind}" Classes="lbl" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Classes="muted" Text="{Binding Description}" />
+                  </StackPanel>
+                </DockPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+
     <Border Background="{DynamicResource BadBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}">
       <TextBlock Text="{Binding Error}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" />
     </Border>

@@ -165,6 +165,157 @@
       <v:EditServerView DataContext="{Binding Edit}" />
     </Border>
 
+    <!-- Окно «Гео-база» (ADR-039): большие списки — только виртуализированный ListBox -->
+    <Border IsVisible="{Binding GeoEditor.IsOpen}" Background="{DynamicResource Overlay}">
+      <Border Classes="card" MaxWidth="820" Margin="40,32" Padding="24" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+          <DockPanel Grid.Row="0">
+            <Button DockPanel.Dock="Right" Width="40" Command="{Binding GeoEditor.CloseCommand}" ToolTip.Tip="Закрыть без сохранения" AutomationProperties.Name="Закрыть">
+<v:Icon Data="{StaticResource IconClose}" />
+</Button>
+            <StackPanel Spacing="4" Margin="0,0,12,0">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="{Binding GeoEditor.Title}" FontSize="21" FontWeight="Bold" VerticalAlignment="Center" />
+                <Button Classes="info" Command="{Binding GeoEditor.ShowInfoCommand}" CommandParameter="geoLists" />
+              </StackPanel>
+              <TextBlock Classes="muted" Text="{Binding GeoEditor.Description}" />
+            </StackPanel>
+          </DockPanel>
+
+          <!-- Проверка адреса -->
+          <StackPanel Grid.Row="1" Spacing="8" Margin="0,16,0,0">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="primary" Content="Добавить…" Command="{Binding GeoEditor.OpenAddCommand}" IsEnabled="{Binding !GeoEditor.IsBusy}" Margin="8,0,0,0" />
+              <Button DockPanel.Dock="Right" Content="Проверить" Command="{Binding GeoEditor.CheckCommand}" IsEnabled="{Binding !GeoEditor.IsBusy}" IsDefault="{Binding GeoEditor.IsOpen}" Margin="8,0,0,0" />
+              <TextBox Text="{Binding GeoEditor.CheckText}" PlaceholderText="{Binding GeoEditor.CheckPlaceholder}" />
+            </DockPanel>
+            <Border Background="{DynamicResource OkBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding GeoEditor.CheckHit}">
+              <SelectableTextBlock Text="{Binding GeoEditor.CheckResult}" Foreground="{DynamicResource OkFg}" TextWrapping="Wrap" />
+            </Border>
+            <Border Background="{DynamicResource Card2}" CornerRadius="10" Padding="10,8" IsVisible="{Binding GeoEditor.CheckMiss}">
+              <SelectableTextBlock Text="{Binding GeoEditor.CheckResult}" TextWrapping="Wrap" />
+            </Border>
+            <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding GeoEditor.CheckBad}">
+              <TextBlock Text="{Binding GeoEditor.CheckResult}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" />
+            </Border>
+          </StackPanel>
+
+          <!-- Поиск и вид -->
+          <DockPanel Grid.Row="2" Margin="0,10,0,0">
+            <ComboBox DockPanel.Dock="Right" ItemsSource="{x:Static vm:GeoListEditorViewModel.Views}" SelectedIndex="{Binding GeoEditor.ViewIndex}" MinWidth="180" Margin="8,0,0,0" />
+            <TextBox Text="{Binding GeoEditor.Filter}" PlaceholderText="Поиск по списку" />
+          </DockPanel>
+
+          <StackPanel Grid.Row="3" Spacing="8" Margin="0,10,0,6">
+            <DockPanel>
+              <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" Width="80" IsVisible="{Binding GeoEditor.IsBusy}" VerticalAlignment="Center" />
+              <TextBlock Classes="muted" Text="{Binding GeoEditor.Summary}" VerticalAlignment="Center" />
+            </DockPanel>
+            <Border Background="{DynamicResource InfoBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding GeoEditor.Message, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <TextBlock Text="{Binding GeoEditor.Message}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
+            </Border>
+            <Border Background="{DynamicResource BadBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding GeoEditor.Error, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <TextBlock Text="{Binding GeoEditor.Error}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" />
+            </Border>
+          </StackPanel>
+
+          <Border Grid.Row="4" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="12" ClipToBounds="True">
+            <Panel>
+              <ListBox ItemsSource="{Binding GeoEditor.Items}" Background="Transparent" SelectionMode="Single">
+                <ListBox.Styles>
+                  <Style Selector="ListBoxItem">
+                    <Setter Property="Padding" Value="12,0,6,0" />
+                    <Setter Property="Height" Value="38" />
+                  </Style>
+                </ListBox.Styles>
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:GeoEntryRow">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" VerticalAlignment="Center">
+                      <SelectableTextBlock Grid.Column="0" Text="{Binding Value}" FontFamily="{StaticResource Mono}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <Border Grid.Column="1" Classes="pill" Background="{DynamicResource OkBg}" IsVisible="{Binding IsAdded}" VerticalAlignment="Center" Margin="8,0,0,0">
+                        <TextBlock Text="добавлено" Foreground="{DynamicResource OkFg}" FontSize="12" />
+                      </Border>
+                      <Border Grid.Column="1" Classes="pill" Background="{DynamicResource WarnBg}" IsVisible="{Binding IsRemoved}" VerticalAlignment="Center" Margin="8,0,0,0">
+                        <TextBlock Text="убрано" Foreground="{DynamicResource WarnFg}" FontSize="12" />
+                      </Border>
+                      <TextBlock Grid.Column="2" Classes="lbl" Text="{Binding KindLabel}" VerticalAlignment="Center" Margin="12,0,12,0" />
+                      <Button Grid.Column="3" Width="32" Height="30" MinHeight="30" Padding="0" Background="Transparent"
+                              Command="{Binding $parent[ListBox].((vm:MainWindowViewModel)DataContext).GeoEditor.ToggleCommand}" CommandParameter="{Binding}"
+                              ToolTip.Tip="{Binding ActionTip}" AutomationProperties.Name="{Binding ActionTip}">
+                        <Panel>
+                          <v:Icon Data="{StaticResource IconClose}" Width="14" Height="14" IsVisible="{Binding !IsRemoved}" />
+                          <v:Icon Data="{StaticResource IconUndo}" Width="14" Height="14" IsVisible="{Binding IsRemoved}" />
+                        </Panel>
+                      </Button>
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Classes="muted" Text="{Binding GeoEditor.EmptyText}" IsVisible="{Binding GeoEditor.IsEmpty}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Panel>
+          </Border>
+
+          <DockPanel Grid.Row="5" Margin="0,16,0,0">
+            <Button DockPanel.Dock="Left" Content="Сбросить мои правки" Command="{Binding GeoEditor.ResetEditsCommand}" IsEnabled="{Binding !GeoEditor.IsBusy}" />
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Content="Отмена" Command="{Binding GeoEditor.CloseCommand}" />
+              <Button Classes="primary" Content="Сохранить" Command="{Binding GeoEditor.SaveCommand}" IsEnabled="{Binding GeoEditor.CanSave}" />
+            </StackPanel>
+          </DockPanel>
+        </Grid>
+      </Border>
+    </Border>
+
+    <!-- Окно «Добавить записи» поверх окна гео-базы -->
+    <Border IsVisible="{Binding GeoEditor.IsAddOpen}" Background="{DynamicResource Overlay}">
+      <Border Classes="card" Width="640" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Spacing="14">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Width="40" Command="{Binding GeoEditor.CloseAddCommand}" ToolTip.Tip="Закрыть" AutomationProperties.Name="Закрыть добавление">
+<v:Icon Data="{StaticResource IconClose}" />
+</Button>
+            <StackPanel Spacing="4" Margin="0,0,12,0">
+              <TextBlock Text="Добавить записи" FontSize="20" FontWeight="Bold" />
+              <TextBlock Classes="muted" Text="{Binding GeoEditor.Title, StringFormat='В список «{0}»'}" />
+            </StackPanel>
+          </DockPanel>
+
+          <StackPanel Spacing="6">
+            <TextBlock Classes="lbl" Text="ЧТО ДОБАВИТЬ" />
+            <ComboBox ItemsSource="{Binding GeoEditor.AddKinds}" SelectedItem="{Binding GeoEditor.AddKind}" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:GeoKindOption">
+                  <TextBlock Text="{Binding Title}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Border Background="{DynamicResource Card2}" CornerRadius="10" Padding="12,10">
+              <StackPanel Spacing="4">
+                <TextBlock Text="{Binding GeoEditor.AddKind.Rule}" TextWrapping="Wrap" />
+                <TextBlock Classes="muted" FontFamily="{StaticResource Mono}" Text="{Binding GeoEditor.AddKind.Example, StringFormat='Пример: {0}'}" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <StackPanel Spacing="6">
+            <TextBlock Classes="lbl" Text="ЗАПИСИ — МОЖНО НЕСКОЛЬКО, КАЖДУЮ С НОВОЙ СТРОКИ" />
+            <TextBox Text="{Binding GeoEditor.NewText}" PlaceholderText="{Binding GeoEditor.AddKind.Placeholder}" FontFamily="{StaticResource Mono}"
+                     AcceptsReturn="True" TextWrapping="Wrap" Height="140" />
+          </StackPanel>
+
+          <Border Background="{DynamicResource BadBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding GeoEditor.AddError, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{Binding GeoEditor.AddError}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" />
+          </Border>
+
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Content="Отмена" Command="{Binding GeoEditor.CloseAddCommand}" />
+            <Button Classes="primary" Content="Добавить" Command="{Binding GeoEditor.AddCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Border>
+
     <!-- Справка по кнопке «i» -->
     <Border IsVisible="{Binding Info.IsOpen}" Background="{DynamicResource Overlay}" PointerPressed="OnInfoBackdropPressed">
       <Border Classes="card" Width="580" MaxHeight="640" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24" PointerPressed="OnInfoCardPressed">

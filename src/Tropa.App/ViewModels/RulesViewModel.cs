@@ -117,12 +117,19 @@ internal sealed partial class RulesViewModel : ObservableObject
 {
     private readonly TropaEngine _engine;
     private readonly InfoViewModel _info;
+    private readonly GeoListEditorViewModel _geoEditor;
     private bool _loading;
+    private IReadOnlyList<GeoListEdit>? _shownGeoEdits;
 
-    public RulesViewModel(TropaEngine engine, InfoViewModel info)
+    /// <summary>Гео-базы, которые можно открыть и поправить (ADR-039).</summary>
+    public ObservableCollection<GeoListRow> GeoLists { get; } = [];
+
+    public RulesViewModel(TropaEngine engine, InfoViewModel info, GeoListEditorViewModel geoEditor)
     {
         _engine = engine;
         _info = info;
+        _geoEditor = geoEditor;
+        geoEditor.Saved += (_, _) => NeedsApply = _engine.Status.State == ConnectionState.Connected;
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(Load);
         engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(() =>
         {
@@ -249,6 +256,14 @@ internal sealed partial class RulesViewModel : ObservableObject
             }
 
             _shownRules = routing.Rules;
+        }
+
+        if (!ReferenceEquals(_shownGeoEdits, routing.GeoEdits))
+        {
+            GeoLists.Clear();
+            foreach (var list in GeoEdits.Catalog)
+                GeoLists.Add(new GeoListRow(list, routing.GeoEdits.FirstOrDefault(e => e.Tag == list.Tag), _geoEditor.Open));
+            _shownGeoEdits = routing.GeoEdits;
         }
 
         OnPropertyChanged(nameof(AppRulesNote));

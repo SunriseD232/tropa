@@ -850,6 +850,25 @@ public sealed class TropaEngine : IAsyncDisposable
         return scrubber.Scrub(config);
     }
 
+    private readonly Dictionary<string, GeoListContent> _geoLists = new(StringComparer.Ordinal);
+
+    /// <summary>Содержимое закреплённого набора правил без правок (ADR-039). Кэшируется до смены файлов.</summary>
+    public async Task<GeoListContent> ReadGeoListAsync(string tag, CancellationToken ct = default)
+    {
+        var locations = _locations;
+        var key = tag + "|" + (locations.Geo.Files.FirstOrDefault(f => f.Name == tag)?.Sha256 ?? "");
+        lock (_geoLists)
+        {
+            if (_geoLists.TryGetValue(key, out var cached))
+                return cached;
+        }
+
+        var content = await GeoListReader.ReadAsync(locations, tag, _paths.RunDirectory, ct).ConfigureAwait(false);
+        lock (_geoLists)
+            _geoLists[key] = content;
+        return content;
+    }
+
     /// <summary>Работает ли другой VPN или клиент обхода (v2rayN и т. п.): текст предупреждения или null.</summary>
     public string? ForeignVpnWarning()
     {

@@ -137,6 +137,42 @@ public sealed class SingBoxGoldenTests
             XrayPath = @"C:\Program Files\Tropa\cores\xray.exe",
         },
 
+        // Правки гео-баз (ADR-039): убранное — логическим «И НЕ», добавленное — встроенным набором рядом с файлом.
+        // Затронуты DNS (банки), маршрут (банки, заблокированные IP и сайты) и правило пользователя с geoip.
+        ["14-geo-edits"] = () => Input(
+            Defaults with
+            {
+                Routing = Defaults.Routing with
+                {
+                    Preset = RoutePreset.BlockedOnly,
+                    GeoEdits =
+                    [
+                        new GeoListEdit { Tag = "geosite-category-bank-ru", Removed = [new(GeoEntryKind.Suffix, "bank.example.ru")] },
+                        new GeoListEdit
+                        {
+                            Tag = "geoip-ru-blocked",
+                            Added = [new(GeoEntryKind.Cidr, "203.0.113.0/24")],
+                            Removed = [new(GeoEntryKind.Cidr, "1.1.1.1/32"), new(GeoEntryKind.Cidr, "2001:db8::/32")],
+                        },
+                        new GeoListEdit { Tag = "geosite-ru-blocked", Added = [new(GeoEntryKind.Suffix, "example.org"), new(GeoEntryKind.Domain, "www.example.net"), new(GeoEntryKind.Keyword, "linked"), new(GeoEntryKind.Regex, @"^(.+\.)?media-watch\.(ru|com)$")] },
+                        // Неизвестный набор и неверная запись — отбрасываются генератором.
+                        new GeoListEdit { Tag = "geosite-evil", Added = [new(GeoEntryKind.Suffix, "evil.example")] },
+                        new GeoListEdit { Tag = "geoip-ru", Added = [new(GeoEntryKind.Cidr, "not-an-ip")] },
+                    ],
+                    Rules =
+                    [
+                        new Rule
+                        {
+                            Id = new Guid(20, 0, 0, new byte[8]),
+                            Match = new RuleMatch { IpCidrs = ["198.51.100.0/24"], GeoIp = ["ru-blocked"], Ports = [PortRange.Of(443)] },
+                            Tcp = RuleAction.Proxy,
+                            Udp = RuleAction.Direct,
+                        },
+                    ],
+                },
+            },
+            Reality),
+
         // «Только заблокированное»: блок-листы через сервер с resolve перед IP-правилами, остальное напрямую.
         ["11-blocked-only-resolve"] = () => Input(
             Defaults with { Routing = Defaults.Routing with { Preset = RoutePreset.BlockedOnly } },

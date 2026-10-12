@@ -69,4 +69,27 @@ public sealed record RoutingSettings
     public bool BlockQuic { get; init; } = true;
     public bool UdpProxy { get; init; } = true;
     public IReadOnlyList<Rule> Rules { get; init; } = [];
+
+    /// <summary>Правки гео-баз поверх закреплённых файлов .srs (ADR-039). Сами файлы не меняются.</summary>
+    public IReadOnlyList<GeoListEdit> GeoEdits { get; init; } = [];
+}
+
+/// <summary>Вид записи гео-базы — как поле правила sing-box.</summary>
+public enum GeoEntryKind { Cidr, Domain, Suffix, Keyword, Regex }
+
+/// <summary>Одна запись гео-базы: сеть (1.2.3.0/24) или домен (Domain — ровно этот, Suffix — с поддоменами).</summary>
+public sealed record GeoEntry(GeoEntryKind Kind, string Value);
+
+/// <summary>
+/// Правка одного набора правил: что добавить и что убрать из закреплённого файла. Добавленное
+/// сильнее убранного: запись, которая есть в обоих списках, совпадает.
+/// </summary>
+public sealed record GeoListEdit
+{
+    public required string Tag { get; init; }
+    public IReadOnlyList<GeoEntry> Added { get; init; } = [];
+    public IReadOnlyList<GeoEntry> Removed { get; init; } = [];
+
+    [JsonIgnore]
+    public bool IsEmpty => Added.Count == 0 && Removed.Count == 0;
 }
