@@ -30,12 +30,17 @@
         <Border Classes="card" Padding="24,32">
           <StackPanel Spacing="18" HorizontalAlignment="Stretch">
             <Panel>
-            <Button HorizontalAlignment="Center" Width="172" Height="172" CornerRadius="86"
+            <Button Classes="power" HorizontalAlignment="Center" Width="172" Height="172" CornerRadius="86"
                     Command="{Binding ToggleCommand}" IsEnabled="{Binding !IsBusy}"
-                    Background="{DynamicResource PowerOff}" Foreground="{DynamicResource Text}"
                     Classes.connected="{Binding IsConnected}" Classes.busy="{Binding IsBusy}" Classes.failed="{Binding IsError}"
                     ToolTip.Tip="Подключить или отключить" AutomationProperties.Name="Подключить или отключить">
+              <!-- Цвета — только стилями: значение, заданное прямо на кнопке, перебивает любой стиль,
+                   и раньше кнопка из-за этого никогда не становилась зелёной. -->
               <Button.Styles>
+                <Style Selector="Button.power">
+                  <Setter Property="Background" Value="{DynamicResource PowerOff}" />
+                  <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                </Style>
                 <Style Selector="Button.connected">
                   <Setter Property="Background" Value="{DynamicResource PowerOn}" />
                   <Setter Property="Foreground" Value="{DynamicResource PowerOnFg}" />

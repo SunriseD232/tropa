@@ -33,6 +33,12 @@ internal sealed partial class RuleItemViewModel : ObservableObject
 
     public string Title { get; }
 
+    /// <summary>
+    /// Варианты действия. Статический список: привязка к родителю пропадала, когда вкладку закрывали,
+    /// выпадающий список терял варианты и показывал пустое поле при возврате.
+    /// </summary>
+    public static IReadOnlyList<string> Actions { get; } = ["Через сервер", "Напрямую", "Блокировать"];
+
     public IRelayCommand RemoveCommand { get; }
 
     [ObservableProperty]
@@ -64,13 +70,20 @@ internal sealed partial class RuleItemViewModel : ObservableObject
     {
         if (value >= 0)
             Push(_rule with { Tcp = Action(value) });
+        else
+            RestoreLater(() => TcpIndex = Index(_rule.Tcp));
     }
 
     partial void OnUdpIndexChanged(int value)
     {
         if (value >= 0)
             Push(_rule with { Udp = Action(value) });
+        else
+            RestoreLater(() => UdpIndex = Index(_rule.Udp));
     }
+
+    // Список на миг потерял выбор — возвращаем сохранённое значение, чтобы поле не осталось пустым.
+    private static void RestoreLater(Action restore) => Avalonia.Threading.Dispatcher.UIThread.Post(restore);
 
     partial void OnEnabledChanged(bool value) => Push(_rule with { Enabled = value });
 
@@ -184,7 +197,6 @@ internal sealed partial class RulesViewModel : ObservableObject
         NeedsApply = _engine.Status.State == ConnectionState.Connected;
     }
 
-    public IReadOnlyList<string> Actions { get; } = ["Через сервер", "Напрямую", "Блокировать"];
 
     [ObservableProperty]
     public partial int PresetIndex { get; set; }

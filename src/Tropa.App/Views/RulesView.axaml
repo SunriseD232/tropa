@@ -87,8 +87,8 @@
             <DataTemplate x:DataType="vm:RuleItemViewModel">
               <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4">
                 <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" SelectedIndex="{Binding TcpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
-                <ComboBox Grid.Column="2" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" SelectedIndex="{Binding UdpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding TcpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="2" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding UdpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
                 <ToggleSwitch Grid.Column="3" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
                 <Button Grid.Column="4" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" AutomationProperties.Name="Удалить правило">
 <v:Icon Data="{StaticResource IconClose}" />
@@ -141,8 +141,8 @@
             <DataTemplate x:DataType="vm:RuleItemViewModel">
               <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4">
                 <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" SelectedIndex="{Binding TcpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
-                <ComboBox Grid.Column="2" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" SelectedIndex="{Binding UdpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding TcpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="2" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding UdpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
                 <ToggleSwitch Grid.Column="3" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
                 <Button Grid.Column="4" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" AutomationProperties.Name="Удалить правило">
 <v:Icon Data="{StaticResource IconClose}" />
