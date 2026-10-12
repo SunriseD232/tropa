@@ -144,6 +144,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new ToggleRow("Переподключаться после сна и смены сети", "reconnect", s => s.General.Reconnect, (s, v) => s with { General = s.General with { Reconnect = v } }),
         new ToggleRow("Аварийная блокировка (kill switch)", "killSwitch", s => s.General.KillSwitch, (s, v) => s with { General = s.General with { KillSwitch = v } }),
         new ToggleRow("Блокировать IPv6 мимо сервера", "ipv6Block", s => s.General.Ipv6Block, (s, v) => s with { General = s.General with { Ipv6Block = v } }),
+        new ToggleRow("Показывать страну выхода", "showExitRegion", s => !s.General.HideExitRegion, (s, v) => s with { General = s.General with { HideExitRegion = !v } },
+            hint: "Рядом с кнопкой подключения. Раз в 2 минуты — короткий запрос к Cloudflare через сервер."),
         new ToggleRow("Пароль на локальный прокси", "localPass", s => s.General.LocalPass, (s, v) => s with { General = s.General with { LocalPass = v } }),
         new TextRow("Горячая клавиша подключения", "hotkey", s => s.General.Hotkey, (s, v) =>
         {

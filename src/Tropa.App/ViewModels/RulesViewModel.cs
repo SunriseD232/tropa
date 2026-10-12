@@ -58,17 +58,31 @@ internal sealed partial class RuleItemViewModel : ObservableObject
         _ => RuleAction.Proxy,
     };
 
-    partial void OnTcpIndexChanged(int value) => Push(_rule with { Tcp = Action(value) });
+    // -1 приходит, когда список пересоздаётся (ItemsSource ещё не привязан или уже отцеплен), —
+    // раньше это сохранялось как «Через сервер» и сбрасывало выбранное «Напрямую».
+    partial void OnTcpIndexChanged(int value)
+    {
+        if (value >= 0)
+            Push(_rule with { Tcp = Action(value) });
+    }
 
-    partial void OnUdpIndexChanged(int value) => Push(_rule with { Udp = Action(value) });
+    partial void OnUdpIndexChanged(int value)
+    {
+        if (value >= 0)
+            Push(_rule with { Udp = Action(value) });
+    }
 
     partial void OnEnabledChanged(bool value) => Push(_rule with { Enabled = value });
 
+    /// <summary>Строку убрали с экрана: её выпадающие списки при отцеплении сбрасываются, это не выбор пользователя.</summary>
+    public void Detach() => _loading = true;
+
     private void Push(Rule rule)
     {
+        if (_loading)
+            return;
         _rule = rule;
-        if (!_loading)
-            _changed(rule);
+        _changed(rule);
     }
 }
 
@@ -197,6 +211,8 @@ internal sealed partial class RulesViewModel : ObservableObject
         ? null
         : "Правила для приложений работают только в режиме «Весь компьютер»: системный прокси не знает, какая программа подключается.";
 
+    private IReadOnlyList<Rule>? _shownRules;
+
     private void Load()
     {
         _loading = true;
@@ -204,15 +220,23 @@ internal sealed partial class RulesViewModel : ObservableObject
         PresetIndex = (int)routing.Preset;
         BlockQuic = routing.BlockQuic;
         UdpProxy = routing.UdpProxy;
-        Apps.Clear();
-        Sites.Clear();
-        foreach (var rule in routing.Rules)
+        // Состояние меняется часто (проверки серверов, подключение) — строки пересоздаём, только если правила другие.
+        if (_shownRules is null || !_shownRules.SequenceEqual(routing.Rules))
         {
-            var item = new RuleItemViewModel(rule, Change, Remove);
-            if (rule.Match.HasProcessCondition)
-                Apps.Add(item);
-            else
-                Sites.Add(item);
+            foreach (var old in Apps.Concat(Sites))
+                old.Detach();
+            Apps.Clear();
+            Sites.Clear();
+            foreach (var rule in routing.Rules)
+            {
+                var item = new RuleItemViewModel(rule, Change, Remove);
+                if (rule.Match.HasProcessCondition)
+                    Apps.Add(item);
+                else
+                    Sites.Add(item);
+            }
+
+            _shownRules = routing.Rules;
         }
 
         OnPropertyChanged(nameof(AppRulesNote));
@@ -229,8 +253,12 @@ internal sealed partial class RulesViewModel : ObservableObject
         NeedsApply = _engine.Status.State == ConnectionState.Connected;
     }
 
-    private void Change(Rule rule) =>
+    private void Change(Rule rule)
+    {
         Update(r => r with { Rules = r.Rules.Select(x => x.Id == rule.Id ? rule : x).ToList() });
+        // Строка уже показывает новое значение — не пересоздаём список под открытым выпадающим меню.
+        _shownRules = _engine.State.Settings.Routing.Rules;
+    }
 
     private void Remove(Guid id) => Update(r => r with { Rules = r.Rules.Where(x => x.Id != id).ToList() });
 

@@ -20,6 +20,15 @@ internal sealed partial class GroupTab(string title, Guid? subscriptionId, bool 
     public bool Manual { get; } = manual;
     public bool All => SubscriptionId is null && !Manual;
 
+    public bool IsSubscription => SubscriptionId is not null;
+
+    /// <summary>Сколько серверов этой вкладки пользователь удалил (скрыл).</summary>
+    public int HiddenCount { get; init; }
+
+    public bool HasHidden => HiddenCount > 0;
+
+    public string RestoreLabel => $"Вернуть удалённые ({HiddenCount})";
+
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
 }
@@ -155,25 +164,36 @@ internal sealed partial class ServersViewModel : ObservableObject
     {
         var s = _engine.State;
         var selectedTab = CurrentTab;
+        var visible = s.Profiles.Where(p => !p.Hidden).ToList();
         Tabs.Clear();
-        Tabs.Add(new GroupTab($"Все · {s.Profiles.Count}", null, false));
+        Tabs.Add(new GroupTab($"Все · {visible.Count}", null, false) { HiddenCount = s.Profiles.Count(p => p.Hidden) });
         foreach (var sub in s.Subscriptions)
-            Tabs.Add(new GroupTab($"{sub.Name} · {s.Profiles.Count(p => p.Profile.SubscriptionId == sub.Id)}", sub.Id, false));
-        var manual = s.Profiles.Count(p => p.Profile.SubscriptionId is null);
+        {
+            Tabs.Add(new GroupTab($"{sub.Name} · {visible.Count(p => p.Profile.SubscriptionId == sub.Id)}", sub.Id, false)
+            {
+                HiddenCount = s.Profiles.Count(p => p.Hidden && p.Profile.SubscriptionId == sub.Id),
+            });
+        }
+
+        var manual = visible.Count(p => p.Profile.SubscriptionId is null);
         if (manual > 0)
             Tabs.Add(new GroupTab($"Мои · {manual}", null, true));
         var restore = Tabs.FirstOrDefault(t => selectedTab is not null && t.SubscriptionId == selectedTab.SubscriptionId && t.Manual == selectedTab.Manual) ?? Tabs[0];
         restore.IsSelected = true;
+        OnPropertyChanged(nameof(CurrentTabInfo));
 
         RebuildItems();
         var updated = s.Subscriptions.Where(x => x.LastUpdated is not null).Select(x => x.LastUpdated!.Value).DefaultIfEmpty().Max();
-        Summary = s.Profiles.Count == 0
+        Summary = visible.Count == 0 && s.Subscriptions.Count == 0
             ? "Серверов пока нет"
-            : Format.Plural(s.Profiles.Count, "сервер", "сервера", "серверов")
+            : Format.Plural(visible.Count, "сервер", "сервера", "серверов")
               + (s.Subscriptions.Count > 0 ? " · " + Format.Plural(s.Subscriptions.Count, "подписка", "подписки", "подписок") : "")
               + (updated == default ? "" : $" · обновлено {updated.LocalDateTime:dd.MM HH:mm}");
-        IsEmpty = s.Profiles.Count == 0;
+        IsEmpty = visible.Count == 0 && s.Subscriptions.Count == 0;
     }
+
+    /// <summary>Открытая вкладка: для полосы действий с подпиской и кнопки «Вернуть удалённые».</summary>
+    public GroupTab? CurrentTabInfo => CurrentTab;
 
     private void RebuildItems()
     {
@@ -181,7 +201,7 @@ internal sealed partial class ServersViewModel : ObservableObject
         var tab = CurrentTab;
         var selectedId = Selected?.Id;
         Items.Clear();
-        foreach (var sp in s.Profiles.OrderBy(p => p.Order))
+        foreach (var sp in s.Profiles.Where(p => !p.Hidden).OrderBy(p => p.Order))
         {
             if (tab is { All: false } && (tab.Manual ? sp.Profile.SubscriptionId is not null : sp.Profile.SubscriptionId != tab.SubscriptionId))
                 continue;
@@ -213,6 +233,8 @@ internal sealed partial class ServersViewModel : ObservableObject
     {
         foreach (var t in Tabs)
             t.IsSelected = t == tab;
+        PendingSubscriptionDelete = null;
+        OnPropertyChanged(nameof(CurrentTabInfo));
         RebuildItems();
     }
 
@@ -239,10 +261,100 @@ internal sealed partial class ServersViewModel : ObservableObject
     [RelayCommand]
     private void RemoveSelected()
     {
-        if (Selected is { Profile.SubscriptionId: null } item)
-            _engine.RemoveProfile(item.Id);
-        else
-            Message = "Серверы из подписки удаляются вместе с подпиской: при обновлении они вернутся.";
+        if (Selected is not { } item)
+            return;
+        var index = Items.IndexOf(item);
+        // Соседний сервер становится выбранным, чтобы можно было удалять подряд.
+        var next = Items.ElementAtOrDefault(index + 1) ?? Items.ElementAtOrDefault(index - 1);
+        _engine.RemoveProfile(item.Id);
+        Refresh();
+        Selected = Items.FirstOrDefault(i => i.Id == next?.Id) ?? Items.FirstOrDefault();
+        Message = item.Profile.SubscriptionId is null
+            ? $"Сервер «{item.Name}» удалён."
+            : $"Сервер «{item.Name}» убран из списка и не вернётся при обновлении подписки. Вернуть: «Вернуть удалённые» на вкладке подписки.";
+    }
+
+    [RelayCommand]
+    private void MoveUp(ServerItemViewModel? item) => Move(item ?? Selected, -1);
+
+    [RelayCommand]
+    private void MoveDown(ServerItemViewModel? item) => Move(item ?? Selected, +1);
+
+    private void Move(ServerItemViewModel? item, int delta)
+    {
+        if (item is null)
+            return;
+        _engine.MoveProfile(item.Id, delta, Items.Select(i => i.Id).ToList());
+        Refresh();
+        Selected = Items.FirstOrDefault(i => i.Id == item.Id);
+    }
+
+    [RelayCommand]
+    private void RestoreHidden()
+    {
+        _engine.RestoreHidden(CurrentTab?.SubscriptionId);
+        Message = "Удалённые серверы возвращены в список.";
+    }
+
+    /// <summary>Вопрос «Удалить подписку…?», пока пользователь не подтвердил.</summary>
+    [ObservableProperty]
+    public partial string? PendingSubscriptionDelete { get; set; }
+
+    [RelayCommand]
+    private void AskRemoveSubscription()
+    {
+        if (CurrentTab is not { SubscriptionId: { } id } || _engine.State.Subscriptions.FirstOrDefault(x => x.Id == id) is not { } sub)
+            return;
+        var count = _engine.State.Profiles.Count(p => p.Profile.SubscriptionId == id);
+        PendingSubscriptionDelete = $"Удалить подписку «{sub.Name}» вместе с серверами ({count})? Адрес подписки тоже удалится — чтобы вернуть её, понадобится ссылка от продавца.";
+    }
+
+    [RelayCommand]
+    private void CancelRemoveSubscription() => PendingSubscriptionDelete = null;
+
+    [RelayCommand]
+    private void ConfirmRemoveSubscription()
+    {
+        PendingSubscriptionDelete = null;
+        if (CurrentTab is not { SubscriptionId: { } id })
+            return;
+        var name = _engine.State.Subscriptions.FirstOrDefault(x => x.Id == id)?.Name;
+        _engine.RemoveSubscription(id);
+        foreach (var t in Tabs)
+            t.IsSelected = false;
+        Refresh();
+        Message = $"Подписка «{name}» удалена.";
+    }
+
+    [RelayCommand]
+    private void MoveSubscriptionLeft() => MoveSubscription(-1);
+
+    [RelayCommand]
+    private void MoveSubscriptionRight() => MoveSubscription(+1);
+
+    private void MoveSubscription(int delta)
+    {
+        if (CurrentTab is { SubscriptionId: { } id })
+            _engine.MoveSubscription(id, delta);
+    }
+
+    [RelayCommand]
+    private async Task UpdateCurrentSubscriptionAsync()
+    {
+        if (CurrentTab is not { SubscriptionId: { } id } || _engine.State.Subscriptions.FirstOrDefault(x => x.Id == id) is not { } sub)
+            return;
+        IsBusy = true;
+        Message = null;
+        try
+        {
+            var r = await _engine.UpdateSubscriptionAsync(id);
+            Message = $"{sub.Name}: +{r.Added}, обновлено {r.Updated}" + (r.Messages.Count > 0 ? " — " + r.Messages[0] : "");
+        }
+        finally
+        {
+            IsBusy = false;
+            Refresh();
+        }
     }
 
     [RelayCommand]

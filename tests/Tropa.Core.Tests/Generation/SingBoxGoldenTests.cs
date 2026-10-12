@@ -32,13 +32,17 @@ public sealed class SingBoxGoldenTests
     internal static readonly Profile Ss2022 = WithId(Ok("ss://2022-blake3-aes-128-gcm:AAECAwQFBgcICQoLDA0ODw%3D%3D@ss.example.com:8388#SS-2022"), 14);
     internal static readonly Profile Hy2 = WithId(Ok("hysteria2://hy2pass@hy.example.com:443?sni=hy.example.com&obfs=salamander&obfs-password=obfspw#HY2"), 15);
 
-    private static readonly AppSettings Defaults = new();
+    // Эталоны сняты с маршрутом «Всё, кроме российского»; сценарии с другим маршрутом задают его явно.
+    private static readonly AppSettings Defaults = new() { Routing = new RoutingSettings { Preset = RoutePreset.ExceptRu } };
 
     public static TheoryData<string> Scenarios => new(All.Keys);
 
     private static readonly Dictionary<string, Func<SingBoxInput>> All = new()
     {
         ["01-reality-vision-tun-except-ru"] = () => Input(Defaults, Reality),
+
+        // Новый маршрут по умолчанию и служебный вход проверки страны выхода (первым правилом — в сервер).
+        ["13-default-blocked-only-exit-probe"] = () => Input(new AppSettings(), Reality) with { ExitProbePort = 19191 },
 
         // Shadowsocks-2022 активный, Hysteria2 в группе авто-выбора; Mux включён — у Hysteria2 его быть не должно.
         ["12-shadowsocks-hysteria2"] = () => Input(

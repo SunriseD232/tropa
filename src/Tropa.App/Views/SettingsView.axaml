@@ -13,11 +13,14 @@
       <Setter Property="Foreground" Value="{DynamicResource WarnFg}" />
     </Style>
     <Style Selector="Button.tab">
-      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Background" Value="{DynamicResource Card}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
       <Setter Property="Foreground" Value="{DynamicResource NavFg}" />
-      <Setter Property="HorizontalAlignment" Value="Stretch" />
-      <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="Padding" Value="14,0" />
     </Style>
     <Style Selector="Button.tab.on">
       <Setter Property="Background" Value="{DynamicResource NavOnBg}" />
@@ -39,7 +42,7 @@
     <DataTemplate DataType="vm:ChoiceRow">
       <DockPanel Margin="0,8">
         <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" />
-        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding Options}" SelectedIndex="{Binding Index}" MinWidth="260" VerticalAlignment="Center" IsEnabled="{Binding IsAvailable}" />
+        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding Options}" SelectedIndex="{Binding Index}" Width="230" VerticalAlignment="Center" IsEnabled="{Binding IsAvailable}" />
         <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,12,0">
           <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" />
           <TextBlock Classes="note" Classes.warn="{Binding NoteIsWarning}" Text="{Binding Note}" IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
@@ -50,7 +53,7 @@
       <StackPanel Margin="0,8" Spacing="6">
         <DockPanel>
           <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" />
-          <TextBox DockPanel.Dock="Right" Width="320" VerticalAlignment="Center" IsVisible="{Binding !Multiline}" IsEnabled="{Binding IsAvailable}"
+          <TextBox DockPanel.Dock="Right" Width="230" VerticalAlignment="Center" IsVisible="{Binding !Multiline}" IsEnabled="{Binding IsAvailable}"
                    Text="{Binding Value, UpdateSourceTrigger=LostFocus}" PlaceholderText="{Binding Placeholder}" />
           <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,12,0">
             <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" />
@@ -63,20 +66,24 @@
     </DataTemplate>
     <DataTemplate DataType="vm:ActionRow">
       <DockPanel Margin="0,8">
-        <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" />
-        <Button DockPanel.Dock="Right" Content="{Binding SecondLabel}" Command="{Binding SecondCommand}" IsVisible="{Binding HasSecond}" Margin="8,0,0,0" />
-        <Button DockPanel.Dock="Right" Content="{Binding FirstLabel}" Command="{Binding FirstCommand}" />
-        <StackPanel VerticalAlignment="Center" Spacing="2" Margin="0,0,12,0">
-          <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" />
-          <TextBlock Classes="note" Text="{Binding Note}" IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" VerticalAlignment="Top" />
+        <StackPanel Spacing="8">
+          <StackPanel Spacing="2">
+            <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" />
+            <TextBlock Classes="note" Text="{Binding Note}" IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+          <WrapPanel>
+            <Button Content="{Binding FirstLabel}" Command="{Binding FirstCommand}" Margin="0,0,8,0" />
+            <Button Content="{Binding SecondLabel}" Command="{Binding SecondCommand}" IsVisible="{Binding HasSecond}" />
+          </WrapPanel>
         </StackPanel>
       </DockPanel>
     </DataTemplate>
     <DataTemplate DataType="vm:LabelRow">
       <DockPanel Margin="0,8">
         <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" />
-        <TextBlock DockPanel.Dock="Right" Text="{Binding Text}" Classes="muted" VerticalAlignment="Center" />
-        <TextBlock Text="{Binding Title}" FontSize="15" VerticalAlignment="Center" />
+        <TextBlock DockPanel.Dock="Right" Text="{Binding Text}" Classes="muted" VerticalAlignment="Center" MaxWidth="260" TextAlignment="Right" />
+        <TextBlock Text="{Binding Title}" FontSize="15" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" />
       </DockPanel>
     </DataTemplate>
   </UserControl.DataTemplates>
@@ -100,19 +107,21 @@
       <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
     </Border>
 
-    <Grid ColumnDefinitions="210,20,*">
-      <Border Grid.Column="0" Classes="card" Padding="8" VerticalAlignment="Top">
-        <ItemsControl ItemsSource="{Binding Sections}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:SettingsSection">
-              <Button Classes="tab" Classes.on="{Binding IsCurrent}" Content="{Binding Title}"
-                      Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).SelectCommand}" CommandParameter="{Binding}" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </Border>
+    <StackPanel Spacing="14">
+      <!-- Разделы — строкой сверху: колонка слева съедала ширину, и на узком окне строки налезали друг на друга. -->
+      <ItemsControl ItemsSource="{Binding Sections}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:SettingsSection">
+            <Button Classes="tab" Classes.on="{Binding IsCurrent}" Content="{Binding Title}" Margin="0,0,8,8"
+                    Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).SelectCommand}" CommandParameter="{Binding}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
 
-      <StackPanel Grid.Column="2" Spacing="14">
+      <StackPanel Spacing="14">
         <Border Classes="card" IsVisible="{Binding SiteImportOpen}">
           <StackPanel Spacing="10">
             <StackPanel Orientation="Horizontal" Spacing="10">
@@ -152,6 +161,6 @@
                    FontFamily="{StaticResource Mono}" FontSize="11" />
         </Border>
       </StackPanel>
-    </Grid>
+    </StackPanel>
   </StackPanel>
 </UserControl>

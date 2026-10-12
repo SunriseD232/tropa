@@ -117,6 +117,44 @@ public sealed class SubscriptionFetchTests : IDisposable
     }
 
     [Fact]
+    public async Task Removed_server_stays_hidden_order_survives_and_subscription_can_be_deleted()
+    {
+        var body = $"vless://{Uuid}@a.example.com:443?security=none#A\nvless://{Uuid}@b.example.com:443?security=none#B\nvless://{Uuid}@c.example.com:443?security=none#C";
+        _handler = ctx => Write(ctx, body);
+        await using var engine = Engine();
+        await engine.ImportTextAsync(Url("sub"), null, TestContext.Current.CancellationToken);
+        await engine.ImportTextAsync(Url("sub2"), "Вторая", TestContext.Current.CancellationToken);
+        var subId = engine.State.Subscriptions[0].Id;
+        Guid Id(string name) => engine.State.Profiles.First(p => p.Profile.Name == name && p.Profile.SubscriptionId == subId).Profile.Id;
+        List<string> Visible() => engine.State.Profiles.Where(p => p.Profile.SubscriptionId == subId && !p.Hidden)
+            .OrderBy(p => p.Order).Select(p => p.Profile.Name).ToList();
+
+        // A выбран; удаляем его — выбирается следующий видимый, а при обновлении A не возвращается.
+        await engine.SetActiveAsync(Id("A"), TestContext.Current.CancellationToken);
+        engine.RemoveProfile(Id("A"));
+        Assert.NotEqual(Id("A"), engine.State.ActiveProfileId);
+        // C поднимаем над B.
+        engine.MoveProfile(Id("C"), -1, [Id("B"), Id("C")]);
+        Assert.Equal(["C", "B"], Visible());
+
+        await engine.UpdateSubscriptionAsync(subId, TestContext.Current.CancellationToken);
+        Assert.Equal(["C", "B"], Visible());
+        Assert.True(engine.State.Profiles.Single(p => p.Profile.Id == Id("A")).Hidden);
+
+        engine.RestoreHidden(subId);
+        Assert.Contains("A", Visible());
+
+        // Сдвиг подписок и удаление подписки вместе с серверами.
+        var second = engine.State.Subscriptions[1].Id;
+        engine.MoveSubscription(second, -1);
+        Assert.Equal(second, engine.State.Subscriptions[0].Id);
+        engine.RemoveSubscription(subId);
+        Assert.Single(engine.State.Subscriptions);
+        Assert.DoesNotContain(engine.State.Profiles, p => p.Profile.SubscriptionId == subId);
+        Assert.Contains(engine.State.Profiles, p => p.Profile.Id == engine.State.ActiveProfileId);
+    }
+
+    [Fact]
     public async Task Empty_answer_suggests_user_agent_change()
     {
         _handler = ctx => Write(ctx, "<html>Unsupported client</html>");

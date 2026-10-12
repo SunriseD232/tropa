@@ -75,7 +75,7 @@
               <Button Classes="info" Command="{Binding Onboarding.ShowInfoCommand}" CommandParameter="autoSetup" />
             </StackPanel>
             <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Тропа включит рекомендуемые настройки: весь компьютер через Тропу, запуск вместе с Windows и автоподключение, выбор самого быстрого сервера, российские сайты напрямую, защита DNS и мягкий обход замедления YouTube. Вам останется только вставить ссылку от продавца VPN. Всё можно поменять потом в «Настройках»." />
+                       Text="Тропа включит рекомендуемые настройки: весь компьютер через Тропу, запуск вместе с Windows и автоподключение, выбор самого быстрого сервера, через сервер — только заблокированные сайты, защита DNS. Вам останется только вставить ссылку от продавца VPN. Всё можно поменять потом в «Настройках»." />
             <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
               <Button Content="Нет, настрою сам" Command="{Binding Onboarding.ChooseManualCommand}" />
               <Button Classes="primary" Content="Да, настроить автоматически" Command="{Binding Onboarding.ChooseAutoCommand}" />
@@ -101,7 +101,13 @@
             <RadioButton GroupName="onbMode" IsChecked="{Binding Onboarding.ModeTun}" IsEnabled="{Binding Onboarding.TunAvailable}" Content="Весь компьютер — игры, Discord, все программы" />
             <RadioButton GroupName="onbMode" IsChecked="{Binding !Onboarding.ModeTun}" Content="Только браузеры — через прокси Windows" />
             <TextBlock Classes="muted" Text="{Binding Onboarding.ModeNote}" />
-            <CheckBox IsChecked="{Binding Onboarding.Autostart}" Content="Запускать вместе с Windows и сразу подключаться" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+              <TextBlock Text="Что пускать через сервер" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding Onboarding.ShowInfoCommand}" CommandParameter="route" />
+            </StackPanel>
+            <RadioButton GroupName="onbRoute" IsChecked="{Binding Onboarding.RouteBlockedOnly}" Content="Только заблокированное (рекомендуется) — остальное работает как без VPN" />
+            <RadioButton GroupName="onbRoute" IsChecked="{Binding !Onboarding.RouteBlockedOnly}" Content="Всё, кроме российского" />
+            <CheckBox IsChecked="{Binding Onboarding.Autostart}" Content="Запускать вместе с Windows и сразу подключаться" Margin="0,6,0,0" />
             <Button Classes="primary" Content="Дальше" Command="{Binding Onboarding.NextCommand}" HorizontalAlignment="Right" />
           </StackPanel>
 
@@ -125,7 +131,9 @@
       <Border Classes="card" Width="680" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24">
         <StackPanel Spacing="14">
           <DockPanel>
-            <Button DockPanel.Dock="Right" Content="✕" Width="40" Command="{Binding Import.CloseCommand}" ToolTip.Tip="Закрыть" />
+            <Button DockPanel.Dock="Right" Width="40" Command="{Binding Import.CloseCommand}" ToolTip.Tip="Закрыть" AutomationProperties.Name="Закрыть">
+<v:Icon Data="{StaticResource IconClose}" />
+</Button>
             <StackPanel Orientation="Horizontal" Spacing="10">
               <TextBlock Text="Добавить серверы" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" />
               <Button Classes="info" Command="{Binding Import.ShowInfoCommand}" CommandParameter="importMethods" ToolTip.Tip="Что можно вставить" />
@@ -162,7 +170,9 @@
       <Border Classes="card" Width="580" MaxHeight="640" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24" PointerPressed="OnInfoCardPressed">
         <DockPanel>
           <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-            <Button DockPanel.Dock="Right" Content="✕" Width="40" Command="{Binding Info.CloseCommand}" ToolTip.Tip="Закрыть" />
+            <Button DockPanel.Dock="Right" Width="40" Command="{Binding Info.CloseCommand}" ToolTip.Tip="Закрыть" AutomationProperties.Name="Закрыть">
+<v:Icon Data="{StaticResource IconClose}" />
+</Button>
             <TextBlock Text="{Binding Info.Title}" FontSize="21" FontWeight="Bold" TextWrapping="Wrap" />
           </DockPanel>
           <Button DockPanel.Dock="Bottom" HorizontalAlignment="Right" Content="Понятно" Margin="0,16,0,0" Command="{Binding Info.CloseCommand}" />

@@ -52,6 +52,7 @@
 | killSwitch | bool | false |
 | ipv6Block | bool | true |
 | localPass | bool | true |
+| hideExitRegion (в интерфейсе «Показывать страну выхода», showExitRegion) | bool | false — страна показывается |
 | subUpdate | 6h/12h/24h/manual | 12h |
 | subViaProxy | bool | true |
 | subUA | tropa/v2rayn/singbox/custom | tropa |

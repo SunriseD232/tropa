@@ -44,7 +44,7 @@ public static class RecommendedSettings
             Subscriptions = defaults.Subscriptions,
             Routing = current.Routing with
             {
-                Preset = RoutePreset.ExceptRu,
+                Preset = RoutePreset.BlockedOnly,
                 BlockQuic = true,
                 UdpProxy = true,
             },

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Tropa.App.ViewModels"
+             xmlns:v="using:Tropa.App.Views"
              x:Class="Tropa.App.Views.HomeView"
              x:DataType="vm:HomeViewModel">
   <StackPanel Spacing="20">
@@ -28,22 +29,56 @@
         <!-- Кнопка подключения -->
         <Border Classes="card" Padding="24,32">
           <StackPanel Spacing="18" HorizontalAlignment="Stretch">
+            <Panel>
             <Button HorizontalAlignment="Center" Width="172" Height="172" CornerRadius="86"
                     Command="{Binding ToggleCommand}" IsEnabled="{Binding !IsBusy}"
                     Background="{DynamicResource PowerOff}" Foreground="{DynamicResource Text}"
-                    Classes.connected="{Binding IsConnected}"
-                    ToolTip.Tip="Подключить или отключить (Ctrl+Alt+P — в следующей версии)">
+                    Classes.connected="{Binding IsConnected}" Classes.busy="{Binding IsBusy}" Classes.failed="{Binding IsError}"
+                    ToolTip.Tip="Подключить или отключить" AutomationProperties.Name="Подключить или отключить">
               <Button.Styles>
                 <Style Selector="Button.connected">
-                  <Setter Property="Background" Value="{DynamicResource Accent}" />
-                  <Setter Property="Foreground" Value="{DynamicResource AccentDark}" />
+                  <Setter Property="Background" Value="{DynamicResource PowerOn}" />
+                  <Setter Property="Foreground" Value="{DynamicResource PowerOnFg}" />
+                </Style>
+                <Style Selector="Button.busy">
+                  <Setter Property="Background" Value="{DynamicResource PowerBusy}" />
+                  <Setter Property="Foreground" Value="{DynamicResource PowerBusyFg}" />
+                </Style>
+                <!-- Во время подключения кнопка выключена, но цвет «жёлтый» должен остаться. -->
+                <Style Selector="Button.busy:disabled /template/ ContentPresenter">
+                  <Setter Property="Background" Value="{DynamicResource PowerBusy}" />
+                  <Setter Property="Foreground" Value="{DynamicResource PowerBusyFg}" />
+                </Style>
+                <Style Selector="Button.failed">
+                  <Setter Property="Background" Value="{DynamicResource PowerErr}" />
+                  <Setter Property="Foreground" Value="{DynamicResource PowerErrFg}" />
+                </Style>
+                <Style Selector="Button.connected:pointerover /template/ ContentPresenter">
+                  <Setter Property="Background" Value="{DynamicResource PowerOn}" />
+                  <Setter Property="Foreground" Value="{DynamicResource PowerOnFg}" />
+                  <Setter Property="Opacity" Value="0.9" />
+                </Style>
+                <Style Selector="Button.failed:pointerover /template/ ContentPresenter">
+                  <Setter Property="Background" Value="{DynamicResource PowerErr}" />
+                  <Setter Property="Foreground" Value="{DynamicResource PowerErrFg}" />
+                  <Setter Property="Opacity" Value="0.9" />
                 </Style>
               </Button.Styles>
               <StackPanel Spacing="8" HorizontalAlignment="Center">
-                <TextBlock Text="⏻" FontSize="40" HorizontalAlignment="Center" />
+                <v:Icon Data="{StaticResource IconPower}" Width="44" Height="44" HorizontalAlignment="Center" />
                 <TextBlock Text="{Binding StateText}" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" />
               </StackPanel>
             </Button>
+            <!-- Страна выхода: у сервера бывает своё переключение внутри туннеля, поэтому проверяем по факту. -->
+            <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-16,-8,0" CornerRadius="999" Padding="10,4"
+                    Background="{DynamicResource Card2}" IsVisible="{Binding ExitRegion, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    ToolTip.Tip="{Binding ExitRegionTip}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <v:Icon Data="{StaticResource IconGlobe}" Width="14" Height="14" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ExitRegion}" FontSize="12" VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+            </Panel>
             <TextBlock Text="{Binding SessionTime}" Classes="mono" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" />
             <Border IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" CornerRadius="12" Padding="12,10"
                     Background="{DynamicResource InfoBg}" Classes.err="{Binding IsError}">
@@ -58,7 +93,7 @@
                   <TextBlock Text="{Binding CountryCode}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel>
-                  <TextBlock Text="{Binding ServerName}" FontSize="15" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding ServerName}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                   <TextBlock Text="{Binding ServerDetails}" Classes="muted" />
                 </StackPanel>
               </DockPanel>
@@ -79,13 +114,13 @@
             <UniformGrid Columns="2">
               <RadioButton GroupName="mode" IsChecked="{Binding ModeTun}" Command="{Binding SetModeCommand}" CommandParameter="tun" Margin="0,0,8,0">
                 <StackPanel>
-                  <TextBlock Text="Весь компьютер" />
+                  <TextBlock Text="Весь компьютер" TextWrapping="Wrap" />
                   <TextBlock Classes="muted" Text="TUN · игры, Discord, UDP" />
                 </StackPanel>
               </RadioButton>
               <RadioButton GroupName="mode" IsChecked="{Binding !ModeTun}" Command="{Binding SetModeCommand}" CommandParameter="proxy">
                 <StackPanel>
-                  <TextBlock Text="Только браузеры" />
+                  <TextBlock Text="Только браузеры" TextWrapping="Wrap" />
                   <TextBlock Classes="muted" Text="системный прокси" />
                 </StackPanel>
               </RadioButton>
@@ -96,7 +131,7 @@
               <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding KillSwitch}" IsEnabled="{Binding KillSwitchEnabled}" OnContent="" OffContent="" />
               <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="killSwitch" />
               <StackPanel>
-                <TextBlock Text="Аварийная блокировка (kill switch)" FontSize="15" />
+                <TextBlock Text="Аварийная блокировка (kill switch)" FontSize="15" TextWrapping="Wrap" />
                 <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding KillSwitchReason, TargetNullValue='Если туннель оборвётся, интернет не пойдёт напрямую'}" />
               </StackPanel>
             </DockPanel>
@@ -106,8 +141,8 @@
               <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="route" />
             </StackPanel>
             <ComboBox SelectedIndex="{Binding RouteIndex}" HorizontalAlignment="Stretch">
-              <ComboBoxItem Content="Всё, кроме российского (рекомендуется)" />
-              <ComboBoxItem Content="Только заблокированное" />
+              <ComboBoxItem Content="Всё, кроме российского" />
+              <ComboBoxItem Content="Только заблокированное (рекомендуется)" />
               <ComboBoxItem Content="Всё через прокси" />
             </ComboBox>
             <TextBlock Classes="muted" Text="{Binding RouteDescription}" />
@@ -143,7 +178,7 @@
           <StackPanel Spacing="8">
             <DockPanel>
               <Button DockPanel.Dock="Right" Content="Проверить" Command="{Binding CheckCommand}" IsVisible="{Binding Enabled}" />
-              <TextBlock Classes="lbl" Text="ВЕРСИИ И ОБНОВЛЕНИЯ" VerticalAlignment="Center" />
+              <TextBlock Classes="lbl" Text="ВЕРСИИ И ОБНОВЛЕНИЯ" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,8,0" />
             </DockPanel>
             <TextBlock Classes="muted" Text="{Binding Versions}" TextWrapping="Wrap" />
             <DockPanel IsVisible="{Binding CoresOffer, Converter={x:Static ObjectConverters.IsNotNull}}">

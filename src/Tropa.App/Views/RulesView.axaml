@@ -1,31 +1,30 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Tropa.App.Views"
              xmlns:vm="using:Tropa.App.ViewModels"
              x:Class="Tropa.App.Views.RulesView"
              x:DataType="vm:RulesViewModel">
   <StackPanel Spacing="18">
-    <DockPanel>
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+    <StackPanel Spacing="8">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <TextBlock Classes="h1" Text="Правила" />
+        <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruleOrder" />
+      </StackPanel>
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="finalRule" ToolTip.Tip="Что, если ни одно правило не подошло" Margin="8,0,0,0" />
+        <Button DockPanel.Dock="Right" Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruServices" Margin="8,0,0,0" />
+        <TextBlock Classes="muted" Text="Правила проверяются сверху вниз, срабатывает первое подходящее. Госуслуги и банки всегда идут напрямую." VerticalAlignment="Center" />
+      </DockPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
         <TextBlock Classes="muted" Text="Основа" VerticalAlignment="Center" />
-        <ComboBox SelectedIndex="{Binding PresetIndex}" MinWidth="240">
+        <ComboBox SelectedIndex="{Binding PresetIndex}" MinWidth="280">
           <ComboBoxItem Content="Всё, кроме российского" />
-          <ComboBoxItem Content="Только заблокированное" />
+          <ComboBoxItem Content="Только заблокированное (рекомендуется)" />
           <ComboBoxItem Content="Всё через прокси" />
         </ComboBox>
         <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="route" />
       </StackPanel>
-      <StackPanel Spacing="4">
-        <StackPanel Orientation="Horizontal" Spacing="10">
-          <TextBlock Classes="h1" Text="Правила" />
-          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruleOrder" />
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <TextBlock Classes="muted" Text="Правила проверяются сверху вниз, срабатывает первое подходящее. Госуслуги и банки всегда идут напрямую." VerticalAlignment="Center" />
-          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruServices" />
-          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="finalRule" ToolTip.Tip="Что, если ни одно правило не подошло" />
-        </StackPanel>
-      </StackPanel>
-    </DockPanel>
+    </StackPanel>
 
     <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding NeedsApply}">
       <DockPanel>
@@ -41,7 +40,7 @@
           <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding BlockQuic}" OnContent="" OffContent="" />
           <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="blockQuic" />
           <StackPanel>
-            <TextBlock Text="Блокировать QUIC (UDP 443)" FontSize="15" />
+            <TextBlock Text="Блокировать QUIC (UDP 443)" FontSize="15" TextWrapping="Wrap" />
             <TextBlock Classes="muted" Text="Браузер сразу уходит на TCP, сайты не «думают»" />
           </StackPanel>
         </DockPanel>
@@ -49,7 +48,7 @@
           <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding UdpProxy}" OnContent="" OffContent="" />
           <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="udpProxy" />
           <StackPanel>
-            <TextBlock Text="UDP через сервер" FontSize="15" />
+            <TextBlock Text="UDP через сервер" FontSize="15" TextWrapping="Wrap" />
             <TextBlock Classes="muted" Text="Нужно для голоса Discord и звонков" />
           </StackPanel>
         </DockPanel>
@@ -68,7 +67,9 @@
         </Border>
         <DockPanel>
           <Button DockPanel.Dock="Right" Content="Добавить" Command="{Binding AddAppCommand}" Margin="8,0,0,0" />
-          <Button DockPanel.Dock="Right" Content="↻" Width="40" Command="{Binding RefreshRunningAppsCommand}" ToolTip.Tip="Обновить список запущенных программ" Margin="8,0,0,0" />
+          <Button DockPanel.Dock="Right" Width="40" Command="{Binding RefreshRunningAppsCommand}" ToolTip.Tip="Обновить список запущенных программ" Margin="8,0,0,0" AutomationProperties.Name="Обновить список запущенных программ">
+<v:Icon Data="{StaticResource IconRefresh}" />
+</Button>
           <AutoCompleteBox Text="{Binding NewApp}" ItemsSource="{Binding RunningApps}" FilterMode="Contains"
                            PlaceholderText="Программа: начните вводить или выберите из запущенных (Discord.exe)" MinimumPrefixLength="0" />
         </DockPanel>
@@ -86,10 +87,12 @@
             <DataTemplate x:DataType="vm:RuleItemViewModel">
               <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4">
                 <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <ComboBox Grid.Column="1" SelectedIndex="{Binding TcpIndex}" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
-                <ComboBox Grid.Column="2" SelectedIndex="{Binding UdpIndex}" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" SelectedIndex="{Binding TcpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="2" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" SelectedIndex="{Binding UdpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
                 <ToggleSwitch Grid.Column="3" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
-                <Button Grid.Column="4" Content="✕" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" />
+                <Button Grid.Column="4" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" AutomationProperties.Name="Удалить правило">
+<v:Icon Data="{StaticResource IconClose}" />
+</Button>
               </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
@@ -138,10 +141,12 @@
             <DataTemplate x:DataType="vm:RuleItemViewModel">
               <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4">
                 <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <ComboBox Grid.Column="1" SelectedIndex="{Binding TcpIndex}" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
-                <ComboBox Grid.Column="2" SelectedIndex="{Binding UdpIndex}" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" SelectedIndex="{Binding TcpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="2" ItemsSource="{Binding $parent[ItemsControl].((vm:RulesViewModel)DataContext).Actions}" SelectedIndex="{Binding UdpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
                 <ToggleSwitch Grid.Column="3" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
-                <Button Grid.Column="4" Content="✕" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" />
+                <Button Grid.Column="4" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" AutomationProperties.Name="Удалить правило">
+<v:Icon Data="{StaticResource IconClose}" />
+</Button>
               </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>

@@ -172,6 +172,14 @@ public sealed class TropaEngine : IAsyncDisposable
 
     public event EventHandler<TrafficSample>? Traffic;
 
+    /// <summary>Страна выхода по последней проверке; null — не подключено, проверка выключена или не удалась.</summary>
+    public ExitRegion? ExitRegion { get; private set; }
+
+    public event EventHandler? ExitRegionChanged;
+
+    /// <summary>Как часто проверять страну выхода. Внутреннее — для тестов.</summary>
+    internal TimeSpan ExitRegionInterval { get; set; } = TimeSpan.FromMinutes(2);
+
     public event EventHandler<string>? Log;
 
     public SecretScrubber Scrubber => new(_secrets.Values);
@@ -231,7 +239,7 @@ public sealed class TropaEngine : IAsyncDisposable
 
     public async Task SetActiveAsync(Guid profileId, CancellationToken ct = default)
     {
-        if (State.Profiles.All(p => p.Profile.Id != profileId))
+        if (State.Profiles.All(p => p.Profile.Id != profileId || p.Hidden))
             return;
         Update(s => s with { ActiveProfileId = profileId });
         if (Status.State == ConnectionState.Connected)
@@ -254,11 +262,35 @@ public sealed class TropaEngine : IAsyncDisposable
             await ReconnectAsync(ct).ConfigureAwait(false);
     }
 
-    public void RemoveProfile(Guid profileId) =>
+    /// <summary>
+    /// Удаляет серверы. Свои — стираются; из подписки — скрываются, иначе при обновлении вернутся.
+    /// Если удалён выбранный сервер — выбирается первый оставшийся видимый.
+    /// </summary>
+    public void RemoveProfiles(IReadOnlyCollection<Guid> profileIds)
+    {
+        ArgumentNullException.ThrowIfNull(profileIds);
+        Update(s =>
+        {
+            var ids = profileIds.ToHashSet();
+            var profiles = s.Profiles
+                .Where(p => !(ids.Contains(p.Profile.Id) && p.Profile.SubscriptionId is null))
+                // Цепочки через удалённый сервер больше не работают — разрываем их, а не оставляем битую ссылку.
+                .Select(p => p.Profile.ChainVia is { } via && ids.Contains(via) && s.Profiles.Any(x => x.Profile.Id == via && x.Profile.SubscriptionId is null)
+                    ? p with { Profile = p.Profile with { ChainVia = null } }
+                    : p)
+                .Select(p => ids.Contains(p.Profile.Id) ? p with { Hidden = true } : p)
+                .ToList();
+            return s with { Profiles = profiles, ActiveProfileId = KeepActive(profiles, s.ActiveProfileId) };
+        });
+    }
+
+    public void RemoveProfile(Guid profileId) => RemoveProfiles([profileId]);
+
+    /// <summary>Вернуть серверы подписки, скрытые пользователем.</summary>
+    public void RestoreHidden(Guid? subscriptionId) =>
         Update(s => s with
         {
-            Profiles = s.Profiles.Where(p => p.Profile.Id != profileId).ToList(),
-            ActiveProfileId = s.ActiveProfileId == profileId ? null : s.ActiveProfileId,
+            Profiles = s.Profiles.Select(p => p.Hidden && (subscriptionId is null || p.Profile.SubscriptionId == subscriptionId) ? p with { Hidden = false } : p).ToList(),
         });
 
     public void RemoveSubscription(Guid subscriptionId) =>
@@ -269,9 +301,55 @@ public sealed class TropaEngine : IAsyncDisposable
             {
                 Subscriptions = s.Subscriptions.Where(x => x.Id != subscriptionId).ToList(),
                 Profiles = profiles,
-                ActiveProfileId = profiles.Any(p => p.Profile.Id == s.ActiveProfileId) ? s.ActiveProfileId : null,
+                ActiveProfileId = KeepActive(profiles, s.ActiveProfileId),
             };
         });
+
+    /// <summary>Сдвигает подписку на одну позицию (delta = −1 — левее, +1 — правее).</summary>
+    public void MoveSubscription(Guid subscriptionId, int delta) =>
+        Update(s =>
+        {
+            var list = s.Subscriptions.ToList();
+            var i = list.FindIndex(x => x.Id == subscriptionId);
+            var j = i + Math.Sign(delta);
+            if (i < 0 || j < 0 || j >= list.Count)
+                return s;
+            (list[i], list[j]) = (list[j], list[i]);
+            return s with { Subscriptions = list };
+        });
+
+    /// <summary>
+    /// Меняет местами сервер с соседом в списке, который видит пользователь (вкладка «Все», подписка или «Мои»):
+    /// <paramref name="visibleOrder"/> — Id серверов в порядке на экране.
+    /// </summary>
+    public void MoveProfile(Guid profileId, int delta, IReadOnlyList<Guid> visibleOrder)
+    {
+        ArgumentNullException.ThrowIfNull(visibleOrder);
+        var i = visibleOrder.ToList().IndexOf(profileId);
+        var j = i + Math.Sign(delta);
+        if (i < 0 || j < 0 || j >= visibleOrder.Count)
+            return;
+        var other = visibleOrder[j];
+        Update(s =>
+        {
+            var ordered = Renumber(s.Profiles);
+            var a = ordered.First(p => p.Profile.Id == profileId).Order;
+            var b = ordered.First(p => p.Profile.Id == other).Order;
+            return s with
+            {
+                Profiles = ordered.Select(p => p.Profile.Id == profileId ? p with { Order = b } : p.Profile.Id == other ? p with { Order = a } : p).ToList(),
+            };
+        });
+    }
+
+    /// <summary>Порядок 0, 1, 2… без повторов: у подписок и своих серверов номера могли пересекаться.</summary>
+    private static List<StoredProfile> Renumber(IEnumerable<StoredProfile> profiles) =>
+        profiles.Select((p, i) => (p, i)).OrderBy(x => x.p.Order).ThenBy(x => x.i).Select((x, n) => x.p with { Order = n }).ToList();
+
+    private static Guid? KeepActive(IReadOnlyList<StoredProfile> profiles, Guid? active) =>
+        profiles.Any(p => p.Profile.Id == active && !p.Hidden)
+            ? active
+            : profiles.Where(p => !p.Hidden && p.RemovedByProvider is null).OrderBy(p => p.Order).FirstOrDefault()?.Profile.Id;
 
     // ---------------- Импорт ----------------
 
@@ -386,10 +464,11 @@ public sealed class TropaEngine : IAsyncDisposable
         Update(s => s with
         {
             Subscriptions = s.Subscriptions.Select(x => x.Id == sub.Id ? updatedSub : x).ToList(),
-            Profiles = merged.Profiles,
+            Profiles = Renumber(merged.Profiles),
             ActiveProfileId = merged.Profiles.Any(p => p.Profile.Id == s.ActiveProfileId)
                 ? s.ActiveProfileId
-                : merged.Profiles.FirstOrDefault(p => p.Profile.SubscriptionId == sub.Id && p.RemovedByProvider is null)?.Profile.Id,
+                : merged.Profiles.Where(p => p.Profile.SubscriptionId == sub.Id && p.RemovedByProvider is null && !p.Hidden)
+                    .OrderBy(p => p.Order).FirstOrDefault()?.Profile.Id,
         });
 
         var messages = parsed.Errors.Select(e => $"Сервер {e.Position}: {e.Message}").ToList();
@@ -907,8 +986,12 @@ public sealed class TropaEngine : IAsyncDisposable
         var effective = CompatRules.Evaluate(settings, active).Effective;
 
         // randomPorts: свободный случайный порт при каждом подключении — фиксированный легко найти сканированием.
+        var previousPort = _mixedPort;
         _mixedPort = effective.Connection.RandomPorts ? ServerTester.FreePort() : effective.Connection.SocksPort;
-        if (!PortIsFree(_mixedPort))
+        // Переподключение через службу: старое ядро ещё слушает этот порт — служба остановит его
+        // перед запуском нового (одной командой, чтобы не снимать kill switch). Это не «чужая программа».
+        var heldByOurOldCore = _servicePending && previousPort == _mixedPort;
+        if (!heldByOurOldCore && !await WaitPortFreeAsync(_mixedPort, ct).ConfigureAwait(false))
             throw new InvalidOperationException($"Порт {_mixedPort} занят другой программой. Закройте её или выберите другой порт в настройках.");
 
         // Через службу наборы правил читает она — из своего защищённого каталога.
@@ -922,8 +1005,9 @@ public sealed class TropaEngine : IAsyncDisposable
 
         var clashPort = ServerTester.FreePort();
         var clashSecret = SecretStore.NewRandomToken();
+        int? exitProbePort = !effective.General.HideExitRegion ? ServerTester.FreePort() : null;
         var group = effective.Connection.AutoSelect
-            ? State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null
+            ? State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null && !p.Hidden
                     && ProfileCompat.Issues(p.Profile).Count == 0
                     && !(p.Profile.Transport.Type == TransportType.Xhttp && p.Profile.ChainVia is not null)
                     // urltest видит только задержку и «заморозку» не замечает — такие серверы убираем сами.
@@ -963,6 +1047,7 @@ public sealed class TropaEngine : IAsyncDisposable
             XrayPorts = xrayPorts,
             XrayAuth = xrayAuth,
             XrayPath = service?.XrayPath ?? CoreProcess.ExecutablePath(_locations, "xray"),
+            ExitProbePort = exitProbePort,
         });
         var xrayReadiness = xrayPorts.Values.FirstOrDefault();
 
@@ -1017,6 +1102,8 @@ public sealed class TropaEngine : IAsyncDisposable
         _trafficCts = new CancellationTokenSource();
         _ = PumpTrafficAsync(new ClashApi(clashPort, clashSecret), _trafficCts.Token);
         _ = MonitorAsync(active.Id, _trafficCts.Token);
+        if (exitProbePort is { } probe)
+            _ = WatchExitRegionAsync(probe, _trafficCts.Token);
     }
 
     /// <summary>Серверы, которые попадут в конфиг: активный, группа, промежуточные звенья цепочек и серверы из правил.</summary>
@@ -1078,7 +1165,7 @@ public sealed class TropaEngine : IAsyncDisposable
                 var name = active.Name;
                 var replacement = State.Settings.Connection.AutoSelect
                     ? ServerHealth.PickReplacement(
-                        State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null
+                        State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null && !p.Hidden
                                 && !(State.Settings.Dpi.AllowInsecureWarn && p.Profile.Security.AllowInsecure))
                             .Select(p => (p.Profile.Id, p.LastTest)), activeId, _now())
                     : null;
@@ -1107,6 +1194,48 @@ public sealed class TropaEngine : IAsyncDisposable
         {
             Log?.Invoke(this, "Фоновая проверка сервера не удалась: " + Scrubber.Scrub(ex.Message));
         }
+    }
+
+    /// <summary>
+    /// Раз в 2 минуты спрашивает у Cloudflare (cdn-cgi/trace) страну выхода — через служебный вход ядра,
+    /// который всегда ведёт в сервер. Уходит только запрос к Cloudflare с IP сервера, ничего о пользователе.
+    /// Сервер может сам переключать выход внутри туннеля, поэтому страну проверяем по факту, а не по имени.
+    /// </summary>
+    private async Task WatchExitRegionAsync(int probePort, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+            while (!ct.IsCancellationRequested)
+            {
+                ExitRegion? region = null;
+                try
+                {
+                    using var client = ServerTester.ProbeClient(probePort, Auth, TimeSpan.FromSeconds(15), allowRedirect: false);
+                    var body = await client.GetStringAsync(new Uri(ExitRegion.TraceUrl), ct).ConfigureAwait(false);
+                    region = ExitRegion.Parse(body.Length > 4096 ? body[..4096] : body, _now());
+                }
+                catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    // Сервер на минуту не ответил — оставляем прежнюю страну, если она есть; иначе прячем значок.
+                    region = ExitRegion is { } prev && _now() - prev.CheckedAt < ExitRegionInterval * 3 ? prev : null;
+                }
+
+                SetExitRegion(region);
+                await Task.Delay(ExitRegionInterval, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void SetExitRegion(ExitRegion? region)
+    {
+        if (ExitRegion == region)
+            return;
+        ExitRegion = region;
+        ExitRegionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private async Task PumpTrafficAsync(ClashApi api, CancellationToken ct)
@@ -1163,6 +1292,8 @@ public sealed class TropaEngine : IAsyncDisposable
             _trafficCts.Dispose();
             _trafficCts = null;
         }
+
+        SetExitRegion(null);
 
         foreach (var core in new[] { _core, _xray })
         {
@@ -1274,6 +1405,19 @@ public sealed class TropaEngine : IAsyncDisposable
     {
         Status = status;
         StatusChanged?.Invoke(this, status);
+    }
+
+    /// <summary>Только что остановленное ядро может отпускать порт не мгновенно — ждём до 3 секунд.</summary>
+    private static async Task<bool> WaitPortFreeAsync(int port, CancellationToken ct)
+    {
+        for (var i = 0; i < 15; i++)
+        {
+            if (PortIsFree(port))
+                return true;
+            await Task.Delay(200, ct).ConfigureAwait(false);
+        }
+
+        return PortIsFree(port);
     }
 
     private static bool PortIsFree(int port)

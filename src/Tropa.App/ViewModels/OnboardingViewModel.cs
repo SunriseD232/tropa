@@ -56,6 +56,10 @@ internal sealed partial class OnboardingViewModel : ObservableObject
     [ObservableProperty]
     public partial bool Autostart { get; set; }
 
+    /// <summary>Маршрут на шаге 2: по умолчанию «Только заблокированное».</summary>
+    [ObservableProperty]
+    public partial bool RouteBlockedOnly { get; set; } = true;
+
     public bool TunAvailable => _engine.TunAvailable;
 
     /// <summary>Выбрана автонастройка: после ссылки сразу подключаемся, без шага 2.</summary>
@@ -166,6 +170,7 @@ internal sealed partial class OnboardingViewModel : ObservableObject
         {
             Connection = s.Connection with { Mode = mode },
             General = s.General with { Autostart = Autostart, Autoconnect = Autostart },
+            Routing = s.Routing with { Preset = RouteBlockedOnly ? RoutePreset.BlockedOnly : RoutePreset.ExceptRu },
         });
         SettingsViewModel.SyncAutostart(Autostart);
         Step = 3;
@@ -180,7 +185,7 @@ internal sealed partial class OnboardingViewModel : ObservableObject
             var profiles = _engine.State.Profiles.Select(p => p.Profile).ToList();
             Message = $"Проверяю серверы: {profiles.Count}…";
             await Task.Run(() => _engine.TestAsync(profiles, TestKinds.Tcp | TestKinds.Delay));
-            var best = ServerHealth.PickReplacement(_engine.State.Profiles.Select(p => (p.Profile.Id, p.LastTest)), Guid.Empty, DateTimeOffset.Now);
+            var best = ServerHealth.PickReplacement(_engine.State.Profiles.Where(p => !p.Hidden).Select(p => (p.Profile.Id, p.LastTest)), Guid.Empty, DateTimeOffset.Now);
             if (best is not { } id)
             {
                 Message = "Ни один сервер сейчас не отвечает. Проверьте интернет или подписку (экран «Диагностика»).";

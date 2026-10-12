@@ -45,6 +45,12 @@ public sealed record SingBoxInput
 
     /// <summary>Путь к xray.exe: в режиме TUN его собственный трафик отправляется напрямую, иначе он зациклится в туннель.</summary>
     public string? XrayPath { get; init; }
+
+    /// <summary>
+    /// Порт служебного входа для проверки страны выхода (только 127.0.0.1, с паролем LocalAuth).
+    /// Всё, что пришло в него, идёт строго через сервер — независимо от маршрута и правил. null — входа нет.
+    /// </summary>
+    public int? ExitProbePort { get; init; }
 }
 
 /// <summary>
@@ -58,6 +64,7 @@ public static class SingBoxConfigBuilder
     public const string TunInboundTag = "tun-in";
     public const string MixedInboundTag = "mixed-in";
     public const string LanInboundTag = "lan-in";
+    public const string ExitProbeInboundTag = "exit-probe-in";
 
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, IndentSize = 2, NewLine = "\n" };
 
@@ -426,6 +433,18 @@ public static class SingBoxConfigBuilder
             });
         }
 
+        if (ctx.Input.ExitProbePort is { } probePort)
+        {
+            inbounds.Push(new JsonObject
+            {
+                ["type"] = "mixed",
+                ["tag"] = ExitProbeInboundTag,
+                ["listen"] = "127.0.0.1",
+                ["listen_port"] = probePort,
+                ["users"] = Users(ctx),
+            });
+        }
+
         return inbounds;
     }
 
@@ -681,6 +700,10 @@ public static class SingBoxConfigBuilder
     {
         var s = ctx.S;
         var rules = new JsonArray();
+
+        // Проверка страны выхода — первым правилом: маршрут «только заблокированное» отправил бы её напрямую.
+        if (ctx.Input.ExitProbePort is not null)
+            rules.Push(new JsonObject { ["inbound"] = StrArray([ExitProbeInboundTag]), ["action"] = "route", ["outbound"] = ProxyTag });
 
         if (s.Dns.Sniffing)
         {

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Tropa.App.ViewModels"
+             xmlns:v="using:Tropa.App.Views"
              x:Class="Tropa.App.Views.ServersView"
              x:DataType="vm:ServersViewModel">
   <UserControl.Styles>
@@ -16,17 +17,30 @@
       <Setter Property="Height" Value="36" />
       <Setter Property="Padding" Value="14,0" />
     </Style>
+    <Style Selector="Button.small">
+      <Setter Property="Margin" Value="0,0,8,8" />
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="Button.sq">
+      <Setter Property="Width" Value="32" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
   </UserControl.Styles>
 
-  <StackPanel Spacing="18">
+  <StackPanel Spacing="16">
     <DockPanel>
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-        <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding IsBusy}" />
-        <Button Content="Обновить подписки" Command="{Binding UpdateSubscriptionsCommand}" IsEnabled="{Binding !IsBusy}" />
-        <Button Content="Тест всех" Command="{Binding TestAllCommand}" IsEnabled="{Binding !IsBusy}" />
-        <Button Content="Вручную" Command="{Binding AddManualCommand}" ToolTip.Tip="Добавить сервер, заполнив поля" />
-        <Button Classes="primary" Content="Добавить" Command="{Binding AddCommand}" />
-      </StackPanel>
+      <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
+        <ProgressBar IsIndeterminate="True" Width="60" MinWidth="0" Margin="0,0,8,8" IsVisible="{Binding IsBusy}" />
+        <Button Classes="small" Content="Обновить подписки" Command="{Binding UpdateSubscriptionsCommand}" IsEnabled="{Binding !IsBusy}" />
+        <Button Classes="small" Content="Тест всех" Command="{Binding TestAllCommand}" IsEnabled="{Binding !IsBusy}" />
+        <Button Classes="small" Content="Вручную" Command="{Binding AddManualCommand}" ToolTip.Tip="Добавить сервер, заполнив поля" />
+        <Button Classes="small primary" Content="Добавить" Command="{Binding AddCommand}" />
+      </WrapPanel>
       <StackPanel Spacing="4">
         <StackPanel Orientation="Horizontal" Spacing="10">
           <TextBlock Classes="h1" Text="Серверы" />
@@ -36,17 +50,61 @@
       </StackPanel>
     </DockPanel>
 
-    <ItemsControl ItemsSource="{Binding Tabs}">
-      <ItemsControl.ItemsPanel>
-        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-      </ItemsControl.ItemsPanel>
-      <ItemsControl.ItemTemplate>
-        <DataTemplate x:DataType="vm:GroupTab">
-          <ToggleButton Classes="tab" Margin="0,0,8,8" Content="{Binding Title}" IsChecked="{Binding IsSelected, Mode=OneWay}"
-                        Command="{Binding $parent[ItemsControl].((vm:ServersViewModel)DataContext).SelectTabCommand}" CommandParameter="{Binding}" />
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
+    <StackPanel>
+      <ItemsControl ItemsSource="{Binding Tabs}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:GroupTab">
+            <ToggleButton Classes="tab" Margin="0,0,8,8" Content="{Binding Title}" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                          Command="{Binding $parent[ItemsControl].((vm:ServersViewModel)DataContext).SelectTabCommand}" CommandParameter="{Binding}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- Действия с открытой вкладкой -->
+      <WrapPanel>
+        <WrapPanel IsVisible="{Binding CurrentTabInfo.IsSubscription, FallbackValue=False}">
+          <Button Classes="small" Content="Обновить эту подписку" Command="{Binding UpdateCurrentSubscriptionCommand}" IsEnabled="{Binding !IsBusy}" />
+          <Button Classes="small" Command="{Binding MoveSubscriptionLeftCommand}" ToolTip.Tip="Сдвинуть вкладку подписки левее" AutomationProperties.Name="Сдвинуть вкладку подписки левее">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <v:Icon Data="{StaticResource IconUp}" Width="14" Height="14" RenderTransform="rotate(-90deg)" VerticalAlignment="Center" />
+              <TextBlock Text="Левее" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="small" Command="{Binding MoveSubscriptionRightCommand}" ToolTip.Tip="Сдвинуть вкладку подписки правее" AutomationProperties.Name="Сдвинуть вкладку подписки правее">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Правее" VerticalAlignment="Center" />
+              <v:Icon Data="{StaticResource IconUp}" Width="14" Height="14" RenderTransform="rotate(90deg)" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Classes="small" Command="{Binding AskRemoveSubscriptionCommand}" ToolTip.Tip="Удалить подписку вместе с её серверами" AutomationProperties.Name="Удалить подписку вместе с её серверами">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <v:Icon Data="{StaticResource IconTrash}" Width="14" Height="14" VerticalAlignment="Center" />
+              <TextBlock Text="Удалить подписку" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+        </WrapPanel>
+        <Button Classes="small" Content="{Binding CurrentTabInfo.RestoreLabel, FallbackValue=''}" Command="{Binding RestoreHiddenCommand}"
+                IsVisible="{Binding CurrentTabInfo.HasHidden, FallbackValue=False}"
+                ToolTip.Tip="Показать снова серверы, которые вы удалили из подписки" />
+      </WrapPanel>
+    </StackPanel>
+
+    <Border Background="{DynamicResource BadBg}" CornerRadius="12" Padding="14,12" IsVisible="{Binding PendingSubscriptionDelete, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center">
+          <Button Content="Отмена" Command="{Binding CancelRemoveSubscriptionCommand}" />
+          <Button Classes="primary" Content="Удалить" Command="{Binding ConfirmRemoveSubscriptionCommand}" />
+        </StackPanel>
+        <TextBlock Text="{Binding PendingSubscriptionDelete}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+
+    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding Message}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
+    </Border>
 
     <Border Classes="card" IsVisible="{Binding IsEmpty}">
       <StackPanel Spacing="10" HorizontalAlignment="Center" Margin="0,20">
@@ -57,45 +115,65 @@
       </StackPanel>
     </Border>
 
-    <Grid ColumnDefinitions="*,20,280" IsVisible="{Binding !IsEmpty}">
-      <Border Grid.Column="0" Classes="card" Padding="8">
+    <Grid x:Name="Body" ColumnDefinitions="*,16,260" RowDefinitions="Auto,Auto" IsVisible="{Binding !IsEmpty}" SizeChanged="OnBodySizeChanged">
+      <Border Grid.Column="0" Classes="card" Padding="8" VerticalAlignment="Top">
         <StackPanel>
-          <Grid ColumnDefinitions="2*,84,104,1.1*,1.5*" Margin="12,6,12,10">
-            <TextBlock Grid.Column="0" Classes="lbl" Text="СЕРВЕР" />
-            <TextBlock Grid.Column="1" Classes="lbl" Text="ПРОТОКОЛ" Margin="8,0,0,0" />
-            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
-              <TextBlock Classes="lbl" Text="СКОРОСТЬ" VerticalAlignment="Center" />
+          <Grid ColumnDefinitions="*,84,124" Margin="12,6,12,10">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+              <TextBlock Classes="lbl" Text="СЕРВЕР · СКОРОСТЬ" VerticalAlignment="Center" />
               <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="speedTest" />
             </StackPanel>
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
               <TextBlock Classes="lbl" Text="ЗАДЕРЖКА" VerticalAlignment="Center" />
               <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="realDelay" />
             </StackPanel>
-            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4">
-              <TextBlock Classes="lbl" Text="СТАТУС" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+              <TextBlock Classes="lbl" Text="СТАТУС" VerticalAlignment="Center" Margin="8,0,0,0" />
               <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="status" />
             </StackPanel>
           </Grid>
+          <TextBlock Classes="muted" Margin="12,4,12,12" Text="Здесь пусто: все серверы этой вкладки удалены." IsVisible="{Binding !Items.Count}" />
           <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Background="Transparent" DoubleTapped="OnDoubleTapped">
+            <ListBox.KeyBindings>
+              <KeyBinding Gesture="Delete" Command="{Binding RemoveSelectedCommand}" />
+              <KeyBinding Gesture="Alt+Up" Command="{Binding MoveUpCommand}" />
+              <KeyBinding Gesture="Alt+Down" Command="{Binding MoveDownCommand}" />
+            </ListBox.KeyBindings>
+            <ListBox.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Использовать этот сервер" Command="{Binding UseSelectedCommand}" />
+                <MenuItem Header="Проверить" Command="{Binding TestSelectedCommand}" />
+                <Separator />
+                <MenuItem Header="Выше" InputGesture="Alt+Up" Command="{Binding MoveUpCommand}" />
+                <MenuItem Header="Ниже" InputGesture="Alt+Down" Command="{Binding MoveDownCommand}" />
+                <Separator />
+                <MenuItem Header="Изменить" Command="{Binding EditSelectedCommand}" />
+                <MenuItem Header="Удалить" InputGesture="Delete" Command="{Binding RemoveSelectedCommand}" />
+              </ContextMenu>
+            </ListBox.ContextMenu>
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:ServerItemViewModel">
-                <Grid ColumnDefinitions="2*,84,104,1.1*,1.5*" Height="40">
-                  <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <Border Background="{DynamicResource Chip}" CornerRadius="4" Width="30" Height="20">
+                <Grid ColumnDefinitions="*,84,124" MinHeight="44">
+                  <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <Border Background="{DynamicResource Chip}" CornerRadius="4" Width="30" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
                       <TextBlock Text="{Binding Country}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
-                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
-                  <TextBlock Grid.Column="1" Text="{Binding Protocol}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                  <TextBlock Grid.Column="3" Text="{Binding Speed}" VerticalAlignment="Center" Classes="mono" />
-                  <Panel Grid.Column="2" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="1" Spacing="1">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Classes="muted" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
+                        <Run Text="{Binding Protocol}" /><Run Text=" · " /><Run Text="{Binding Speed}" />
+                      </TextBlock>
+                    </StackPanel>
+                  </Grid>
+                  <Panel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="{Binding Delay}" Classes="mono" IsVisible="{Binding !Testing}" />
                     <ProgressBar IsIndeterminate="True" Width="56" MinWidth="0" IsVisible="{Binding Testing}" HorizontalAlignment="Left" />
                   </Panel>
-                  <Border Grid.Column="4" Classes="pill status" Classes.ok="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsOk}}"
+                  <Border Grid.Column="2" Classes="pill status" Classes.ok="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsOk}}"
                           Classes.warn="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsWarn}}"
                           Classes.bad="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsBad}}"
-                          HorizontalAlignment="Left" VerticalAlignment="Center" IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                          HorizontalAlignment="Left" VerticalAlignment="Center" IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                          ToolTip.Tip="{Binding Status}">
                     <TextBlock Text="{Binding Status}" FontSize="12" TextTrimming="CharacterEllipsis" />
                   </Border>
                 </Grid>
@@ -105,9 +183,19 @@
         </StackPanel>
       </Border>
 
-      <Border Grid.Column="2" Classes="card" VerticalAlignment="Top">
+      <Border x:Name="Details" Grid.Column="2" Classes="card" VerticalAlignment="Top">
         <StackPanel Spacing="12" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <TextBlock Text="{Binding Selected.Name}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top" Margin="8,0,0,0">
+              <Button Classes="sq" Command="{Binding MoveUpCommand}" ToolTip.Tip="Выше в списке (Alt+стрелка вверх)" AutomationProperties.Name="Выше в списке (Alt+стрелка вверх)">
+                <v:Icon Data="{StaticResource IconUp}" />
+              </Button>
+              <Button Classes="sq" Command="{Binding MoveDownCommand}" ToolTip.Tip="Ниже в списке (Alt+стрелка вниз)" AutomationProperties.Name="Ниже в списке (Alt+стрелка вниз)">
+                <v:Icon Data="{StaticResource IconDown}" />
+              </Button>
+            </StackPanel>
+            <TextBlock Text="{Binding Selected.Name}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
+          </DockPanel>
           <TextBlock Classes="muted" Text="{Binding Selected.Transport}" />
           <TextBlock Classes="muted" Text="{Binding Selected.CoreLabel}" />
           <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
@@ -145,15 +233,16 @@
           <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Использовать этот сервер" Command="{Binding UseSelectedCommand}" />
           <UniformGrid Columns="2">
             <Button Content="Изменить" Command="{Binding EditSelectedCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,4,0" />
-            <Button Content="Удалить" Command="{Binding RemoveSelectedCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="4,0,0,0" />
+            <Button Command="{Binding RemoveSelectedCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="4,0,0,0" ToolTip.Tip="Удалить сервер (Delete)" AutomationProperties.Name="Удалить сервер (Delete)">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <v:Icon Data="{StaticResource IconTrash}" Width="14" Height="14" VerticalAlignment="Center" />
+                <TextBlock Text="Удалить" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
           </UniformGrid>
           <TextBlock Classes="muted" Text="Ключ доступа хранится зашифрованным и здесь не показывается." />
         </StackPanel>
       </Border>
     </Grid>
-
-    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}">
-      <TextBlock Text="{Binding Message}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
-    </Border>
   </StackPanel>
 </UserControl>

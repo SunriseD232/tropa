@@ -30,6 +30,12 @@ public sealed record StoredProfile
 
     public bool Favorite { get; init; }
 
+    /// <summary>
+    /// Пользователь удалил сервер из подписки. Совсем стереть его нельзя — при обновлении провайдер
+    /// пришлёт его снова, — поэтому он скрыт: не показывается, не выбирается и не попадает в авто-выбор.
+    /// </summary>
+    public bool Hidden { get; init; }
+
     public int Order { get; init; }
 
     /// <summary>Последняя проверка: показывается в списке и учитывается авто-выбором.</summary>

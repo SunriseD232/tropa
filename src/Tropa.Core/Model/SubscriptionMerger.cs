@@ -58,6 +58,17 @@ public static class SubscriptionMerger
             result.Add(old with { RemovedByProvider = since, Order = order++ });
         }
 
+        // Порядок, который задал пользователь, сохраняется: известные серверы остаются на своих местах,
+        // новые встают следом в порядке провайдера.
+        var known = mine.ToDictionary(p => p.Profile.Id, p => p.Order);
+        var tail = (known.Count == 0 ? existing.Select(p => p.Order).DefaultIfEmpty(-1).Max() : known.Values.Max()) + 1;
+        var first = known.Count == 0 ? tail : known.Values.Min();
+        result = result
+            .Select((p, i) => (p, order: known.TryGetValue(p.Profile.Id, out var o) ? o : tail, i))
+            .OrderBy(x => x.order).ThenBy(x => x.i)
+            .Select((x, n) => x.p with { Order = first + n })
+            .ToList();
+
         return new MergeResult([.. others, .. result], added, updated, removed);
     }
 }

@@ -30,6 +30,13 @@ public sealed record GeneralSettings
     public bool LocalPass { get; init; } = true;
     public string Hotkey { get; init; } = "Ctrl+Alt+P";
     public bool NotifySwitch { get; init; } = true;
+
+    /// <summary>
+    /// Не показывать страну, из которой сайты видят подключение (по умолчанию показывается: проверка раз
+    /// в 2 минуты через сервер). Флаг «наоборот»: в старых settings.json его нет, а отсутствующее
+    /// init-свойство при чтении становится false — значит, «показывать».
+    /// </summary>
+    public bool HideExitRegion { get; init; }
     public AppTheme Theme { get; init; } = AppTheme.Dark;
     public string Lang { get; init; } = "ru";
 

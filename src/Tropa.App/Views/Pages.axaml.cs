@@ -15,6 +15,18 @@ internal sealed partial class ServersView : UserControl
 {
     public ServersView() => InitializeComponent();
 
+    // Узкое окно: панель сервера уходит под список, иначе списку не остаётся места и имена пропадают.
+    private void OnBodySizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        var narrow = e.NewSize.Width < 820;
+        if (Body.ColumnDefinitions.Count == (narrow ? 1 : 3))
+            return;
+        Body.ColumnDefinitions = narrow ? new ColumnDefinitions("*") : new ColumnDefinitions("*,16,260");
+        Grid.SetColumn(Details, narrow ? 0 : 2);
+        Grid.SetRow(Details, narrow ? 1 : 0);
+        Details.Margin = narrow ? new Avalonia.Thickness(0, 16, 0, 0) : default;
+    }
+
     // Двойной щелчок по серверу — сделать его текущим.
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
     {

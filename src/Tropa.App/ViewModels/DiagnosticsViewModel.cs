@@ -33,9 +33,8 @@ internal sealed partial class StepItemViewModel(int number, string key, string t
 
     public string Glyph => Status switch
     {
-        StepStatus.Ok => "✓",
+        StepStatus.Ok or StepStatus.Bad => "", // нарисованы иконками: символов ✓ и ✕ нет в части шрифтов
         StepStatus.Warn => "!",
-        StepStatus.Bad => "✕",
         StepStatus.Running => "…",
         StepStatus.Skipped => "–",
         _ => Number.ToString(CultureInfo.InvariantCulture),

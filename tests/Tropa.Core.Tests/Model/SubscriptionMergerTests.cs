@@ -30,6 +30,26 @@ public sealed class SubscriptionMergerTests
     }
 
     [Fact]
+    public void User_order_and_hidden_flag_survive_update()
+    {
+        var a = P("a.example.com");
+        var b = P("b.example.com");
+        // Пользователь поставил b выше a и скрыл a.
+        var existing = new[]
+        {
+            new StoredProfile { Profile = a, Order = 6, Hidden = true },
+            new StoredProfile { Profile = b, Order = 5 },
+        };
+
+        var r = SubscriptionMerger.Merge(Sub, existing, [P("a.example.com"), P("c.example.com"), P("b.example.com")], Now);
+
+        var ordered = r.Profiles.OrderBy(p => p.Order).Select(p => p.Profile.Address).ToList();
+        Assert.Equal(["b.example.com", "a.example.com", "c.example.com"], ordered); // новый — в конец
+        Assert.True(r.Profiles.Single(p => p.Profile.Id == a.Id).Hidden);
+        Assert.False(r.Profiles.Single(p => p.Profile.Address == "c.example.com").Hidden);
+    }
+
+    [Fact]
     public void New_servers_are_added_and_duplicates_dropped()
     {
         var r = SubscriptionMerger.Merge(Sub, [], [P("a.example.com"), P("a.example.com"), P("b.example.com")], Now);

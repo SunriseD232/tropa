@@ -229,7 +229,7 @@ public sealed class RecommendedSettingsTests
         Assert.Equal(CaptureMode.Tun, r.Connection.Mode);
         Assert.True(r.Connection.AutoSelect);
         Assert.True(r.Dns.DnsHijack);
-        Assert.Equal(RoutePreset.ExceptRu, r.Routing.Preset);
+        Assert.Equal(RoutePreset.BlockedOnly, r.Routing.Preset);
         Assert.True(r.Routing.BlockQuic);
         // Своё не трогаем.
         Assert.Equal("Ctrl+Alt+K", r.General.Hotkey);

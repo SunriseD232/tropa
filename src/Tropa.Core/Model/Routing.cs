@@ -63,7 +63,8 @@ public sealed record Rule
 
 public sealed record RoutingSettings
 {
-    public RoutePreset Preset { get; init; } = RoutePreset.ExceptRu;
+    /// <summary>По умолчанию через сервер идёт только заблокированное: остальное работает как без VPN (ADR-038).</summary>
+    public RoutePreset Preset { get; init; } = RoutePreset.BlockedOnly;
 
     public bool BlockQuic { get; init; } = true;
     public bool UdpProxy { get; init; } = true;

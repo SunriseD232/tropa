@@ -32,6 +32,7 @@ internal sealed partial class HomeViewModel : ObservableObject
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => OnStatus(s));
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(Refresh);
         engine.Traffic += (_, t) => Dispatcher.UIThread.Post(() => OnTraffic(t));
+        engine.ExitRegionChanged += (_, _) => Dispatcher.UIThread.Post(OnExitRegion);
         engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(() =>
         {
             OnPropertyChanged(nameof(TunAvailable));
@@ -70,7 +71,7 @@ internal sealed partial class HomeViewModel : ObservableObject
             Servers.Clear();
             var subs = _engine.State.Subscriptions.ToDictionary(s => s.Id, s => s.Name);
             // Сначала рабочие по задержке, затем остальные; удалённые провайдером не показываем.
-            foreach (var sp in _engine.State.Profiles.Where(p => p.RemovedByProvider is null)
+            foreach (var sp in _engine.State.Profiles.Where(p => p.RemovedByProvider is null && !p.Hidden)
                          .OrderBy(p => p.LastTest?.DelayMs ?? int.MaxValue).ThenBy(p => p.Order))
             {
                 var delay = sp.LastTest?.DelayMs is { } ms ? $" · {ms} мс" : "";
@@ -127,6 +128,21 @@ internal sealed partial class HomeViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string? SubscriptionLine { get; set; }
+
+    /// <summary>«Нидерланды» — страна, из которой сайты видят подключение; null — значок скрыт.</summary>
+    [ObservableProperty]
+    public partial string? ExitRegion { get; set; }
+
+    [ObservableProperty]
+    public partial string? ExitRegionTip { get; set; }
+
+    private void OnExitRegion()
+    {
+        var r = _engine.Status.State == ConnectionState.Connected ? _engine.ExitRegion : null;
+        ExitRegion = r?.Name;
+        ExitRegionTip = r is null ? null
+            : $"Сайты видят вас из страны «{r.Name}» ({r.CountryCode}). Проверено в {r.CheckedAt.ToLocalTime():HH:mm}, обновляется раз в 2 минуты: сервер может сам переключать выход.";
+    }
 
     [ObservableProperty]
     public partial bool ModeTun { get; set; }
@@ -278,6 +294,7 @@ internal sealed partial class HomeViewModel : ObservableObject
         IsBusy = s.State is ConnectionState.Connecting or ConnectionState.Disconnecting;
         IsError = s.State == ConnectionState.Error;
         Message = s.Message;
+        OnExitRegion();
         OnPropertyChanged(nameof(Blocking));
         StateText = s.State switch
         {
@@ -308,7 +325,7 @@ internal sealed partial class HomeViewModel : ObservableObject
         _totalDown += t.Down;
         Down = Format.Speed(t.Down);
         Up = Format.Speed(t.Up);
-        Totals = $"за сеанс ↓ {Format.Bytes(_totalDown)} · ↑ {Format.Bytes(_totalUp)}";
+        Totals = $"за сеанс: загружено {Format.Bytes(_totalDown)} · отдано {Format.Bytes(_totalUp)}";
     }
 
     private void UpdateClock()

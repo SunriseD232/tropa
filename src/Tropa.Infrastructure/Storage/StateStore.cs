@@ -210,6 +210,7 @@ public sealed class StateStore(string directory)
                 ChainVia = sp.Profile.ChainVia,
                 RemovedByProvider = sp.RemovedByProvider,
                 Favorite = sp.Favorite,
+                Hidden = sp.Hidden,
                 Order = sp.Order,
                 LastTest = sp.LastTest,
                 Core = sp.Core,
@@ -268,6 +269,7 @@ public sealed class StateStore(string directory)
                 },
                 RemovedByProvider = p.RemovedByProvider,
                 Favorite = p.Favorite,
+                Hidden = p.Hidden,
                 Order = p.Order,
                 LastTest = p.LastTest,
                 Core = p.Core,
@@ -319,6 +321,7 @@ internal sealed record StoredProfileDto
     public Guid? ChainVia { get; init; }
     public DateTimeOffset? RemovedByProvider { get; init; }
     public bool Favorite { get; init; }
+    public bool Hidden { get; init; }
     public int Order { get; init; }
     public Core.Testing.ServerTestResult? LastTest { get; init; }
     public CoreChoice Core { get; init; } = CoreChoice.Auto;

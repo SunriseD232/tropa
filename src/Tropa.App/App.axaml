@@ -37,6 +37,13 @@
           <SolidColorBrush x:Key="SideFooter" Color="#1A1F24" />
           <SolidColorBrush x:Key="Chip" Color="#2A323A" />
           <SolidColorBrush x:Key="PowerOff" Color="#232A31" />
+          <!-- Кнопка подключения по состояниям: приглушённые, не кислотные. -->
+          <SolidColorBrush x:Key="PowerOn" Color="#2E7D5B" />
+          <SolidColorBrush x:Key="PowerOnFg" Color="#E8F5EE" />
+          <SolidColorBrush x:Key="PowerBusy" Color="#7A6332" />
+          <SolidColorBrush x:Key="PowerBusyFg" Color="#F6EBD3" />
+          <SolidColorBrush x:Key="PowerErr" Color="#7E3A3D" />
+          <SolidColorBrush x:Key="PowerErrFg" Color="#F8E1E2" />
           <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#3DDC97" />
           <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#5BE6A8" />
           <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#2FBF80" />
@@ -76,6 +83,12 @@
           <SolidColorBrush x:Key="SideFooter" Color="#DFE4E9" />
           <SolidColorBrush x:Key="Chip" Color="#DDE3E8" />
           <SolidColorBrush x:Key="PowerOff" Color="#E3E8ED" />
+          <SolidColorBrush x:Key="PowerOn" Color="#5FAE88" />
+          <SolidColorBrush x:Key="PowerOnFg" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="PowerBusy" Color="#D2B26E" />
+          <SolidColorBrush x:Key="PowerBusyFg" Color="#3B2C08" />
+          <SolidColorBrush x:Key="PowerErr" Color="#CF8487" />
+          <SolidColorBrush x:Key="PowerErrFg" Color="#FFFFFF" />
           <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#15A066" />
           <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#1DB876" />
           <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#118A57" />
@@ -87,6 +100,18 @@
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
       <FontFamily x:Key="Mono">Cascadia Mono, Consolas, monospace</FontFamily>
+
+      <!-- Иконки: контуры в сетке 24×24 для Views/Icon.cs (рисуются линией цвета текста). -->
+      <StreamGeometry x:Key="IconPower">M12 3 L12 11 M17.66 6.34 A8 8 0 1 1 6.34 6.34</StreamGeometry>
+      <StreamGeometry x:Key="IconRefresh">M20 12 A8 8 0 1 1 17.66 6.34 M20 4 L20 9 L15 9</StreamGeometry>
+      <StreamGeometry x:Key="IconClose">M6 6 L18 18 M18 6 L6 18</StreamGeometry>
+      <StreamGeometry x:Key="IconCheck">M5 12.5 L10 17.5 L19 7</StreamGeometry>
+      <StreamGeometry x:Key="IconUp">M6 15 L12 9 L18 15</StreamGeometry>
+      <StreamGeometry x:Key="IconDown">M6 9 L12 15 L18 9</StreamGeometry>
+      <StreamGeometry x:Key="IconTrash">M4 7 L20 7 M9 7 L9 4 L15 4 L15 7 M6 7 L7 20 L17 20 L18 7 M10 11 L10 16 M14 11 L14 16</StreamGeometry>
+      <StreamGeometry x:Key="IconGlobe">M12 3 A9 9 0 1 1 11.99 3 M3 12 L21 12 M12 3 C15 6 15 18 12 21 C9 18 9 6 12 3</StreamGeometry>
+      <StreamGeometry x:Key="IconArrowDown">M12 5 L12 19 M6 13 L12 19 L18 13</StreamGeometry>
+      <StreamGeometry x:Key="IconArrowUp">M12 19 L12 5 M6 11 L12 5 L18 11</StreamGeometry>
     </ResourceDictionary>
   </Application.Resources>
 
