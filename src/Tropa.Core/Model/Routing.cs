@@ -70,8 +70,14 @@ public sealed record RoutingSettings
     public bool UdpProxy { get; init; } = true;
     public IReadOnlyList<Rule> Rules { get; init; } = [];
 
-    /// <summary>Правки гео-баз поверх закреплённых файлов .srs (ADR-039). Сами файлы не меняются.</summary>
-    public IReadOnlyList<GeoListEdit> GeoEdits { get; init; } = [];
+    /// <summary>
+    /// Правки гео-баз поверх закреплённых файлов .srs (ADR-039). Сами файлы не меняются.
+    /// В settings.json прошлых версий поля нет, и source-generated System.Text.Json передаёт сюда null
+    /// (инициализатор init-свойства не применяется) — поэтому null превращается в пустой список.
+    /// </summary>
+    public IReadOnlyList<GeoListEdit> GeoEdits { get => _geoEdits; init => _geoEdits = value ?? []; }
+
+    private readonly IReadOnlyList<GeoListEdit> _geoEdits = [];
 }
 
 /// <summary>Вид записи гео-базы — как поле правила sing-box.</summary>
@@ -87,8 +93,11 @@ public sealed record GeoEntry(GeoEntryKind Kind, string Value);
 public sealed record GeoListEdit
 {
     public required string Tag { get; init; }
-    public IReadOnlyList<GeoEntry> Added { get; init; } = [];
-    public IReadOnlyList<GeoEntry> Removed { get; init; } = [];
+    public IReadOnlyList<GeoEntry> Added { get => _added; init => _added = value ?? []; }
+    public IReadOnlyList<GeoEntry> Removed { get => _removed; init => _removed = value ?? []; }
+
+    private readonly IReadOnlyList<GeoEntry> _added = [];
+    private readonly IReadOnlyList<GeoEntry> _removed = [];
 
     [JsonIgnore]
     public bool IsEmpty => Added.Count == 0 && Removed.Count == 0;

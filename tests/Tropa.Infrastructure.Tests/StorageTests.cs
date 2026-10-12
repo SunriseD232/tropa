@@ -49,6 +49,25 @@ public sealed class StorageTests : IDisposable
         Assert.Equal("https://panel.example.com/sub/TOKEN1234567890abcdef", again.State.Subscriptions[0].Url.Reveal());
     }
 
+    /// <summary>
+    /// Настройки прошлой версии без поля geoEdits: source-generated System.Text.Json не применяет
+    /// инициализатор init-свойства, и список приходил null — экран «Правила» не показывал гео-базы.
+    /// </summary>
+    [Fact]
+    public void Settings_from_older_version_get_empty_geo_edits()
+    {
+        var store = new StateStore(_dir.FullName);
+        store.Save(SampleState(), store.Load().Secrets, Now);
+        var text = File.ReadAllText(store.SettingsPath);
+        var cut = System.Text.RegularExpressions.Regex.Replace(text, @",\s*""geoEdits""\s*:\s*\[\s*\]", "");
+        Assert.NotEqual(text, cut);
+        File.WriteAllText(store.SettingsPath, cut);
+
+        var loaded = new StateStore(_dir.FullName).Load();
+        Assert.NotNull(loaded.State.Settings.Routing.GeoEdits);
+        Assert.Empty(loaded.State.Settings.Routing.GeoEdits);
+    }
+
     [Fact]
     public void Corrupted_settings_fall_back_to_backup()
     {
