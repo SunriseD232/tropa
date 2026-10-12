@@ -173,6 +173,34 @@ public sealed class SingBoxGoldenTests
             },
             Reality),
 
+        // Свои списки (ADR-040): домены всех списков до resolve, сети — после; выключенный список не попадает в конфиг.
+        ["15-custom-lists"] = () => Input(
+            Defaults with
+            {
+                Routing = Defaults.Routing with
+                {
+                    Preset = RoutePreset.BlockedOnly,
+                    CustomLists =
+                    [
+                        new CustomGeoList
+                        {
+                            Id = new Guid(30, 0, 0, new byte[8]),
+                            Name = "Игры",
+                            Action = RuleActionKind.Proxy,
+                            Entries =
+                            [
+                                new(GeoEntryKind.Suffix, "faceit.com"), new(GeoEntryKind.Domain, "otvet.mail.ru"),
+                                new(GeoEntryKind.Keyword, "xsolla"), new(GeoEntryKind.Regex, @"^(.+\.)?cybershoke\.net$"),
+                                new(GeoEntryKind.Cidr, "91.108.4.0/22"),
+                            ],
+                        },
+                        new CustomGeoList { Id = new Guid(31, 0, 0, new byte[8]), Name = "Напрямую", Action = RuleActionKind.Direct, Entries = [new(GeoEntryKind.Suffix, "bank.example.ru")] },
+                        new CustomGeoList { Id = new Guid(32, 0, 0, new byte[8]), Name = "Выключен", Disabled = true, Action = RuleActionKind.Block, Entries = [new(GeoEntryKind.Suffix, "off.example")] },
+                    ],
+                },
+            },
+            Reality),
+
         // «Только заблокированное»: блок-листы через сервер с resolve перед IP-правилами, остальное напрямую.
         ["11-blocked-only-resolve"] = () => Input(
             Defaults with { Routing = Defaults.Routing with { Preset = RoutePreset.BlockedOnly } },

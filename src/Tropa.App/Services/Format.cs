@@ -30,16 +30,7 @@ internal static class Format
     public static string Duration(TimeSpan t) =>
         $"{(int)t.TotalHours:00}:{t.Minutes:00}:{t.Seconds:00}";
 
-    /// <summary>Код страны из эмодзи-флага в начале имени («🇳🇱 Amsterdam» → «NL»).</summary>
-    public static string CountryCode(string name)
-    {
-        var runes = name.EnumerateRunes().Take(2).ToArray();
-        if (runes.Length == 2 && IsRegional(runes[0]) && IsRegional(runes[1]))
-            return new string([(char)('A' + runes[0].Value - 0x1F1E6), (char)('A' + runes[1].Value - 0x1F1E6)]);
-        return "··";
-    }
-
-    /// <summary>Имя без флага в начале: флаг уже показан плашкой с кодом страны.</summary>
+    /// <summary>Имя без эмодзи-флага в начале: Windows рисует его буквами, а страну выхода показывает плашка с флагом.</summary>
     public static string NameWithoutFlag(string name)
     {
         var runes = name.EnumerateRunes().ToArray();

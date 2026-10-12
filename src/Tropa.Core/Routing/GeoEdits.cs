@@ -66,6 +66,167 @@ public static class GeoEdits
         return (entries, bad);
     }
 
+    /// <summary>Что получилось из вставленного списка v2ray / Xray / Clash.</summary>
+    public sealed record AutoParse(List<GeoEntry> Entries, List<string> Bad, List<string> GeoRefs, List<string> WrongPlace);
+
+    /// <summary>
+    /// Вставка из v2rayN / Xray: «domain:» — домен и поддомены, «full:» — точный адрес, «keyword:» — слово,
+    /// «regexp:» — выражение, IP и сети — как есть; строка без префикса — домен и поддомены. Понимает и
+    /// JSON-массив ("domain:a.com", …), запятые в конце строк, правила Clash (DOMAIN-SUFFIX,a.com) и «+.a.com».
+    /// «geosite:» / «geoip:» не переносятся — это ссылки на чужие базы (в Тропе они готовые).
+    /// </summary>
+    /// <param name="ip">Разрешены ли IP и сети.</param>
+    /// <param name="sites">Разрешены ли домены.</param>
+    public static AutoParse ParseAuto(string? text, bool ip, bool sites)
+    {
+        var result = new AutoParse([], [], [], []);
+        var seen = new HashSet<GeoEntry>();
+        foreach (var rawLine in (text ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = Unwrap(rawLine);
+            if (line.Length == 0 || line.StartsWith('#') || line.StartsWith("//", StringComparison.Ordinal))
+                continue;
+            var tokens = line.StartsWith("regexp:", StringComparison.OrdinalIgnoreCase) || ClashRule(line) is not null
+                ? [line]
+                : line.Split([',', ';', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries).Select(Unwrap).Where(t => t.Length > 0);
+            foreach (var token in tokens)
+            {
+                var (kind, value) = ClashRule(token) ?? Prefixed(token);
+                if (kind is null)
+                {
+                    if (value == "geo")
+                        result.GeoRefs.Add(token);
+                    else
+                        result.Bad.Add(token);
+                    continue;
+                }
+
+                if ((kind == GeoEntryKind.Cidr && !ip) || (kind != GeoEntryKind.Cidr && !sites))
+                {
+                    result.WrongPlace.Add(token);
+                    continue;
+                }
+
+                if (Validate(value, kind.Value) is not { } ok)
+                {
+                    result.Bad.Add(token);
+                    continue;
+                }
+
+                var entry = new GeoEntry(kind.Value, ok);
+                if (seen.Add(entry))
+                    result.Entries.Add(entry);
+            }
+        }
+
+        return result;
+    }
+
+    private static string Unwrap(string s)
+    {
+        s = s.Trim().Trim(',', ';').Trim().Trim('[', ']').Trim().TrimEnd(',').Trim();
+        // Строка JSON из конфига v2rayN: "regexp:^(.+\\.)?a\\.com$" — снимаем экранирование, иначе \\ попадёт в выражение.
+        if (s.Length >= 2 && s[0] == '"' && s[^1] == '"')
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(s);
+                return doc.RootElement.GetString()?.Trim() ?? "";
+            }
+            catch (System.Text.Json.JsonException)
+            {
+            }
+        }
+
+        return s.Trim('"', '\'').Trim();
+    }
+
+    private static (GeoEntryKind? Kind, string Value) Prefixed(string token)
+    {
+        var colon = token.IndexOf(':', StringComparison.Ordinal);
+        // «2a00::1» и «1.2.3.4/32» — адреса, а не префиксы.
+        if (Cidr(token) is not null)
+            return (GeoEntryKind.Cidr, token);
+        if (colon > 0 && !token.Contains("://", StringComparison.Ordinal))
+        {
+            var prefix = token[..colon].ToLowerInvariant();
+            var value = token[(colon + 1)..].Trim();
+            return prefix switch
+            {
+                "domain" => (GeoEntryKind.Suffix, value),
+                "full" => (GeoEntryKind.Domain, value),
+                "keyword" => (GeoEntryKind.Keyword, value),
+                "regexp" => (GeoEntryKind.Regex, value),
+                "geosite" or "geoip" or "ext" or "ext-ip" => (null, "geo"),
+                // «example.com:443» — адрес с портом, а не префикс.
+                _ when int.TryParse(value, out _) => (GeoEntryKind.Suffix, token),
+                _ => (null, ""),
+            };
+        }
+
+        if (token.StartsWith("+.", StringComparison.Ordinal))
+            token = token[2..];
+        return (GeoEntryKind.Suffix, token);
+    }
+
+    /// <summary>Строка Clash: «DOMAIN-SUFFIX,example.com[,PROXY]».</summary>
+    private static (GeoEntryKind? Kind, string Value)? ClashRule(string line)
+    {
+        var parts = line.Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length < 2)
+            return null;
+        GeoEntryKind? kind = parts[0].ToUpperInvariant() switch
+        {
+            "DOMAIN-SUFFIX" => GeoEntryKind.Suffix,
+            "DOMAIN" => GeoEntryKind.Domain,
+            "DOMAIN-KEYWORD" => GeoEntryKind.Keyword,
+            "DOMAIN-REGEX" => GeoEntryKind.Regex,
+            "IP-CIDR" or "IP-CIDR6" => GeoEntryKind.Cidr,
+            _ => null,
+        };
+        return kind is null ? null : (kind, parts[1]);
+    }
+
+    /// <summary>Сколько своих списков можно завести.</summary>
+    public const int MaxCustomLists = 50;
+
+    /// <summary>Тег встроенного набора своего списка: домены и сети отдельно — сети срабатывают только после resolve.</summary>
+    public static string CustomTag(CustomGeoList list, bool ip)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        return "custom-" + list.Id.ToString("N")[..12] + (ip ? "-ip" : "");
+    }
+
+    /// <summary>Свои списки из недоверенного источника: имя очищено, записи проверены, действие известное.</summary>
+    public static List<CustomGeoList> SanitizeCustom(IReadOnlyList<CustomGeoList>? lists)
+    {
+        var result = new List<CustomGeoList>();
+        var ids = new HashSet<Guid>();
+        foreach (var l in (lists ?? []).Take(MaxCustomLists))
+        {
+            if (l is null || l.Id == Guid.Empty || !ids.Add(l.Id))
+                continue;
+            var seen = new HashSet<GeoEntry>();
+            var entries = new List<GeoEntry>();
+            foreach (var e in l.Entries)
+            {
+                if (entries.Count >= MaxEntries)
+                    break;
+                if (e?.Value is not null && Validate(e.Value, e.Kind) is { } v && seen.Add(e with { Value = v }))
+                    entries.Add(e with { Value = v });
+            }
+
+            result.Add(l with
+            {
+                Name = Security.NameSanitizer.Sanitize(l.Name, "Мой список"),
+                Action = l.Action is RuleActionKind.Direct or RuleActionKind.Block ? l.Action : RuleActionKind.Proxy,
+                Entries = entries,
+            });
+        }
+
+        return result;
+    }
+
     /// <summary>Проверенное значение записи этого вида или null.</summary>
     public static string? Validate(string? value, GeoEntryKind kind) => kind switch
     {

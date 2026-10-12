@@ -112,6 +112,13 @@ public sealed class ServerTesterTests : IAsyncLifetime
                         await ctx.Response.OutputStream.FlushAsync();
                         await Task.Delay(TimeSpan.FromSeconds(60), _stop.Token);
                     }
+                    else if (path == "/trace")
+                    {
+                        // Как cloudflare.com/cdn-cgi/trace: страна выхода в строке loc=.
+                        var body = System.Text.Encoding.ASCII.GetBytes("fl=1\nip=203.0.113.9\nloc=NL\ntls=TLSv1.3\n");
+                        ctx.Response.ContentLength64 = body.Length;
+                        await ctx.Response.OutputStream.WriteAsync(body);
+                    }
                     else
                     {
                         ctx.Response.StatusCode = 204;
@@ -189,9 +196,10 @@ public sealed class ServerTesterTests : IAsyncLifetime
 
     private Profile Good => ShareLink.Parse($"vless://{Uuid}@127.0.0.1:{_serverPort}?security=none#good").Profile!;
 
+    // Страну выхода спрашиваем у локального «cdn-cgi/trace», а не у cloudflare.com: тесты без интернета.
     private Task<IReadOnlyDictionary<Guid, ServerTestResult>> Run(Profile p, AppSettings s, TestKinds kinds, TesterOptions? o = null) =>
         ServerTester.TestAsync([p], [p], s, kinds, Cores, Path.Combine(_work.FullName, "run"), SecretScrubber.PatternsOnly, _ => { },
-            null, TestContext.Current.CancellationToken, o);
+            null, TestContext.Current.CancellationToken, (o ?? new TesterOptions()) with { ExitTraceUrl = $"http://127.0.0.1:{_sitePort}/trace" });
 
     [Fact]
     public async Task Healthy_server_passes_all_checks()
@@ -207,6 +215,22 @@ public sealed class ServerTesterTests : IAsyncLifetime
         Assert.False(r.Frozen);
         Assert.True(r.UdpOk, "STUN через сервер должен пройти");
         Assert.Equal(HealthStatus.Working, ServerHealth.Classify(r));
+        Assert.Equal("NL", r.ExitCountry); // страна выхода — по ответу trace через сервер
+    }
+
+    [Fact]
+    public async Task Exit_country_is_not_asked_when_hidden_or_server_is_down()
+    {
+        if (_server is null)
+            Assert.Skip("Ядра не скачаны");
+        var p = Good;
+        var hidden = Settings() with { General = Settings().General with { HideExitRegion = true } };
+        Assert.Null((await Run(p, hidden, TestKinds.Delay))[p.Id].ExitCountry);
+
+        var dead = ShareLink.Parse($"vless://{Uuid}@127.0.0.1:{FreeTcpPort()}?security=none#dead").Profile!;
+        var r = (await Run(dead, Settings(), TestKinds.Delay, new TesterOptions { RequestTimeout = TimeSpan.FromSeconds(2) }))[dead.Id];
+        Assert.Null(r.DelayMs);
+        Assert.Null(r.ExitCountry); // в списке будет «–»
     }
 
     [Fact]

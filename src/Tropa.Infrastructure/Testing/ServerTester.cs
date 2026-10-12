@@ -43,6 +43,12 @@ public sealed record TesterOptions
     public TimeSpan StabilityInterval { get; init; } = TimeSpan.FromSeconds(1);
     public int ParallelSpeedTests { get; init; } = 2;
     public TimeProvider Time { get; init; } = TimeProvider.System;
+
+    /// <summary>
+    /// Адрес, у которого через сервер спрашиваем страну выхода (ответ «loc=NL»). null — не спрашивать.
+    /// Спрашиваем, только если в настройках включено «Показывать страну выхода».
+    /// </summary>
+    public string? ExitTraceUrl { get; init; } = Tropa.Core.Diagnostics.ExitRegion.TraceUrl;
 }
 
 /// <summary>
@@ -222,6 +228,10 @@ public static partial class ServerTester
             r = r with { DelayMs = delay };
             if (delay is null)
                 return r with { Error = error };
+
+            // 2a. Страна выхода: у провайдера выход может переключаться внутри туннеля, поэтому — при каждой проверке.
+            if (o.ExitTraceUrl is { } traceUrl && !settings.General.HideExitRegion)
+                r = r with { ExitCountry = await ExitCountryAsync(t.Port, auth, traceUrl, o, ct).ConfigureAwait(false) };
         }
 
         // 3. UDP: STUN через сервер.
@@ -338,6 +348,30 @@ public static partial class ServerTester
                 HttpRequestError.SecureConnectionError => "Соединение через сервер оборвалось: сервер не принял ключ (Reality, SNI) или его перехватывает другая программа.",
                 _ => "Запрос через сервер не прошёл.",
             });
+        }
+    }
+
+    /// <summary>Страна выхода по ответу cdn-cgi/trace через сервер. null — не удалось узнать (это не ошибка сервера).</summary>
+    private static async Task<string?> ExitCountryAsync(int port, LocalAuth auth, string url, TesterOptions o, CancellationToken ct)
+    {
+        using var client = Client(port, auth, o.RequestTimeout);
+        try
+        {
+            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                return null;
+            // Ответ — несколько коротких строк; больше 4 КБ не читаем.
+            await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            var buffer = new byte[4096];
+            var read = 0;
+            int n;
+            while (read < buffer.Length && (n = await stream.ReadAsync(buffer.AsMemory(read), ct).ConfigureAwait(false)) > 0)
+                read += n;
+            return Tropa.Core.Diagnostics.ExitRegion.Parse(System.Text.Encoding.ASCII.GetString(buffer, 0, read), o.Time.GetUtcNow())?.CountryCode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            return null;
         }
     }
 

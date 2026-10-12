@@ -155,8 +155,12 @@
               <DataTemplate x:DataType="vm:ServerItemViewModel">
                 <Grid ColumnDefinitions="*,84,124" MinHeight="44">
                   <Grid Grid.Column="0" ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,0,8,0">
-                    <Border Background="{DynamicResource Chip}" CornerRadius="4" Width="30" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Country}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Border Background="{DynamicResource Chip}" CornerRadius="4" Width="30" Height="22" Margin="0,0,10,0" VerticalAlignment="Center"
+                            ClipToBounds="True" ToolTip.Tip="{Binding CountryTip}">
+                      <Panel>
+                        <Image Source="{Binding Flag}" Stretch="UniformToFill" IsVisible="{Binding HasFlag}" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                        <TextBlock Text="{Binding Country}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasFlag}" />
+                      </Panel>
                     </Border>
                     <StackPanel Grid.Column="1" Spacing="1">
                       <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />

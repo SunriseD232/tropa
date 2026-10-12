@@ -24,6 +24,11 @@ internal sealed partial class App : Application
     /// <summary>Запуск из автозагрузки Windows: окно по настройке startMin, подключение по autoconnect.</summary>
     public static bool FromAutostart { get; set; }
 
+    /// <summary>Запущена установщиком после обновления из самой Тропы: окно показываем, подключение — если было.</summary>
+    public static bool AfterUpdate { get; set; }
+
+    public static bool ReconnectAfterUpdate { get; set; }
+
     private static App? Instance => Current as App;
 
     private Services.GlobalHotkey? _hotkey;
@@ -80,8 +85,10 @@ internal sealed partial class App : Application
             var settings = _engine.State.Settings.General;
             if (!(StartMinimized || (FromAutostart && settings.StartMin)))
                 _window.Show();
-            if (FromAutostart && settings.Autoconnect && _engine.State.ActiveProfile is not null)
-                _ = AutoconnectAsync(_engine, settings.WaitNet);
+            if (AfterUpdate)
+                _window.Show();
+            if (((FromAutostart && settings.Autoconnect) || ReconnectAfterUpdate) && _engine.State.ActiveProfile is not null)
+                _ = AutoconnectAsync(_engine, waitNet: settings.WaitNet || ReconnectAfterUpdate);
         }
 
         base.OnFrameworkInitializationCompleted();

@@ -118,9 +118,21 @@ internal sealed partial class UpdatesViewModel : ObservableObject
         {
             Report($"Скачиваю Тропу {app.Version.ToString(3)}…");
             var installer = await Task.Run(() => _engine.DownloadAppUpdateAsync(app));
-            Report("Запускаю установщик. Тропа закроется и откроется снова после обновления.");
-            // Установщик сам закроет Тропу (с откатом прокси) и попросит права администратора.
-            Process.Start(new ProcessStartInfo(installer) { UseShellExecute = true });
+            Report($"Устанавливаю Тропу {app.Version.ToString(3)}: Windows попросит разрешение, Тропа закроется на полминуты и откроется сама.");
+            // Тихая установка без мастера (installer/tropa.iss, IsInAppUpdate): установщик сам вернёт прокси,
+            // закроет Тропу, обновит службу и запустит новую версию; подключение восстановится, если было.
+            var args = new List<string> { "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/NOCANCEL", "/SP-", "/TROPAUPDATE" };
+            if (_engine.Status.State == ConnectionState.Connected)
+                args.Add("/TROPARECONNECT");
+            // Выбор «Запускать вместе с Windows» берём из настроек, а не из прошлой установки.
+            args.Add(_engine.State.Settings.General.Autostart ? "/MERGETASKS=autostart" : "/MERGETASKS=!autostart");
+            // Файл держим открытым без права записи, пока установщик не запущен: между проверкой и запуском его не подменить.
+            using (PinnedFiles.OpenVerified(installer, app.Sha256))
+                Process.Start(new ProcessStartInfo(installer, string.Join(' ', args)) { UseShellExecute = true });
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            Report("Обновление отменено: Windows не получила разрешения. Нажмите «Установить» ещё раз и ответьте «Да».", error: true);
         }
         catch (Exception ex) when (ex is IntegrityException or HttpRequestException or TaskCanceledException or IOException or System.ComponentModel.Win32Exception)
         {

@@ -63,9 +63,14 @@ public sealed class StorageTests : IDisposable
         Assert.NotEqual(text, cut);
         File.WriteAllText(store.SettingsPath, cut);
 
+        cut = System.Text.RegularExpressions.Regex.Replace(cut, @",\s*""customLists""\s*:\s*\[\s*\]", "");
+        File.WriteAllText(store.SettingsPath, cut);
+
         var loaded = new StateStore(_dir.FullName).Load();
         Assert.NotNull(loaded.State.Settings.Routing.GeoEdits);
         Assert.Empty(loaded.State.Settings.Routing.GeoEdits);
+        Assert.NotNull(loaded.State.Settings.Routing.CustomLists);
+        Assert.Empty(loaded.State.Settings.Routing.CustomLists);
     }
 
     [Fact]

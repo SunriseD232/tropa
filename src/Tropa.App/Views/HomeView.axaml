@@ -94,8 +94,11 @@
             </Border>
             <Border Background="{DynamicResource Card2}" CornerRadius="12" Padding="16,12">
               <DockPanel>
-                <Border DockPanel.Dock="Left" Background="{DynamicResource Chip}" CornerRadius="4" Width="34" Height="22" Margin="0,0,12,0" VerticalAlignment="Center">
-                  <TextBlock Text="{Binding CountryCode}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Border DockPanel.Dock="Left" Background="{DynamicResource Chip}" CornerRadius="4" Width="34" Height="24" Margin="0,0,12,0" VerticalAlignment="Center" ClipToBounds="True">
+                  <Panel>
+                    <Image Source="{Binding Flag}" Stretch="UniformToFill" IsVisible="{Binding HasFlag}" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                    <TextBlock Text="{Binding CountryCode}" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasFlag}" />
+                  </Panel>
                 </Border>
                 <StackPanel>
                   <TextBlock Text="{Binding ServerName}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />

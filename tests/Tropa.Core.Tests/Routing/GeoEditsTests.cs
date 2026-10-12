@@ -126,6 +126,73 @@ public sealed class GeoEditsTests
     public void Hosts_to_check(string input, string? expected) => Assert.Equal(expected, GeoEdits.Host(input));
 
     [Fact]
+    public void V2ray_list_is_pasted_as_is()
+    {
+        // Вставка владельца из v2rayN — с запятыми в конце строк.
+        var r = GeoEdits.ParseAuto("domain:faceit.com,\ndomain:xsolla.com,\ndomain:otvet.mail.ru,\ndomain:cybershoke.net", ip: true, sites: true);
+        Assert.Equal(
+            [new GeoEntry(GeoEntryKind.Suffix, "faceit.com"), new GeoEntry(GeoEntryKind.Suffix, "xsolla.com"),
+             new GeoEntry(GeoEntryKind.Suffix, "otvet.mail.ru"), new GeoEntry(GeoEntryKind.Suffix, "cybershoke.net")],
+            r.Entries);
+        Assert.Empty(r.Bad);
+        // domain: — домен и поддомены, как в v2ray.
+        Assert.True(GeoEdits.Matches(r.Entries[0], "www.faceit.com", null));
+    }
+
+    [Fact]
+    public void V2ray_prefixes_and_other_formats()
+    {
+        var r = GeoEdits.ParseAuto("""
+            [
+              "full:otvet.mail.ru",
+              "keyword:xsolla",
+              "regexp:^(.+\\.)?faceit\\.(com|net)$",
+              "geosite:category-games",
+              "91.108.4.0/22", "2001:b28:f23d::/48",
+              plain.example.com
+            ]
+            DOMAIN-SUFFIX,clash.example,PROXY
+            +.plus.example
+            # комментарий
+            bogus:thing
+            """, ip: true, sites: true);
+        Assert.Equal(
+            [new GeoEntry(GeoEntryKind.Domain, "otvet.mail.ru"), new GeoEntry(GeoEntryKind.Keyword, "xsolla"),
+             new GeoEntry(GeoEntryKind.Regex, @"^(.+\.)?faceit\.(com|net)$"), new GeoEntry(GeoEntryKind.Cidr, "91.108.4.0/22"),
+             new GeoEntry(GeoEntryKind.Cidr, "2001:b28:f23d::/48"), new GeoEntry(GeoEntryKind.Suffix, "plain.example.com"),
+             new GeoEntry(GeoEntryKind.Suffix, "clash.example"), new GeoEntry(GeoEntryKind.Suffix, "plus.example")],
+            r.Entries);
+        Assert.Equal(["geosite:category-games"], r.GeoRefs);
+        Assert.Equal(["bogus:thing"], r.Bad);
+    }
+
+    [Fact]
+    public void Ip_entries_go_only_where_allowed()
+    {
+        var r = GeoEdits.ParseAuto("domain:a.example\n1.2.3.4", ip: false, sites: true);
+        Assert.Equal([new GeoEntry(GeoEntryKind.Suffix, "a.example")], r.Entries);
+        Assert.Equal(["1.2.3.4"], r.WrongPlace);
+    }
+
+    [Fact]
+    public void Custom_lists_are_sanitized()
+    {
+        var id = Guid.NewGuid();
+        var clean = GeoEdits.SanitizeCustom(
+        [
+            new CustomGeoList { Id = id, Name = "Игры‮", Action = RuleActionKind.Server, Entries = [new(GeoEntryKind.Suffix, "faceit.com"), new(GeoEntryKind.Cidr, "nope"), new(GeoEntryKind.Regex, "(?<=x)")] },
+            new CustomGeoList { Id = id, Name = "Повтор" },
+            new CustomGeoList { Id = Guid.Empty, Name = "Без Id" },
+            new CustomGeoList { Id = Guid.NewGuid(), Name = "  " },
+        ]);
+        Assert.Equal(2, clean.Count);
+        Assert.Equal("Игры", clean[0].Name);
+        Assert.Equal(RuleActionKind.Proxy, clean[0].Action);
+        Assert.Equal([new GeoEntry(GeoEntryKind.Suffix, "faceit.com")], clean[0].Entries);
+        Assert.Equal("Мой список", clean[1].Name);
+    }
+
+    [Fact]
     public void Added_wins_over_removed()
     {
         GeoEntry a = new(GeoEntryKind.Suffix, "a.example"), b = new(GeoEntryKind.Suffix, "b.example"), c = new(GeoEntryKind.Suffix, "c.example");

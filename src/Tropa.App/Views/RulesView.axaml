@@ -162,6 +162,38 @@
           <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="geoLists" />
         </StackPanel>
         <TextBlock Classes="muted" Text="Готовые списки адресов и сайтов, по которым работает маршрут. Откройте список, чтобы найти в нём адрес, добавить свой или убрать лишний." />
+
+        <!-- Свои списки (ADR-040) -->
+        <Border Background="{DynamicResource Card2}" CornerRadius="12" Padding="14,12">
+          <StackPanel Spacing="8">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="primary" Content="Создать список" Command="{Binding CreateListCommand}" />
+              <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,12,0">
+                <TextBlock Text="Свои списки" FontWeight="SemiBold" FontSize="15" />
+                <TextBlock Classes="muted" Text="Свой набор сайтов и адресов с действием «через сервер», «напрямую» или «блокировать». Список из v2rayN можно вставить как есть." />
+              </StackPanel>
+            </DockPanel>
+            <ItemsControl ItemsSource="{Binding CustomLists}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:GeoListRow">
+                  <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="4,10">
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Content="Открыть" Command="{Binding OpenCommand}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                      <Border DockPanel.Dock="Right" Classes="pill" Background="{DynamicResource InfoBg}" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource InfoFg}" FontSize="12" />
+                      </Border>
+                      <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="muted" Text="{Binding Description}" />
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
         <ItemsControl ItemsSource="{Binding GeoLists}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:GeoListRow">

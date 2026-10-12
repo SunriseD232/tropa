@@ -112,7 +112,24 @@ internal sealed partial class HomeViewModel : ObservableObject
     public partial string ServerDetails { get; set; } = "Добавьте подписку на экране «Серверы» или нажмите Ctrl+V";
 
     [ObservableProperty]
-    public partial string CountryCode { get; set; } = "··";
+    public partial string CountryCode { get; set; } = "–";
+
+    /// <summary>Флаг страны выхода: при подключении — по живой проверке, иначе — по последней проверке сервера.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFlag))]
+    public partial Avalonia.Media.Imaging.Bitmap? Flag { get; set; }
+
+    public bool HasFlag => Flag is not null;
+
+    private void UpdateFlag()
+    {
+        var s = _engine.State;
+        var live = _engine.Status.State == ConnectionState.Connected ? _engine.ExitRegion?.CountryCode : null;
+        var tested = s.ActiveProfile is { } a ? s.Profiles.FirstOrDefault(p => p.Profile.Id == a.Id)?.LastTest?.ExitCountry : null;
+        var code = live ?? tested;
+        CountryCode = code ?? "–";
+        Flag = Flags.Get(code);
+    }
 
     [ObservableProperty]
     public partial bool HasServer { get; set; }
@@ -140,6 +157,7 @@ internal sealed partial class HomeViewModel : ObservableObject
     {
         var r = _engine.Status.State == ConnectionState.Connected ? _engine.ExitRegion : null;
         ExitRegion = r?.Name;
+        UpdateFlag();
         ExitRegionTip = r is null ? null
             : $"Сайты видят вас из страны «{r.Name}» ({r.CountryCode}). Проверено в {r.CheckedAt.ToLocalTime():HH:mm}, обновляется раз в 2 минуты: сервер может сам переключать выход.";
     }
@@ -218,7 +236,6 @@ internal sealed partial class HomeViewModel : ObservableObject
         if (active is not null)
         {
             ServerName = Format.NameWithoutFlag(active.Name);
-            CountryCode = Format.CountryCode(active.Name);
             ServerDetails = $"{Format.Protocol(active)} · {Format.Transport(active)}";
             var sub = s.Subscriptions.FirstOrDefault(x => x.Id == active.SubscriptionId);
             SubscriptionLine = sub is null ? null : SubscriptionText(sub);
@@ -226,10 +243,11 @@ internal sealed partial class HomeViewModel : ObservableObject
         else
         {
             ServerName = "Сервер не выбран";
-            CountryCode = "··";
             ServerDetails = "Добавьте подписку на экране «Серверы» или нажмите Ctrl+V";
             SubscriptionLine = null;
         }
+
+        UpdateFlag();
 
         ModeTun = s.Settings.Connection.Mode == CaptureMode.Tun;
         FillServers();

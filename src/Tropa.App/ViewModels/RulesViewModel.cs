@@ -124,6 +124,14 @@ internal sealed partial class RulesViewModel : ObservableObject
     /// <summary>Гео-базы, которые можно открыть и поправить (ADR-039).</summary>
     public ObservableCollection<GeoListRow> GeoLists { get; } = [];
 
+    private IReadOnlyList<CustomGeoList>? _shownCustom;
+
+    /// <summary>Свои списки (ADR-040).</summary>
+    public ObservableCollection<GeoListRow> CustomLists { get; } = [];
+
+    [RelayCommand]
+    private void CreateList() => _geoEditor.OpenCustom(null);
+
     public RulesViewModel(TropaEngine engine, InfoViewModel info, GeoListEditorViewModel geoEditor)
     {
         _engine = engine;
@@ -258,12 +266,16 @@ internal sealed partial class RulesViewModel : ObservableObject
             _shownRules = routing.Rules;
         }
 
-        if (!ReferenceEquals(_shownGeoEdits, routing.GeoEdits))
+        if (!ReferenceEquals(_shownGeoEdits, routing.GeoEdits) || !ReferenceEquals(_shownCustom, routing.CustomLists))
         {
             GeoLists.Clear();
+            CustomLists.Clear();
             foreach (var list in GeoEdits.Catalog)
                 GeoLists.Add(new GeoListRow(list, routing.GeoEdits.FirstOrDefault(e => e.Tag == list.Tag), _geoEditor.Open));
+            foreach (var list in routing.CustomLists)
+                CustomLists.Add(new GeoListRow(list, id => _geoEditor.OpenCustom(id)));
             _shownGeoEdits = routing.GeoEdits;
+            _shownCustom = routing.CustomLists;
         }
 
         OnPropertyChanged(nameof(AppRulesNote));

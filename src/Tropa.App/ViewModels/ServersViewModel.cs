@@ -45,7 +45,22 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
     public Profile Profile { get; } = profile;
     public Guid Id => Profile.Id;
     public string Name => Format.NameWithoutFlag(Profile.Name);
-    public string Country => Format.CountryCode(Profile.Name);
+
+    /// <summary>
+    /// Страна выхода по последней проверке (не по названию сервера: выход у провайдера может переключаться).
+    /// «–» — проверки не было или страну узнать не удалось.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFlag))]
+    public partial Avalonia.Media.Imaging.Bitmap? Flag { get; set; }
+
+    [ObservableProperty]
+    public partial string Country { get; set; } = "–";
+
+    [ObservableProperty]
+    public partial string? CountryTip { get; set; } = "Страна выхода появится после проверки сервера";
+
+    public bool HasFlag => Flag is not null;
     public string Protocol => Format.Protocol(Profile);
     public string Transport => Format.Transport(Profile);
 
@@ -95,6 +110,11 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
         if (r is null)
             return;
         var status = ServerHealth.Classify(r);
+        Flag = Flags.Get(r.ExitCountry);
+        Country = r.ExitCountry ?? "–";
+        CountryTip = r.ExitCountry is { } code
+            ? $"Выход: {new Tropa.Core.Diagnostics.ExitRegion(code, r.At).Name}. Проверено {r.At.ToLocalTime():dd.MM HH:mm}; при следующей проверке может быть другой, если сервер переключает выход."
+            : "Страну выхода узнать не удалось: сервер не ответил или проверка страны выключена в настройках";
         Delay = r.DelayMs is { } ms ? $"{ms} мс" : "—";
         Speed = r.Frozen ? "замерзает" : r.SpeedMbps is { } sp ? sp.ToString("0.#", Ru) + " Мбит/с" : "—";
         Tcp = r.TcpMs is { } tcp ? $"{tcp} мс" : Profile.ChainVia is null ? "нет ответа" : "через цепочку";

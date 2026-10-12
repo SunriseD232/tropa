@@ -68,6 +68,8 @@ Filename: "{app}\Tropa.Service.exe"; Parameters: "--install"; Flags: runhidden w
 Filename: "{app}\Tropa.exe"; Parameters: "--set-autostart=on"; Flags: runasoriginaluser waituntilterminated; Tasks: autostart
 Filename: "{app}\Tropa.exe"; Parameters: "--set-autostart=off"; Flags: runasoriginaluser waituntilterminated; Tasks: not autostart
 Filename: "{app}\Tropa.exe"; Description: "Запустить Тропу"; Flags: postinstall nowait skipifsilent runasoriginaluser
+; Обновление из самой Тропы (/SILENT /TROPAUPDATE): мастера нет — после установки Тропа открывается сама.
+Filename: "{app}\Tropa.exe"; Parameters: "{code:RelaunchArgs}"; Flags: nowait runasoriginaluser; Check: IsInAppUpdate
 
 [UninstallRun]
 ; Сначала откат от имени пользователя (прокси Windows, блокировка, служба), затем удаление службы.
@@ -91,6 +93,25 @@ begin
   if not Exec(FileName, Params, '', SW_HIDE, ewWaitUntilTerminated, Code) then
     Code := -1;
   Result := Code;
+end;
+
+function HasParam(const Name: String): Boolean;
+begin
+  Result := Pos(Uppercase(Name), Uppercase(GetCmdTail)) > 0;
+end;
+
+{ Установщик запущен кнопкой «Установить» в Тропе (UpdatesViewModel). }
+function IsInAppUpdate: Boolean;
+begin
+  Result := HasParam('/TROPAUPDATE');
+end;
+
+{ Тропа была подключена — после обновления подключиться снова. }
+function RelaunchArgs(Param: String): String;
+begin
+  Result := '--after-update';
+  if HasParam('/TROPARECONNECT') then
+    Result := Result + ' --reconnect';
 end;
 
 { Закрывает только Тропу из каталога установки, а не процессы с таким же именем где-то ещё. }

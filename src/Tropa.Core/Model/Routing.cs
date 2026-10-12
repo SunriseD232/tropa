@@ -78,6 +78,33 @@ public sealed record RoutingSettings
     public IReadOnlyList<GeoListEdit> GeoEdits { get => _geoEdits; init => _geoEdits = value ?? []; }
 
     private readonly IReadOnlyList<GeoListEdit> _geoEdits = [];
+
+    /// <summary>Свои списки сайтов и адресов с действием (ADR-040). Проверяются после правил «Приложения» и «Сайты».</summary>
+    public IReadOnlyList<CustomGeoList> CustomLists { get => _customLists; init => _customLists = value ?? []; }
+
+    private readonly IReadOnlyList<CustomGeoList> _customLists = [];
+}
+
+/// <summary>
+/// Свой список (ADR-040): записи любых видов гео-баз и одно действие для TCP и UDP.
+/// Флаг «наоборот» (Disabled): отсутствующее в settings.json init-свойство читается как false.
+/// </summary>
+public sealed record CustomGeoList
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+
+    public string Name { get => _name; init => _name = value ?? ""; }
+
+    private readonly string _name = "";
+
+    public bool Disabled { get; init; }
+
+    /// <summary>Proxy, Direct или Block (конкретный сервер для списков не поддерживается).</summary>
+    public RuleActionKind Action { get; init; }
+
+    public IReadOnlyList<GeoEntry> Entries { get => _entries; init => _entries = value ?? []; }
+
+    private readonly IReadOnlyList<GeoEntry> _entries = [];
 }
 
 /// <summary>Вид записи гео-базы — как поле правила sing-box.</summary>

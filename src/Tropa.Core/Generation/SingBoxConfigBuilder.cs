@@ -231,6 +231,9 @@ public static class SingBoxConfigBuilder
 
         /// <summary>Правки гео-баз (ADR-039), уже очищенные: только известные наборы и проверенные записи.</summary>
         public Dictionary<string, GeoListEdit> Edits { get; } = GeoEdits.Sanitize(settings.Routing.GeoEdits).ToDictionary(e => e.Tag, StringComparer.Ordinal);
+
+        /// <summary>Встроенные наборы своих списков: тег → записи.</summary>
+        public Dictionary<string, IReadOnlyList<GeoEntry>> InlineSets { get; } = new(StringComparer.Ordinal);
         public Dictionary<Guid, string> ServerTags { get; } = [];
 
         public string TagFor(Profile p)
@@ -758,6 +761,24 @@ public static class SingBoxConfigBuilder
                 rules.Push(expanded);
         }
 
+        // Свои списки (ADR-040): сначала домены всех списков, затем resolve и сети — как у правил пресета.
+        var custom = GeoEdits.SanitizeCustom(s.Routing.CustomLists).Where(l => !l.Disabled && l.Entries.Count > 0).ToList();
+        foreach (var ipPart in new[] { false, true })
+        {
+            foreach (var list in custom)
+            {
+                var entries = list.Entries.Where(e => (e.Kind == GeoEntryKind.Cidr) == ipPart).ToList();
+                if (entries.Count == 0)
+                    continue;
+                if (ipPart)
+                    Resolve();
+                var tag = GeoEdits.CustomTag(list, ipPart);
+                ctx.RuleSetTags.Add(tag);
+                ctx.InlineSets[tag] = entries;
+                rules.Push(Route(ctx, new JsonObject { ["rule_set"] = StrArray([tag]) }, new RuleAction(list.Action)));
+            }
+        }
+
         if (!s.Routing.UdpProxy)
             rules.Push(Route(ctx, new JsonObject { ["network"] = "udp" }, RuleAction.Direct));
 
@@ -886,7 +907,12 @@ public static class SingBoxConfigBuilder
     {
         var plus = tag.LastIndexOf('+');
         var edit = ctx.Edits[tag[..plus]];
-        var entries = tag.EndsWith(AddedSuffix, StringComparison.Ordinal) ? edit.Added : edit.Removed;
+        return InlineSet(tag, tag.EndsWith(AddedSuffix, StringComparison.Ordinal) ? edit.Added : edit.Removed);
+    }
+
+    /// <summary>Встроенный набор правил из записей гео-базы: одно правило, поля по видам записей.</summary>
+    private static JsonObject InlineSet(string tag, IReadOnlyList<GeoEntry> entries)
+    {
         var rule = new JsonObject();
         foreach (var (kind, key) in new[]
         {
@@ -1003,6 +1029,12 @@ public static class SingBoxConfigBuilder
             if (IsEditTag(tag))
             {
                 sets.Push(EditRuleSet(ctx, tag));
+                continue;
+            }
+
+            if (ctx.InlineSets.TryGetValue(tag, out var own))
+            {
+                sets.Push(InlineSet(tag, own));
                 continue;
             }
 

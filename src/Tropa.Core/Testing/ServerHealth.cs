@@ -32,6 +32,12 @@ public sealed record ServerTestResult
 
     /// <summary>Причина ошибки на шаге, где проверка остановилась (без секретов).</summary>
     public string? Error { get; init; }
+
+    /// <summary>
+    /// Страна выхода (ISO 3166, «NL») по cdn-cgi/trace через сервер при этой проверке. null — не проверялась
+    /// или не удалось узнать. Меняется от проверки к проверке, если у провайдера выход переключается.
+    /// </summary>
+    public string? ExitCountry { get; init; }
 }
 
 public enum HealthStatus { Unknown, Working, Slow, Frozen, HandshakeError, NoResponse, Incompatible }

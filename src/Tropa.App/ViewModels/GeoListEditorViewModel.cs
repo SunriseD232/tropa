@@ -33,7 +33,7 @@ internal sealed class GeoEntryRow(GeoEntry entry, bool added, bool removed)
 }
 
 /// <summary>Вид записи в окне «Добавить записи»: название, как работает, пример.</summary>
-internal sealed record GeoKindOption(GeoEntryKind Kind, string Title, string Rule, string Example, string Placeholder)
+internal sealed record GeoKindOption(GeoEntryKind? Kind, string Title, string Rule, string Example, string Placeholder)
 {
     private static readonly IReadOnlyList<GeoKindOption> Ip =
     [
@@ -58,24 +58,59 @@ internal sealed record GeoKindOption(GeoEntryKind Kind, string Title, string Rul
             @"^(.+\.)?linked(in)?\.(com|cn)$ → linkedin.com, www.linked.cn", @"^(.+\.)?linkedin\.(com|cn)$"),
     ];
 
-    public static IReadOnlyList<GeoKindOption> For(bool ip) => ip ? Ip : Sites;
+    /// <summary>Вставка из v2rayN / Xray / Clash: вид определяется по префиксу каждой строки.</summary>
+    private static GeoKindOption Auto(bool ip, bool sites) => new(null, "Список из v2ray / Clash (вид по префиксу)",
+        "Вставьте список как есть. domain: — домен и поддомены, full: — только этот адрес, keyword: — содержит слово, regexp: — выражение"
+        + (ip ? ", IP и сети — как есть" : "") + (sites ? "; без префикса — домен и поддомены" : "") + ". Запятые и кавычки в конце строк не мешают.",
+        "domain:faceit.com,  full:otvet.mail.ru,  keyword:xsolla" + (ip ? ",  91.108.4.0/22" : ""),
+        "domain:faceit.com,\ndomain:xsolla.com,\nfull:otvet.mail.ru");
+
+    public static IReadOnlyList<GeoKindOption> For(bool ip, bool sites) =>
+        [Auto(ip, sites), .. sites ? Sites : [], .. ip ? Ip : []];
 
     public override string ToString() => Title;
 }
 
-/// <summary>Гео-база на экране «Правила»: название и что в ней поправлено.</summary>
-internal sealed class GeoListRow(GeoListInfo info, GeoListEdit? edit, Action<string> open)
+/// <summary>Гео-база или свой список на экране «Правила»: название и что в нём поправлено.</summary>
+internal sealed class GeoListRow
 {
-    public string Title => info.Title;
-    public string Description => info.Description;
-    public string Kind => info.IsIp ? "IP-адреса" : "Сайты";
-    public bool IsEdited => edit is { IsEmpty: false };
+    public GeoListRow(GeoListInfo info, GeoListEdit? edit, Action<string> open)
+    {
+        Title = info.Title;
+        Description = info.Description;
+        Kind = info.IsIp ? "IP-адреса" : "Сайты";
+        IsEdited = edit is { IsEmpty: false };
+        EditSummary = edit is { IsEmpty: false } e
+            ? string.Join(" · ", new[] { e.Added.Count > 0 ? $"добавлено {e.Added.Count}" : null, e.Removed.Count > 0 ? $"убрано {e.Removed.Count}" : null }.OfType<string>())
+            : "";
+        OpenCommand = new RelayCommand(() => open(info.Tag));
+    }
 
-    public string EditSummary => edit is { IsEmpty: false } e
-        ? string.Join(" · ", new[] { e.Added.Count > 0 ? $"добавлено {e.Added.Count}" : null, e.Removed.Count > 0 ? $"убрано {e.Removed.Count}" : null }.OfType<string>())
-        : "";
+    public GeoListRow(CustomGeoList list, Action<Guid> open)
+    {
+        Title = list.Name;
+        var count = list.Entries.Count.ToString("N0", CultureInfo.GetCultureInfo("ru-RU"));
+        Description = (list.Disabled ? "Выключен. " : "") + $"Свой список · записей: {count}";
+        Kind = ActionLabel(list.Action);
+        EditSummary = "";
+        IsCustom = true;
+        OpenCommand = new RelayCommand(() => open(list.Id));
+    }
 
-    public IRelayCommand OpenCommand { get; } = new RelayCommand(() => open(info.Tag));
+    public static string ActionLabel(RuleActionKind action) => action switch
+    {
+        RuleActionKind.Direct => "Напрямую",
+        RuleActionKind.Block => "Блокировать",
+        _ => "Через сервер",
+    };
+
+    public string Title { get; }
+    public string Description { get; }
+    public string Kind { get; }
+    public bool IsEdited { get; }
+    public bool IsCustom { get; }
+    public string EditSummary { get; }
+    public IRelayCommand OpenCommand { get; }
 }
 
 /// <summary>
@@ -100,6 +135,12 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
     private GeoListInfo? _list;
     private int _shown;
 
+    // Свой список (ADR-040): null — открыт встроенный набор.
+    private Guid? _customId;
+    private bool _hasIp;
+    private bool _hasSites;
+    private bool _loadingCustom;
+
     public GeoListEditorViewModel(TropaEngine engine, InfoViewModel info)
     {
         _engine = engine;
@@ -116,6 +157,40 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
     public event EventHandler? Saved;
 
     public static IReadOnlyList<string> Views { get; } = ["Весь список", "Добавленные мной", "Убранные мной"];
+
+    public static IReadOnlyList<string> Actions { get; } = ["Через сервер", "Напрямую", "Блокировать"];
+
+    /// <summary>Открыт свой список: можно менять название, действие и удалить его.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBuiltIn), nameof(CheckPlaceholder))]
+    public partial bool IsCustom { get; set; }
+
+    public bool IsBuiltIn => !IsCustom;
+
+    [ObservableProperty]
+    public partial string? ListName { get; set; }
+
+    [ObservableProperty]
+    public partial int ActionIndex { get; set; }
+
+    [ObservableProperty]
+    public partial bool ListEnabled { get; set; } = true;
+
+    /// <summary>Первое нажатие «Удалить список» спрашивает подтверждение.</summary>
+    [ObservableProperty]
+    public partial bool ConfirmDelete { get; set; }
+
+    partial void OnListNameChanged(string? value) => MarkCustomDirty();
+
+    partial void OnActionIndexChanged(int value) => MarkCustomDirty();
+
+    partial void OnListEnabledChanged(bool value) => MarkCustomDirty();
+
+    private void MarkCustomDirty()
+    {
+        if (IsCustom && !_loadingCustom)
+            IsDirty = true;
+    }
 
     [ObservableProperty]
     public partial bool IsOpen { get; set; }
@@ -135,9 +210,11 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
 
     public bool IsSites => !IsIp;
 
-    public string CheckPlaceholder => IsIp
-        ? "IP-адрес или сайт: 1.2.3.4 или linkedin.com (адрес сайта Тропа узнает у DNS)"
-        : "Адрес сайта: linkedin.com или https://www.linkedin.com/feed";
+    public string CheckPlaceholder => IsCustom
+        ? "Сайт или IP-адрес: linkedin.com или 1.2.3.4"
+        : IsIp
+            ? "IP-адрес или сайт: 1.2.3.4 или linkedin.com (адрес сайта Тропа узнает у DNS)"
+            : "Адрес сайта: linkedin.com или https://www.linkedin.com/feed";
 
     [ObservableProperty]
     public partial IReadOnlyList<GeoEntryRow> Items { get; set; } = [];
@@ -244,6 +321,58 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
             Refilter();
     }
 
+    private void Reset(string title, string description, bool ip, bool sites)
+    {
+        Title = title;
+        Description = description;
+        _hasIp = ip;
+        _hasSites = sites;
+        IsIp = ip && !sites;
+        Filter = null;
+        ViewIndex = 0;
+        NewText = null;
+        IsAddOpen = false;
+        AddError = null;
+        AddKinds = GeoKindOption.For(ip, sites);
+        AddKind = AddKinds[0];
+        CheckText = null;
+        CheckResult = null;
+        CheckMatched = null;
+        Error = null;
+        Message = null;
+        ConfirmDelete = false;
+        _original = [];
+        _originalSet = [];
+        _added.Clear();
+        _addedSet.Clear();
+        _removed.Clear();
+    }
+
+    /// <summary>Открыть свой список; null — создать новый (сохраняется кнопкой «Сохранить»).</summary>
+    public void OpenCustom(Guid? id)
+    {
+        ++_generation;
+        var existing = id is { } g ? _engine.State.Settings.Routing.CustomLists.FirstOrDefault(l => l.Id == g) : null;
+        _list = null;
+        _customId = existing?.Id ?? Guid.NewGuid();
+        _loadingCustom = true;
+        IsCustom = true;
+        Reset(existing?.Name ?? "Новый список", "Свой список: сайты и адреса с одним действием. Проверяется после правил «Приложения» и «Сайты».", ip: true, sites: true);
+        ListName = existing?.Name ?? "Новый список";
+        ActionIndex = existing?.Action switch { RuleActionKind.Direct => 1, RuleActionKind.Block => 2, _ => 0 };
+        ListEnabled = existing is not { Disabled: true };
+        _loadingCustom = false;
+        _original = existing?.Entries ?? [];
+        _originalSet = [.. _original];
+        IsDirty = existing is null;
+        IsBusy = false;
+        Items = [];
+        IsOpen = true;
+        if (existing is null)
+            Message = "Дайте списку название, выберите действие и нажмите «Добавить…» — список из v2ray можно вставить как есть.";
+        Refilter();
+    }
+
     public async void Open(string tag)
     {
         if (GeoEdits.Find(tag) is not { } list)
@@ -251,26 +380,9 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
         var generation = ++_generation;
 
         _list = list;
-        Title = list.Title;
-        Description = list.Description;
-        IsIp = list.IsIp;
-        Filter = null;
-        ViewIndex = 0;
-        NewText = null;
-        IsAddOpen = false;
-        AddError = null;
-        AddKinds = GeoKindOption.For(list.IsIp);
-        AddKind = AddKinds[0];
-        CheckText = null;
-        CheckResult = null;
-        CheckMatched = null;
-        Error = null;
-        Message = null;
-        _original = [];
-        _originalSet = [];
-        _added.Clear();
-        _addedSet.Clear();
-        _removed.Clear();
+        _customId = null;
+        IsCustom = false;
+        Reset(list.Title, list.Description, list.IsIp, !list.IsIp);
         var edit = _engine.State.Settings.Routing.GeoEdits.FirstOrDefault(e => e.Tag == tag);
         foreach (var e in edit?.Added ?? [])
         {
@@ -357,14 +469,34 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
     [RelayCommand]
     private void Add()
     {
-        if (_list is null || AddKind is not { } option || string.IsNullOrWhiteSpace(NewText))
+        if ((_list is null && !IsCustom) || AddKind is not { } option || string.IsNullOrWhiteSpace(NewText))
             return;
-        var (entries, bad) = GeoEdits.ParseInput(NewText, option.Kind);
+        List<GeoEntry> entries;
+        List<string> bad;
+        var skippedNotes = new List<string>();
+        if (option.Kind is { } kind)
+        {
+            (entries, bad) = GeoEdits.ParseInput(NewText, kind);
+        }
+        else
+        {
+            var auto = GeoEdits.ParseAuto(NewText, _hasIp, _hasSites);
+            (entries, bad) = (auto.Entries, auto.Bad);
+            if (auto.GeoRefs.Count > 0)
+                skippedNotes.Add($"не перенесены ссылки на базы ({string.Join(", ", auto.GeoRefs.Take(3))}{(auto.GeoRefs.Count > 3 ? "…" : "")}) — в Тропе они уже есть, их можно открыть в «Гео-базах»");
+            if (auto.WrongPlace.Count > 0)
+                skippedNotes.Add(_hasIp
+                    ? $"не IP-адреса: {auto.WrongPlace.Count} — сайты добавляют в списки сайтов"
+                    : $"IP-адреса пропущены: {auto.WrongPlace.Count} — их добавляют в IP-список или в свой список");
+        }
+
         if (entries.Count == 0)
         {
-            AddError = !_list.IsIp && bad.All(b => GeoEdits.Cidr(b) is not null)
-                ? "Это IP-адреса — их добавляют в IP-список, например «Заблокированные IP-адреса»."
-                : $"Не подходит для вида «{option.Title}»: {string.Join(", ", bad.Take(3))}{(bad.Count > 3 ? "…" : "")}. {option.Rule}";
+            AddError = skippedNotes.Count > 0 && bad.Count == 0
+                ? "Нечего добавить: " + string.Join("; ", skippedNotes) + "."
+                : !_hasIp && bad.All(b => GeoEdits.Cidr(b) is not null)
+                    ? "Это IP-адреса — их добавляют в IP-список, например «Заблокированные IP-адреса»."
+                    : $"Не подходит для вида «{option.Title}»: {string.Join(", ", bad.Take(3))}{(bad.Count > 3 ? "…" : "")}. {option.Rule}";
             return;
         }
 
@@ -401,7 +533,7 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
             Error = null;
         }
 
-        var notes = new List<string> { added > 0 ? $"Добавлено: {added} ({option.Title.ToLowerInvariant()})" : "Ничего нового не добавлено" };
+        var notes = new List<string> { added > 0 ? (option.Kind is null ? $"Добавлено: {added}" : $"Добавлено: {added} ({option.Title.ToLowerInvariant()})") : "Ничего нового не добавлено" };
         if (already > 0)
             notes.Add($"уже были в списке: {already}");
         if (bad.Count > 0)
@@ -419,9 +551,10 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
     [RelayCommand]
     private async Task CheckAsync()
     {
-        if (_list is null || IsBusy || IsChecking)
+        if ((_list is null && !IsCustom) || IsBusy || IsChecking)
             return;
-        var list = _list;
+        var generation = _generation;
+        var title = IsCustom && !string.IsNullOrWhiteSpace(ListName) ? ListName.Trim() : Title;
         var input = CheckText?.Trim();
         CheckMatched = null;
         if (string.IsNullOrEmpty(input))
@@ -434,7 +567,7 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
         IPAddress[] ips = [];
         if (IPAddress.TryParse(input, out var ip))
         {
-            if (!list.IsIp)
+            if (!_hasIp)
             {
                 CheckResult = "Это IP-адрес, а в этом списке — сайты. Проверьте его в IP-списке или введите адрес сайта.";
                 return;
@@ -451,7 +584,9 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
                 return;
             }
 
-            if (list.IsIp)
+            // DNS спрашиваем, только если в списке есть сети: свой список из одних доменов проверяется по имени.
+            var needIp = _hasIp && (!_hasSites || _original.Concat(_added).Any(e => e.Kind == GeoEntryKind.Cidr));
+            if (needIp)
             {
                 IsChecking = true;
                 try
@@ -468,14 +603,14 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
                     IsChecking = false;
                 }
 
-                if (!ReferenceEquals(list, _list))
+                if (generation != _generation)
                     return;
 
                 // При подключённом VPN с FakeIP (Тропа, v2rayN) DNS отвечает условными адресами — по ним проверять нельзя.
                 var fake = ips.Where(a => GeoEdits.Matches(new GeoEntry(GeoEntryKind.Cidr, "198.18.0.0/15"), null, a)
                                           || GeoEdits.Matches(new GeoEntry(GeoEntryKind.Cidr, "fc00::/18"), null, a)).ToList();
                 ips = [.. ips.Except(fake)];
-                if (ips.Length == 0 && fake.Count > 0)
+                if (ips.Length == 0 && fake.Count > 0 && !_hasSites)
                 {
                     CheckResult = $"Настоящий адрес {host} сейчас не узнать: включён VPN с подменой DNS (FakeIP), и он ответил условным адресом {fake[0]}. "
                         + "Отключитесь или введите IP-адрес сами (его показывает, например, nslookup на другом устройстве).";
@@ -493,7 +628,9 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
         }
 
         // IP-набор — по каждому адресу сайта; набор сайтов — один проход по имени.
-        List<(string? Host, IPAddress? Ip)> targets = list.IsIp ? [.. ips.Select(a => ((string?)null, (IPAddress?)a))] : [(host, null)];
+        List<(string? Host, IPAddress? Ip)> targets = [.. ips.Select(a => ((string?)null, (IPAddress?)a))];
+        if (_hasSites && host is not null)
+            targets.Insert(0, (host, null));
         const int Limit = 20;
         var hits = new List<(GeoEntry Entry, bool Added, IPAddress? Ip)>();
         var removedHits = new List<GeoEntry>();
@@ -519,7 +656,7 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
         }
 
         var subject = host ?? input;
-        var resolved = list.IsIp && host is not null
+        var resolved = _hasIp && host is not null && (ips.Length > 0 || !_hasSites)
             ? ips.Length == 0 ? " (DNS не вернул адресов)" : $" ({string.Join(", ", ips.Take(4))}{(ips.Length > 4 ? "…" : "")})"
             : "";
         string Describe((GeoEntry Entry, bool Added, IPAddress? Ip) m) =>
@@ -530,7 +667,7 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
         if (hits.Count > 0)
         {
             CheckMatched = true;
-            var lines = new List<string> { $"{subject}{resolved} попадает в список «{list.Title}». Совпало:" };
+            var lines = new List<string> { $"{subject}{resolved} попадает в список «{title}». Совпало:" };
             lines.AddRange(hits.Take(5).Select(Describe));
             if (hits.Count > 5)
                 lines.Add(hits.Count >= Limit ? "…и ещё много." : $"…и ещё {hits.Count - 5}.");
@@ -539,7 +676,7 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
         else
         {
             CheckMatched = false;
-            var text = $"{subject}{resolved} не попадает в список «{list.Title}».";
+            var text = $"{subject}{resolved} не попадает в список «{title}».";
             if (removedHits.Count > 0)
                 text += $"\nСовпала бы запись «{removedHits[0].Value}», но вы её убрали.";
             CheckResult = text;
@@ -595,6 +732,12 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
     [RelayCommand]
     private void Save()
     {
+        if (IsCustom && _customId is { } id)
+        {
+            SaveCustom(id);
+            return;
+        }
+
         if (_list is null)
             return;
         var tag = _list.Tag;
@@ -605,6 +748,65 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
             var list = edit.IsEmpty ? others.ToList() : [.. others, edit];
             return s with { Routing = s.Routing with { GeoEdits = list } };
         });
+        IsDirty = false;
+        IsOpen = false;
+        Saved?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void SaveCustom(Guid id)
+    {
+        var name = Tropa.Core.Security.NameSanitizer.Sanitize(ListName, "");
+        if (name.Length == 0)
+        {
+            Error = "Дайте списку название, например «Игры».";
+            return;
+        }
+
+        var list = new CustomGeoList
+        {
+            Id = id,
+            Name = name,
+            Disabled = !ListEnabled,
+            Action = ActionIndex switch { 1 => RuleActionKind.Direct, 2 => RuleActionKind.Block, _ => RuleActionKind.Proxy },
+            Entries = GeoEdits.Apply(_original, new GeoListEdit { Tag = "custom", Added = [.. _added], Removed = [.. _removed] }),
+        };
+        var full = false;
+        _engine.UpdateSettings(s =>
+        {
+            var lists = s.Routing.CustomLists.ToList();
+            var i = lists.FindIndex(l => l.Id == id);
+            if (i >= 0)
+                lists[i] = list;
+            else if (lists.Count < GeoEdits.MaxCustomLists)
+                lists.Add(list);
+            else
+                full = true;
+            return s with { Routing = s.Routing with { CustomLists = lists } };
+        });
+        if (full)
+        {
+            Error = $"Своих списков может быть не больше {GeoEdits.MaxCustomLists}.";
+            return;
+        }
+
+        IsDirty = false;
+        IsOpen = false;
+        Saved?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private void DeleteList()
+    {
+        if (!IsCustom || _customId is not { } id)
+            return;
+        if (!ConfirmDelete)
+        {
+            ConfirmDelete = true;
+            return;
+        }
+
+        _engine.UpdateSettings(s => s with { Routing = s.Routing with { CustomLists = [.. s.Routing.CustomLists.Where(l => l.Id != id)] } });
+        ConfirmDelete = false;
         IsDirty = false;
         IsOpen = false;
         Saved?.Invoke(this, EventArgs.Empty);

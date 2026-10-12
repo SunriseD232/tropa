@@ -27,6 +27,9 @@ internal static class Program
             return 0;
 
         App.StartMinimized = args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
+        // Перезапуск установщиком после обновления из Тропы (installer/tropa.iss, RelaunchArgs).
+        App.AfterUpdate = args.Contains("--after-update", StringComparer.OrdinalIgnoreCase);
+        App.ReconnectAfterUpdate = App.AfterUpdate && args.Contains("--reconnect", StringComparer.OrdinalIgnoreCase);
         App.FromAutostart = args.Contains(Infrastructure.SystemIntegration.Autostart.Argument, StringComparer.OrdinalIgnoreCase);
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
