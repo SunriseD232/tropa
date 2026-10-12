@@ -171,6 +171,7 @@
               <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,12,0">
                 <TextBlock Text="Свои списки" FontWeight="SemiBold" FontSize="15" />
                 <TextBlock Classes="muted" Text="Свой набор сайтов и адресов с действием «через сервер», «напрямую» или «блокировать». Список из v2rayN можно вставить как есть." />
+                <TextBlock Classes="muted" Text="Если сайт есть в нескольких списках, срабатывает тот, что выше: порядок меняется стрелками." />
               </StackPanel>
             </DockPanel>
             <ItemsControl ItemsSource="{Binding CustomLists}">
@@ -179,9 +180,18 @@
                   <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="4,10">
                     <DockPanel>
                       <Button DockPanel.Dock="Right" Content="Открыть" Command="{Binding OpenCommand}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                      <Button DockPanel.Dock="Right" Width="36" Command="{Binding MoveDownCommand}" IsEnabled="{Binding CanMoveDown}" Margin="6,0,0,0" VerticalAlignment="Center"
+                              ToolTip.Tip="Ниже — проверяется позже" AutomationProperties.Name="Опустить список">
+                        <v:Icon Data="{StaticResource IconDown}" Width="14" Height="14" />
+                      </Button>
+                      <Button DockPanel.Dock="Right" Width="36" Command="{Binding MoveUpCommand}" IsEnabled="{Binding CanMoveUp}" Margin="12,0,0,0" VerticalAlignment="Center"
+                              ToolTip.Tip="Выше — главнее: проверяется раньше" AutomationProperties.Name="Поднять список">
+                        <v:Icon Data="{StaticResource IconUp}" Width="14" Height="14" />
+                      </Button>
                       <Border DockPanel.Dock="Right" Classes="pill" Background="{DynamicResource InfoBg}" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource InfoFg}" FontSize="12" />
                       </Border>
+                      <TextBlock DockPanel.Dock="Left" Text="{Binding Position}" Classes="lbl" Width="22" VerticalAlignment="Center" />
                       <StackPanel Spacing="2" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" TextTrimming="CharacterEllipsis" />
                         <TextBlock Classes="muted" Text="{Binding Description}" />

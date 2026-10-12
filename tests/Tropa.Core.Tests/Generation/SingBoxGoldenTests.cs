@@ -190,6 +190,7 @@ public sealed class SingBoxGoldenTests
                             Entries =
                             [
                                 new(GeoEntryKind.Suffix, "faceit.com"), new(GeoEntryKind.Domain, "otvet.mail.ru"),
+                                new(GeoEntryKind.Suffix, "connector_openai_cocoon.web-sandbox.oaiusercontent.com"), new(GeoEntryKind.Suffix, "chatgpt"),
                                 new(GeoEntryKind.Keyword, "xsolla"), new(GeoEntryKind.Regex, @"^(.+\.)?cybershoke\.net$"),
                                 new(GeoEntryKind.Cidr, "91.108.4.0/22"),
                             ],

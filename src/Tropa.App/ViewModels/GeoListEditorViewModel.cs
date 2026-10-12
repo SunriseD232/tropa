@@ -86,8 +86,14 @@ internal sealed class GeoListRow
         OpenCommand = new RelayCommand(() => open(info.Tag));
     }
 
-    public GeoListRow(CustomGeoList list, Action<Guid> open)
+    /// <param name="position">Место списка сверху (1 — главнее всех).</param>
+    public GeoListRow(CustomGeoList list, Action<Guid> open, Action<Guid, int> move, int position, int total)
     {
+        Position = position;
+        CanMoveUp = position > 1;
+        CanMoveDown = position < total;
+        MoveUpCommand = new RelayCommand(() => move(list.Id, -1));
+        MoveDownCommand = new RelayCommand(() => move(list.Id, +1));
         Title = list.Name;
         var count = list.Entries.Count.ToString("N0", CultureInfo.GetCultureInfo("ru-RU"));
         Description = (list.Disabled ? "Выключен. " : "") + $"Свой список · записей: {count}";
@@ -111,6 +117,13 @@ internal sealed class GeoListRow
     public bool IsCustom { get; }
     public string EditSummary { get; }
     public IRelayCommand OpenCommand { get; }
+
+    // Порядок своих списков: срабатывает первый подходящий, поэтому верхний главнее.
+    public int Position { get; }
+    public bool CanMoveUp { get; }
+    public bool CanMoveDown { get; }
+    public IRelayCommand? MoveUpCommand { get; }
+    public IRelayCommand? MoveDownCommand { get; }
 }
 
 /// <summary>
@@ -368,9 +381,13 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
         IsBusy = false;
         Items = [];
         IsOpen = true;
-        if (existing is null)
-            Message = "Дайте списку название, выберите действие и нажмите «Добавить…» — список из v2ray можно вставить как есть.";
         Refilter();
+        if (existing is null)
+        {
+            // Новый список: сразу окно вставки в режиме «Список из v2ray / Clash» — весь список одним разом.
+            Message = "Дайте списку название и выберите действие, затем «Сохранить».";
+            OpenAdd();
+        }
     }
 
     public async void Open(string tag)
@@ -483,7 +500,7 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
             var auto = GeoEdits.ParseAuto(NewText, _hasIp, _hasSites);
             (entries, bad) = (auto.Entries, auto.Bad);
             if (auto.GeoRefs.Count > 0)
-                skippedNotes.Add($"не перенесены ссылки на базы ({string.Join(", ", auto.GeoRefs.Take(3))}{(auto.GeoRefs.Count > 3 ? "…" : "")}) — в Тропе они уже есть, их можно открыть в «Гео-базах»");
+                skippedNotes.Add($"не перенесены ссылки на базы v2ray ({string.Join(", ", auto.GeoRefs.Take(3))}{(auto.GeoRefs.Count > 3 ? "…" : "")}): их содержимого в этой вставке нет — нужные адреса добавьте записями или посмотрите похожие готовые «Гео-базы»");
             if (auto.WrongPlace.Count > 0)
                 skippedNotes.Add(_hasIp
                     ? $"не IP-адреса: {auto.WrongPlace.Count} — сайты добавляют в списки сайтов"
@@ -538,6 +555,7 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
             notes.Add($"уже были в списке: {already}");
         if (bad.Count > 0)
             notes.Add($"не распознано: {string.Join(", ", bad.Take(3))}{(bad.Count > 3 ? "…" : "")}");
+        notes.AddRange(skippedNotes);
         Message = string.Join(" · ", notes) + (added > 0 ? ". Не забудьте «Сохранить»." : ".");
         IsAddOpen = false;
         CheckResult = null;

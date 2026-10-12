@@ -132,6 +132,21 @@ internal sealed partial class RulesViewModel : ObservableObject
     [RelayCommand]
     private void CreateList() => _geoEditor.OpenCustom(null);
 
+    /// <summary>Своё место в очереди: список выше проверяется раньше и главнее нижнего.</summary>
+    private void MoveList(Guid id, int delta)
+    {
+        Update(r =>
+        {
+            var lists = r.CustomLists.ToList();
+            var i = lists.FindIndex(l => l.Id == id);
+            var j = i + delta;
+            if (i < 0 || j < 0 || j >= lists.Count)
+                return r;
+            (lists[i], lists[j]) = (lists[j], lists[i]);
+            return r with { CustomLists = lists };
+        });
+    }
+
     public RulesViewModel(TropaEngine engine, InfoViewModel info, GeoListEditorViewModel geoEditor)
     {
         _engine = engine;
@@ -272,8 +287,9 @@ internal sealed partial class RulesViewModel : ObservableObject
             CustomLists.Clear();
             foreach (var list in GeoEdits.Catalog)
                 GeoLists.Add(new GeoListRow(list, routing.GeoEdits.FirstOrDefault(e => e.Tag == list.Tag), _geoEditor.Open));
+            var position = 0;
             foreach (var list in routing.CustomLists)
-                CustomLists.Add(new GeoListRow(list, id => _geoEditor.OpenCustom(id)));
+                CustomLists.Add(new GeoListRow(list, id => _geoEditor.OpenCustom(id), MoveList, ++position, routing.CustomLists.Count));
             _shownGeoEdits = routing.GeoEdits;
             _shownCustom = routing.CustomLists;
         }

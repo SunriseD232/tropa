@@ -15,8 +15,50 @@ public sealed record GeoListInfo(string Tag, string Title, string Description)
 /// Правки гео-баз (ADR-039): проверка ввода, очистка недоверенных правок (резервная копия настроек)
 /// и применение правок к содержимому файла. Закреплённые файлы .srs не меняются никогда.
 /// </summary>
-public static class GeoEdits
+public static partial class GeoEdits
 {
+    // Метки адреса: латиница, цифры, дефис и подчёркивание (в настоящих адресах бывает: connector_x.example.com).
+    [System.Text.RegularExpressions.GeneratedRegex(@"^(?=.{1,253}$)[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?(?:\.[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?)*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex HostPattern();
+
+    private static readonly IdnMapping Idn = new();
+
+    /// <summary>
+    /// Адрес сайта для гео-баз: без схемы, пути и порта, «*.» и точки по краям убираются, кириллица → punycode.
+    /// В отличие от правил «Сайты» допускает подчёркивание и адрес из одной метки (суффикс «chatgpt»).
+    /// </summary>
+    private static string? NormalizeHost(string? input, bool stripWww)
+    {
+        if (string.IsNullOrWhiteSpace(input) || Cidr(input) is not null)
+            return null;
+        var h = input.Trim().ToLowerInvariant();
+        var scheme = h.IndexOf("://", StringComparison.Ordinal);
+        if (scheme >= 0)
+            h = h[(scheme + 3)..];
+        var cut = h.IndexOfAny(['/', '?', '#']);
+        if (cut >= 0)
+            h = h[..cut];
+        var colon = h.LastIndexOf(':');
+        if (colon > 0 && h[(colon + 1)..].All(char.IsAsciiDigit))
+            h = h[..colon];
+        h = h.TrimStart('*', '+', '.').TrimEnd('.');
+        if (stripWww && h.StartsWith("www.", StringComparison.Ordinal) && h.Length > 4)
+            h = h[4..];
+        if (h.Any(c => c > 127))
+        {
+            try
+            {
+                h = Idn.GetAscii(h);
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+        }
+
+        return HostPattern().IsMatch(h) ? h : null;
+    }
+
     /// <summary>Сколько записей можно добавить или убрать в одном наборе.</summary>
     public const int MaxEntries = 20_000;
 
@@ -153,10 +195,11 @@ public static class GeoEdits
             var value = token[(colon + 1)..].Trim();
             return prefix switch
             {
-                "domain" => (GeoEntryKind.Suffix, value),
-                "full" => (GeoEntryKind.Domain, value),
-                "keyword" => (GeoEntryKind.Keyword, value),
-                "regexp" => (GeoEntryKind.Regex, value),
+                // Префиксы v2ray и, на всякий случай, имена полей sing-box.
+                "domain" or "domain_suffix" or "suffix" => (GeoEntryKind.Suffix, value),
+                "full" or "domain_full" => (GeoEntryKind.Domain, value),
+                "keyword" or "domain_keyword" => (GeoEntryKind.Keyword, value),
+                "regexp" or "regex" or "domain_regex" => (GeoEntryKind.Regex, value),
                 "geosite" or "geoip" or "ext" or "ext-ip" => (null, "geo"),
                 // «example.com:443» — адрес с портом, а не префикс.
                 _ when int.TryParse(value, out _) => (GeoEntryKind.Suffix, token),
@@ -273,10 +316,8 @@ public static class GeoEdits
     /// </summary>
     public static string? Host(string? input)
     {
-        if (string.IsNullOrWhiteSpace(input) || Cidr(input) is not null)
-            return null;
-        var d = RuleInput.NormalizeDomain(input);
-        return d is not null && input.Contains("www." + d, StringComparison.OrdinalIgnoreCase) ? "www." + d : d;
+        var h = NormalizeHost(input, stripWww: false);
+        return h is not null && h.Contains('.', StringComparison.Ordinal) ? h : null;
     }
 
     /// <summary>
@@ -382,16 +423,14 @@ public static class GeoEdits
     /// <summary>Домен: Suffix — как правило «Сайты» (без www), Domain — ровно этот адрес.</summary>
     public static string? Domain(string? input, GeoEntryKind kind)
     {
-        // IP-адрес как «сайт» никогда не совпадёт — ему место в IP-списке.
-        if (Cidr(input) is not null)
-            return null;
-        if (kind == GeoEntryKind.Suffix)
-            return RuleInput.NormalizeDomain(input);
-        if (kind != GeoEntryKind.Domain || string.IsNullOrWhiteSpace(input))
-            return null;
-        // NormalizeDomain убирает «www.», а точному адресу он нужен.
-        var d = RuleInput.NormalizeDomain(input);
-        return d is not null && input.Contains("www." + d, StringComparison.OrdinalIgnoreCase) ? "www." + d : d;
+        // IP-адрес как «сайт» никогда не совпадёт — ему место в IP-списке (NormalizeHost вернёт null).
+        // Suffix — как правило «Сайты» (без www), точному адресу «www.» нужен.
+        return kind switch
+        {
+            GeoEntryKind.Suffix => NormalizeHost(input, stripWww: true),
+            GeoEntryKind.Domain => NormalizeHost(input, stripWww: false),
+            _ => null,
+        };
     }
 
     /// <summary>

@@ -127,7 +127,9 @@
               "otvet.mail.ru"
             ],
             "domain_suffix": [
-              "faceit.com"
+              "faceit.com",
+              "connector_openai_cocoon.web-sandbox.oaiusercontent.com",
+              "chatgpt"
             ],
             "domain_keyword": [
               "xsolla"
