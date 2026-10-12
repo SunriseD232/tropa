@@ -178,7 +178,12 @@ public sealed class TropaEngine : IAsyncDisposable
     public event EventHandler? ExitRegionChanged;
 
     /// <summary>Как часто проверять страну выхода. Внутреннее — для тестов.</summary>
-    internal TimeSpan ExitRegionInterval { get; set; } = TimeSpan.FromMinutes(2);
+    internal TimeSpan ExitRegionInterval { get; set; } = TimeSpan.FromMinutes(1);
+
+    private TaskCompletionSource _exitRegionNow = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Проверить страну выхода сейчас, не дожидаясь очередной минуты (правый клик по значку в трее).</summary>
+    public void RefreshExitRegion() => _exitRegionNow.TrySetResult();
 
     public event EventHandler<string>? Log;
 
@@ -1216,7 +1221,7 @@ public sealed class TropaEngine : IAsyncDisposable
     }
 
     /// <summary>
-    /// Раз в 2 минуты спрашивает у Cloudflare (cdn-cgi/trace) страну выхода — через служебный вход ядра,
+    /// Раз в минуту (и по просьбе — RefreshExitRegion) спрашивает у Cloudflare (cdn-cgi/trace) страну выхода — через служебный вход ядра,
     /// который всегда ведёт в сервер. Уходит только запрос к Cloudflare с IP сервера, ничего о пользователе.
     /// Сервер может сам переключать выход внутри туннеля, поэтому страну проверяем по факту, а не по имени.
     /// </summary>
@@ -1241,7 +1246,10 @@ public sealed class TropaEngine : IAsyncDisposable
                 }
 
                 SetExitRegion(region);
-                await Task.Delay(ExitRegionInterval, ct).ConfigureAwait(false);
+                // Ручные просьбы, пришедшие во время проверки, уже учтены ею.
+                _exitRegionNow = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                await Task.WhenAny(Task.Delay(ExitRegionInterval, ct), _exitRegionNow.Task).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
             }
         }
         catch (OperationCanceledException)

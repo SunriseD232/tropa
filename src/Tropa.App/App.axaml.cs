@@ -17,6 +17,7 @@ internal sealed partial class App : Application
     private MainWindow? _window;
     private TrayIcon? _tray;
     private NativeMenuItem? _toggleItem;
+    private NativeMenuItem? _refreshItem;
     private bool _exiting;
 
     public static bool StartMinimized { get; set; }
@@ -76,6 +77,7 @@ internal sealed partial class App : Application
             });
             _subscriptionTimer.Start();
             _engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => UpdateTray(s));
+            _engine.ExitRegionChanged += (_, _) => Dispatcher.UIThread.Post(() => UpdateTray(_engine.Status));
 
             // Выход из Windows или завершение сеанса: вернуть прокси до того, как процесс убьют.
             desktop.ShutdownRequested += (_, _) => ShutdownEngine();
@@ -104,9 +106,6 @@ internal sealed partial class App : Application
         return EnginePaths.Default();
     }
 
-    private static WindowIcon LoadIcon(string name) =>
-        new(AssetLoader.Open(new Uri($"avares://Tropa/Assets/{name}")));
-
     private void CreateTray()
     {
         _toggleItem = new NativeMenuItem("Подключить");
@@ -122,14 +121,20 @@ internal sealed partial class App : Application
         // Работает даже при сломанной конфигурации: отключает, возвращает прокси Windows и просит службу откатить всё.
         var emergency = new NativeMenuItem("Аварийно вернуть настройки сети");
         emergency.Click += async (_, _) => await _engine!.EmergencyRollbackAsync();
+        var refresh = new NativeMenuItem("Проверить страну выхода");
+        _refreshItem = refresh;
+        refresh.Click += (_, _) => _engine!.RefreshExitRegion();
         var exit = new NativeMenuItem("Выход");
         exit.Click += async (_, _) => await ExitAsync();
 
+        var menu = new NativeMenu { Items = { _toggleItem, refresh, open, new NativeMenuItemSeparator(), emergency, exit } };
+        // Правый клик по значку сам обновляет страну выхода: флаг в трее догоняет переключение выхода сервером.
+        menu.Opening += (_, _) => _engine!.RefreshExitRegion();
         _tray = new TrayIcon
         {
-            Icon = LoadIcon("tray-off.ico"),
+            Icon = Services.TrayIconArt.Get(ConnectionState.Disconnected, null),
             ToolTipText = "Тропа — отключено",
-            Menu = new NativeMenu { Items = { _toggleItem, open, new NativeMenuItemSeparator(), emergency, exit } },
+            Menu = menu,
         };
         _tray.Clicked += (_, _) => ShowWindow();
         TrayIcon.SetIcons(this, new TrayIcons { _tray });
@@ -139,12 +144,15 @@ internal sealed partial class App : Application
     {
         if (_tray is null || _toggleItem is null)
             return;
-        (_tray.Icon, _tray.ToolTipText, _toggleItem.Header) = s.State switch
+        var region = s.State == ConnectionState.Connected ? _engine?.ExitRegion : null;
+        _refreshItem!.IsEnabled = s.State == ConnectionState.Connected && _engine?.State.Settings.General.HideExitRegion == false;
+        _tray.Icon = Services.TrayIconArt.Get(s.State, region?.CountryCode);
+        (_tray.ToolTipText, _toggleItem.Header) = s.State switch
         {
-            ConnectionState.Connected => (LoadIcon("tray-on.ico"), "Тропа — подключено", "Отключить"),
-            ConnectionState.Connecting or ConnectionState.Disconnecting => (LoadIcon("tray-busy.ico"), "Тропа — подключение…", "Подключить"),
-            ConnectionState.Error => (LoadIcon("tray-error.ico"), "Тропа — ошибка подключения", "Подключить"),
-            _ => (LoadIcon("tray-off.ico"), "Тропа — отключено", "Подключить"),
+            ConnectionState.Connected => (region is null ? "Тропа — подключено" : $"Тропа — подключено, выход: {region.Name}", "Отключить"),
+            ConnectionState.Connecting or ConnectionState.Disconnecting => ("Тропа — подключение…", "Подключить"),
+            ConnectionState.Error => ("Тропа — ошибка подключения", "Подключить"),
+            _ => ("Тропа — отключено", "Подключить"),
         };
     }
 

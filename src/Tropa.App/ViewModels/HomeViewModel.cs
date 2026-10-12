@@ -159,7 +159,7 @@ internal sealed partial class HomeViewModel : ObservableObject
         ExitRegion = r?.Name;
         UpdateFlag();
         ExitRegionTip = r is null ? null
-            : $"Сайты видят вас из страны «{r.Name}» ({r.CountryCode}). Проверено в {r.CheckedAt.ToLocalTime():HH:mm}, обновляется раз в 2 минуты: сервер может сам переключать выход.";
+            : $"Сайты видят вас из страны «{r.Name}» ({r.CountryCode}). Проверено в {r.CheckedAt.ToLocalTime():HH:mm}, обновляется раз в минуту и по правому клику на значке в трее: сервер может сам переключать выход.";
     }
 
     [ObservableProperty]
