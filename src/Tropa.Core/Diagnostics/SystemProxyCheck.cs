@@ -56,6 +56,38 @@ public static partial class Diagnosis
         return proxy.Enabled && !proxy.AppliedByUs && LoopbackProxyPorts(proxy.Server).Intersect(ownPorts).Any();
     }
 
+    /// <summary>Сервер, который запускается только в одном ядре: сравнивать нечего. null — сравнивать можно.</summary>
+    public static string? SingleCoreReason(Profile p)
+    {
+        ArgumentNullException.ThrowIfNull(p);
+        if (p.Protocol == Protocol.Hysteria2)
+            return "Hysteria2 Тропа запускает только в sing-box.";
+        if (p.Transport.Type == TransportType.Xhttp)
+            return "XHTTP есть только в Xray.";
+        if (Generation.CorePlan.XrayRefuses(p))
+            return "Сервер без проверки сертификата: Xray 26.9 такой режим не поддерживает, работает только sing-box.";
+        return p.ChainVia is not null ? "Сервер в цепочке: ядра для цепочек не сравниваются." : null;
+    }
+
+    /// <summary>Шаг «Ядра»: активный сервер через Xray и через sing-box.</summary>
+    public static StepResult Cores(Testing.ServerTestResult? xray, Testing.ServerTestResult? singBox)
+    {
+        string Text(Testing.ServerTestResult? r) => r?.DelayMs is { } d ? $"{d} мс" : "не работает (" + (r?.Error ?? "нет ответа") + ")";
+        var x = xray?.DelayMs is not null;
+        var s = singBox?.DelayMs is not null;
+        var details = $"Xray: {Text(xray)}. sing-box: {Text(singBox)}.";
+        return (x, s) switch
+        {
+            (true, true) => new StepResult("coreCheck", StepStatus.Ok, "Сервер работает через оба ядра", details),
+            (true, false) => new StepResult("coreCheck", StepStatus.Warn, "Сервер работает только через Xray", details,
+                "У сервера должно быть ядро «Автоматически» или Xray (окно сервера). В отчёт попали сообщения sing-box — пришлите его администратору."),
+            (false, true) => new StepResult("coreCheck", StepStatus.Warn, "Сервер работает только через sing-box", details,
+                "У сервера должно быть ядро «Автоматически» или sing-box (окно сервера)."),
+            _ => new StepResult("coreCheck", StepStatus.Bad, "Сервер не работает ни через одно ядро", details,
+                "Скорее всего, сервер недоступен из вашей сети. Выберите другой сервер."),
+        };
+    }
+
     /// <summary>Шаг «Системный прокси»: не уводит ли он программы мимо туннеля.</summary>
     public static StepResult SystemProxy(ProxySnapshot proxy, CaptureMode mode, bool connected, int ownPort)
     {

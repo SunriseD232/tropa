@@ -39,7 +39,7 @@ public sealed record DiagnosticsInput
 public sealed record DomainCheck(string Domain, DnsAnswer? Provider, DnsAnswer? Tunnel, DnsVerdict Verdict, string? ProviderDns);
 
 /// <summary>
-/// Десять шагов диагностики (docs/07-testing-diagnostics.md, §2). Шаги независимы: сбой одного
+/// Одиннадцать шагов диагностики (docs/07-testing-diagnostics.md, §2). Шаги независимы: сбой одного
 /// не останавливает остальные. В сеть «напрямую» ходит временное ядро мимо туннеля, через сервер —
 /// временный вход через активный сервер; текущее подключение не трогается.
 /// </summary>
@@ -54,6 +54,7 @@ public static class DiagnosticsRunner
         ("dataFlow", "Данные идут"),
         ("dnsPoison", "Подмена DNS"),
         ("udpTest", "UDP"),
+        ("coreCheck", "Ядра"),
         ("leaks", "Утечки"),
         ("otherVpn", "Другой VPN"),
         ("sysProxy", "Системный прокси"),
@@ -122,6 +123,9 @@ public static class DiagnosticsRunner
 
         // 3, 4, 5, 7: сервер — тем же тестом, что и на экране серверов, файл 10 МБ.
         await ServerStepsAsync(input, Set, ct).ConfigureAwait(false);
+
+        // Активный сервер по очереди через Xray и через sing-box: у некоторых провайдеров одно из ядер не проходит.
+        await CoreStepAsync(input, Set, ct).ConfigureAwait(false);
 
         // 8, 9: настройки, адаптеры и процессы.
         Set(Diagnosis.Leaks(effective, input.Connected, adapters));
@@ -227,6 +231,44 @@ public static class DiagnosticsRunner
             set(step);
     }
 
+    private static async Task CoreStepAsync(DiagnosticsInput input, Action<StepResult> set, CancellationToken ct)
+    {
+        if (input.Active is not { } active)
+        {
+            set(new StepResult("coreCheck", StepStatus.Skipped, "Ядра не проверялись", "Не выбран сервер."));
+            return;
+        }
+
+        if (Diagnosis.SingleCoreReason(active) is { } only)
+        {
+            set(new StepResult("coreCheck", StepStatus.Skipped, "Ядра не сравнивались", only));
+            return;
+        }
+
+        set(new StepResult("coreCheck", StepStatus.Running, "Ядра"));
+        var results = new Dictionary<CoreChoice, ServerTestResult?>();
+        foreach (var core in new[] { CoreChoice.Xray, CoreChoice.SingBox })
+        {
+            var name = core == CoreChoice.Xray ? "Xray" : "sing-box";
+            input.Log($"Диагностика: проверка сервера через {name}…");
+            try
+            {
+                var settings = input.Settings with { Cores = input.Settings.Cores with { CoreChoice = core } };
+                var r = (await ServerTester.TestAsync([active], input.Profiles, settings, TestKinds.Tcp | TestKinds.Delay, input.Locations,
+                    input.RunDirectory, input.Scrubber, input.Log, null, ct, input.TesterOptions).ConfigureAwait(false))[active.Id];
+                results[core] = r;
+                input.Log($"Диагностика: {name} — " + (r.DelayMs is { } d ? $"{d} мс" : "не работает: " + input.Scrubber.Scrub(r.Error ?? "без ответа")));
+            }
+            catch (Exception ex) when (ex is CoreStartException or IntegrityException or IOException or UnsupportedProfileException)
+            {
+                results[core] = new ServerTestResult { At = DateTimeOffset.Now, Error = "ядро не запустилось: " + input.Scrubber.Scrub(ex.Message) };
+                input.Log($"Диагностика: {name} не запустился: " + input.Scrubber.Scrub(ex.Message));
+            }
+        }
+
+        set(Diagnosis.Cores(results[CoreChoice.Xray], results[CoreChoice.SingBox]));
+    }
+
     /// <summary>Шаги 3, 4, 5, 7 из результата теста сервера.</summary>
     internal static IEnumerable<StepResult> ServerSteps(Profile active, ServerTestResult r)
     {
@@ -268,7 +310,7 @@ public static class DiagnosticsRunner
         {
             yield return new StepResult("dataFlow", StepStatus.Bad, "Данные не идут",
                 $"Пришло {r.FrozenAfterBytes / 1024 ?? 0} КБ, затем тишина. Так провайдеры ограничивают IP хостингов.",
-                "Выберите сервер у другого хостинга или включите обход DPI в «Правилах».");
+                "Выберите сервер у другого хостинга.");
         }
         else if (r.SpeedMbps is { } mbps)
         {

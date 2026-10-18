@@ -25,6 +25,30 @@ public sealed class SystemProxyCheckTests
     }
 
     [Fact]
+    public void Core_check_names_the_working_core()
+    {
+        var ok = new Tropa.Core.Testing.ServerTestResult { At = DateTimeOffset.UnixEpoch, DelayMs = 200 };
+        var bad = new Tropa.Core.Testing.ServerTestResult { At = DateTimeOffset.UnixEpoch, Error = "EOF" };
+        Assert.Equal(StepStatus.Ok, Diagnosis.Cores(ok, ok).Status);
+        var onlyXray = Diagnosis.Cores(ok, bad);
+        Assert.Equal(StepStatus.Warn, onlyXray.Status);
+        Assert.Contains("Xray", onlyXray.Title, StringComparison.Ordinal);
+        Assert.Contains("EOF", onlyXray.Details, StringComparison.Ordinal);
+        Assert.Contains("sing-box", Diagnosis.Cores(bad, ok).Title, StringComparison.Ordinal);
+        Assert.Equal(StepStatus.Bad, Diagnosis.Cores(bad, null).Status);
+    }
+
+    [Fact]
+    public void Single_core_servers_are_not_compared()
+    {
+        const string uuid = "b831381d-6324-4d53-ad4f-8cda48b30811";
+        Profile P(string link) => Tropa.Core.Parsing.ShareLink.Parse(link).Profile!;
+        Assert.Null(Diagnosis.SingleCoreReason(P($"vless://{uuid}@a.example.com:443?security=tls&sni=a.example.com#A")));
+        Assert.NotNull(Diagnosis.SingleCoreReason(P($"vless://{uuid}@a.example.com:443?security=tls&sni=a.example.com&allowInsecure=1#A")));
+        Assert.NotNull(Diagnosis.SingleCoreReason(P($"vless://{uuid}@a.example.com:443?type=xhttp&path=%2Fx&security=tls&sni=a.example.com#X")));
+    }
+
+    [Fact]
     public void Step_verdicts()
     {
         Assert.Equal(StepStatus.Ok, Diagnosis.SystemProxy(new ProxySnapshot(false, "127.0.0.1:10880", null, false), CaptureMode.Tun, true, 10880).Status);
