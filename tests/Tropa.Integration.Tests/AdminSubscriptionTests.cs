@@ -113,6 +113,11 @@ public sealed class AdminSubscriptionTests : IDisposable
         Assert.Null(engine.SetAdminUrl("https://friends.example.com/tropa/0123456789abcdef"));
         Assert.Equal("https://friends.example.com/••••", engine.AdminUrlMasked);
         Assert.NotNull(engine.RevealAdminKey());
+        Assert.NotNull(engine.SetAdminKey("short"));
+        Assert.Null(engine.SetAdminKey("0123456789abcdef0123456789abcdef"));
+        Assert.Equal("0123456789abcdef0123456789abcdef", engine.RevealAdminKey());
+        Assert.Null(engine.SetAdminKey("••••••••"));
+        Assert.Equal("0123456789abcdef0123456789abcdef", engine.RevealAdminKey());
         Assert.Contains("Нет серверов", await engine.PublishForFriendsAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
     }
 }

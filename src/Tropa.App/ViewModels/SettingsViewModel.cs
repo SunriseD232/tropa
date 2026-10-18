@@ -298,13 +298,12 @@ internal sealed partial class SettingsViewModel : ObservableObject
                 Report(error ?? "Опубликовано.", error: error is not null);
             })),
             ("Скопировать ссылку для друзей", new RelayCommand(() => Copy(_engine.RevealAdminUrl(), "Ссылка для друзей скопирована. Отправьте её другу — он вставит её в Тропу как подписку.")))),
-        new ActionRow("Ключ публикации", "adminKey", "Ключ нужен серверу публикации, друзьям — нет.",
-            ("Скопировать ключ", new RelayCommand(() => Copy(_engine.RevealAdminKey(), "Ключ публикации скопирован."))),
-            ("Новый ключ", new RelayCommand(() =>
+        new TextRow("Ключ публикации", "adminKey", _ => _engine.AdminKeyMasked, (s, v) =>
             {
-                _engine.RegenerateAdminKey();
-                Report("Создан новый ключ. Замените его на сервере публикации, иначе публикация не пройдёт.");
-            }))),
+                _engine.SetAdminKey(v);
+                return s;
+            },
+            TropaEngine.ValidateAdminKey, placeholder: "Ключ с сервера публикации", hint: "Ключ нужен серверу публикации, друзьям — нет. После сохранения виден только маской."),
     ]);
 
     private void Copy(string? text, string done)

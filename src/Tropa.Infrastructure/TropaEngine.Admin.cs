@@ -61,12 +61,29 @@ public sealed partial class TropaEngine
         return null;
     }
 
-    /// <summary>Новый ключ: старый перестаёт работать, на сервере публикации его нужно заменить.</summary>
-    public void RegenerateAdminKey()
+    /// <summary>Ключ для показа в поле: только маска.</summary>
+    public string AdminKeyMasked => _secrets.Get(StateStore.AdminKeyKey) is null ? "" : "••••••••";
+
+    /// <summary>Ключ с сервера публикации (его задаёт сервер). Маска из поля — ключ не меняли.</summary>
+    public string? SetAdminKey(string key)
     {
-        _secrets.Set(StateStore.AdminKeyKey, Storage.SecretStore.NewRandomToken());
+        var value = (key ?? "").Trim();
+        if (value.Contains('•', StringComparison.Ordinal))
+            return null;
+        if (ValidateAdminKey(value) is { } error)
+            return error;
+        _secrets.Set(StateStore.AdminKeyKey, value);
         Save();
+        _lastPublishedFingerprint = null;
+        SchedulePublish();
+        return null;
     }
+
+    public static string? ValidateAdminKey(string value) =>
+        value.Contains('•', StringComparison.Ordinal) ? null
+        : value.Length < 16 ? "Ключ — не короче 16 символов."
+        : value.Length > 200 || value.Any(c => c <= ' ' || c > '~') ? "В ключе только латинские буквы, цифры и знаки, без пробелов."
+        : null;
 
     // ---------------- Администратор: публикация ----------------
 
