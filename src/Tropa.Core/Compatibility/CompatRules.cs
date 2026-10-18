@@ -44,8 +44,6 @@ public static class CompatRules
             "системный прокси Windows не умеет передавать пароль — браузеры начали бы его спрашивать",
             s => s with { General = s.General with { LocalPass = false } }),
         new("lanPort", (s, _) => !s.Connection.LanAllow, "включите подключения из локальной сети"),
-        new("autoInterval", (s, _) => !s.Connection.AutoSelect, "включите авто-выбор"),
-        new("autoTol", (s, _) => !s.Connection.AutoSelect, "включите авто-выбор"),
         new("stunServer", (s, _) => !s.Connection.UdpTestOn, "включите проверку UDP"),
         new("routeOnly", (s, _) => !s.Dns.Sniffing, "включите определение домена",
             s => s with { Dns = s.Dns with { RouteOnly = false } }),

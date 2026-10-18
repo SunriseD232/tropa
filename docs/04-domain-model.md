@@ -103,7 +103,6 @@ enum RuleAction { Proxy, Direct, Block, Server /* + Guid конкретного 
 | tunStack, mtu, strictRoute, lanBypass | mode ≠ tun | — | то же |
 | sysBypass, uwpLoopback | mode ≠ proxy | — | нужно только в режиме «Только браузеры» |
 | localPass | lanAllow | true | пароль обязателен при доступе из LAN |
-| autoInterval, autoTol | !autoSelect | — | включите авто-выбор |
 | stunServer | !udpTestOn | — | включите проверку UDP |
 | routeOnly | !sniffing | false | включите определение домена |
 | sniffHttp/Tls/Quic | !sniffing | false | определение домена выключено |

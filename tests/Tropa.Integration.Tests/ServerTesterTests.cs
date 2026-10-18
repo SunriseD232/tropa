@@ -294,7 +294,7 @@ public sealed class ServerTesterTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Background_check_switches_away_from_frozen_server()
+    public async Task Background_check_warns_about_frozen_server_and_stays_on_it()
     {
         if (_server is null)
             Assert.Skip("Ядра не скачаны");
@@ -304,7 +304,7 @@ public sealed class ServerTesterTests : IAsyncLifetime
             new EnginePaths(Path.Combine(_work.FullName, "r"), Path.Combine(_work.FullName, "l")), proxy, Cores);
         engine.MonitorIntervalOverride = TimeSpan.FromSeconds(1);
         var good = Settings();
-        engine.UpdateSettings(_ => good with { Connection = good.Connection with { SocksPort = FreeTcpPort(), AutoSelect = true } });
+        engine.UpdateSettings(_ => good with { Connection = good.Connection with { SocksPort = FreeTcpPort() } });
         await engine.ImportTextAsync(
             $"vless://{Uuid}@127.0.0.1:{_serverPort}?security=none#A\nvless://{Uuid2}@127.0.0.1:{_serverPort}?security=none#B", null, ct);
         var a = engine.State.Profiles.Single(p => p.Profile.Name == "A").Profile.Id;
@@ -321,14 +321,13 @@ public sealed class ServerTesterTests : IAsyncLifetime
         // Теперь «сайт» для теста скорости начинает «замерзать» — фоновая проверка должна это заметить.
         engine.UpdateSettings(s => s with { Connection = s.Connection with { SpeedUrl = $"http://127.0.0.1:{_sitePort}/freeze" } });
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(40);
-        while (!(engine.State.ActiveProfileId == b && engine.Status.State == ConnectionState.Connected
-                   && engine.Status.Message?.Contains("Переключено", StringComparison.Ordinal) == true)
-               && DateTime.UtcNow < deadline)
+        while (engine.Status.Message?.Contains("Сервер «A»", StringComparison.Ordinal) != true && DateTime.UtcNow < deadline)
             await Task.Delay(250, ct);
 
-        Assert.Equal(b, engine.State.ActiveProfileId);
+        // Авто-выбор убран (ADR-047): сервер не меняется, пользователь видит предупреждение.
+        Assert.Equal(a, engine.State.ActiveProfileId);
         Assert.True(engine.Status.State == ConnectionState.Connected, engine.Status.Message);
-        Assert.Contains("Переключено", engine.Status.Message, StringComparison.Ordinal);
+        Assert.Contains("Сервер «A»", engine.Status.Message, StringComparison.Ordinal);
         Assert.Equal(HealthStatus.Frozen, ServerHealth.Classify(engine.State.Profiles.Single(p => p.Profile.Id == a).LastTest));
         await engine.DisconnectAsync();
     }

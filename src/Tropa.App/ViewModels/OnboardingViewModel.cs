@@ -106,7 +106,7 @@ internal sealed partial class OnboardingViewModel : ObservableObject
 
     public string ModeNote => _engine.TunAvailable
         ? "Рекомендуется: через Тропу идут все программы, включая игры и голос Discord."
-        : "Служба Тропы не установлена, поэтому доступен только режим «Только браузеры».";
+        : _engine.NoTunReason() + " Пока доступен только режим «Только браузеры».";
 
     private bool NotBusy() => !Busy;
 

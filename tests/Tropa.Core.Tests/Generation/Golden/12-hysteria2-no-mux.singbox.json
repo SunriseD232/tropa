@@ -90,76 +90,21 @@
   ],
   "outbounds": [
     {
-      "type": "urltest",
+      "type": "hysteria2",
       "tag": "proxy",
-      "outbounds": [
-        "srv-00000001",
-        "srv-00000003",
-        "srv-00000005"
-      ],
-      "url": "https://www.gstatic.com/generate_204",
-      "interval": "3m",
-      "tolerance": 50
-    },
-    {
-      "type": "vless",
-      "tag": "srv-00000001",
-      "server": "nl1.example.com",
+      "server": "hy.example.com",
       "server_port": 443,
-      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
-      "flow": "xtls-rprx-vision",
-      "packet_encoding": "xudp",
-      "tls": {
-        "enabled": true,
-        "server_name": "www.microsoft.com",
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        },
-        "reality": {
-          "enabled": true,
-          "public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
-          "short_id": "a1b2c3"
-        }
-      }
-    },
-    {
-      "type": "trojan",
-      "tag": "srv-00000003",
-      "server": "fi.example.com",
-      "server_port": 443,
-      "password": "pw",
-      "tls": {
-        "enabled": true,
-        "server_name": "fi.example.com",
-        "alpn": [
-          "h2",
-          "http/1.1"
-        ],
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        }
-      }
-    },
-    {
-      "type": "vless",
-      "tag": "srv-00000005",
-      "server": "us.example.com",
-      "server_port": 443,
-      "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
-      "packet_encoding": "xudp",
-      "tls": {
-        "enabled": true,
-        "server_name": "us.example.com",
-        "utls": {
-          "enabled": true,
-          "fingerprint": "chrome"
-        }
+      "password": "hy2pass",
+      "obfs": {
+        "type": "salamander",
+        "password": "obfspw"
       },
-      "transport": {
-        "type": "grpc",
-        "service_name": "svc"
+      "tls": {
+        "enabled": true,
+        "server_name": "hy.example.com",
+        "alpn": [
+          "h3"
+        ]
       }
     },
     {

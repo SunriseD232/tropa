@@ -150,7 +150,6 @@ public sealed class HybridTests : IAsyncLifetime
         Connection = new ConnectionSettings
         {
             SocksPort = port,
-            AutoSelect = false,
             TestUrl = "http://tropa.test/generate_204",
             SpeedUrl = "http://tropa.test/big",
             UdpTestOn = false,

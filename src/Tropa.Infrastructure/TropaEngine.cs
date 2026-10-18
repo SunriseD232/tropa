@@ -53,6 +53,7 @@ public sealed class TropaEngine : IAsyncDisposable
     private readonly Func<DateTimeOffset> _now;
 
     private readonly Func<CancellationToken, Task<ServiceClient?>> _connectService;
+    private readonly Func<bool> _serviceInstalled;
 
     private CoreProcess? _core;
     private CoreProcess? _xray;
@@ -68,7 +69,7 @@ public sealed class TropaEngine : IAsyncDisposable
     private bool _systemProxyApplied;
 
     private TropaEngine(EnginePaths paths, StateStore store, LoadResult loaded, SystemProxy systemProxy, CoreLocations locations,
-        Func<DateTimeOffset> now, Func<CancellationToken, Task<ServiceClient?>> connectService)
+        Func<DateTimeOffset> now, Func<CancellationToken, Task<ServiceClient?>> connectService, Func<bool> serviceInstalled)
     {
         _paths = paths;
         _store = store;
@@ -77,6 +78,7 @@ public sealed class TropaEngine : IAsyncDisposable
         _locations = locations;
         _now = now;
         _connectService = connectService;
+        _serviceInstalled = serviceInstalled;
         State = loaded.State;
         StartupWarning = loaded.Warning;
         Log += (_, line) => Remember(line);
@@ -95,6 +97,46 @@ public sealed class TropaEngine : IAsyncDisposable
             expected = dev;
 #endif
         return ct => ServiceClient.TryConnectAsync(Ipc.IpcProtocol.PipeName, expected, TimeSpan.FromMilliseconds(500), ct);
+    }
+
+    /// <summary>
+    /// Служба Тропы зарегистрирована в Windows. Раздел служб в реестре читается без прав администратора;
+    /// так видно, что служба есть, но ещё не запустилась (сразу после входа в Windows).
+    /// </summary>
+    public static bool ServiceRegistered()
+    {
+        using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + Ipc.IpcProtocol.ServiceName);
+        return key is not null;
+    }
+
+    /// <summary>Почему режим «Весь компьютер» сейчас недоступен — для подсказок на Главной и после подключения.</summary>
+    public string NoTunReason() => (ServiceAvailable, ServiceStarting) switch
+    {
+        (true, _) => "Служба Тропы работает без прав системы, поэтому режим «Весь компьютер» недоступен — переустановите Тропу.",
+        (false, true) => "Служба Тропы установлена, но не отвечает (не запустилась или остановлена), поэтому режим «Весь компьютер» недоступен. Переподключитесь через минуту; если не поможет — перезагрузите компьютер или переустановите Тропу.",
+        _ => "Служба Тропы не установлена, поэтому режим «Весь компьютер» недоступен — установите Тропу установщиком.",
+    };
+
+    /// <summary>Сколько ждать запуска установленной службы перед подключением.</summary>
+    public static readonly TimeSpan ServiceStartWait = TimeSpan.FromSeconds(90);
+
+    /// <summary>Служба установлена, но связи с ней нет — обычно она ещё запускается.</summary>
+    public bool ServiceStarting => !ServiceAvailable && _serviceInstalled();
+
+    /// <summary>
+    /// Ждёт службу, если она установлена: после входа в Windows Тропа из автозагрузки стартует раньше
+    /// службы, и без ожидания режим «Весь компьютер» молча заменился бы на «Только браузеры».
+    /// </summary>
+    public async Task<bool> WaitForServiceAsync(TimeSpan max, CancellationToken ct = default)
+    {
+        var until = _now() + max;
+        while (true)
+        {
+            await AttachServiceAsync(ct).ConfigureAwait(false);
+            if (ServiceAvailable || !_serviceInstalled() || _now() >= until)
+                return ServiceAvailable;
+            await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Служба Тропы подключена и может включить режим «Весь компьютер».</summary>
@@ -190,7 +232,8 @@ public sealed class TropaEngine : IAsyncDisposable
     public SecretScrubber Scrubber => new(_secrets.Values);
 
     public static TropaEngine Open(EnginePaths paths, IProxySettingsStore? proxyStore = null, CoreLocations? locations = null,
-        Func<DateTimeOffset>? now = null, Func<CancellationToken, Task<ServiceClient?>>? connectService = null)
+        Func<DateTimeOffset>? now = null, Func<CancellationToken, Task<ServiceClient?>>? connectService = null,
+        Func<bool>? serviceInstalled = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         Directory.CreateDirectory(paths.Roaming);
@@ -202,7 +245,8 @@ public sealed class TropaEngine : IAsyncDisposable
         // Установленное обновление ядер (если есть и подпись верна) новее файлов программы.
         var effectiveLocations = locations ?? new UpdateStore(paths.UpdatesDirectory, UpdateConfig.Embedded).Load(CoreLocations.Default());
         var engine = new TropaEngine(paths, store, loaded, systemProxy, effectiveLocations, now ?? (() => DateTimeOffset.Now),
-            connectService ?? (_ => Task.FromResult<ServiceClient?>(null)));
+            connectService ?? (_ => Task.FromResult<ServiceClient?>(null)),
+            serviceInstalled ?? (connectService is null ? () => false : ServiceRegistered));
 
         // Откат после сбоя: если в журнале остались наши изменения, возвращаем систему в исходное состояние.
         if (systemProxy.IsAppliedByUs)
@@ -610,6 +654,12 @@ public sealed class TropaEngine : IAsyncDisposable
                 return;
             SetStatus(new ConnectionStatus(ConnectionState.Connecting));
             await AttachServiceAsync(ct).ConfigureAwait(false);
+            if (State.Settings.Connection.Mode == CaptureMode.Tun && ServiceStarting)
+            {
+                SetStatus(new ConnectionStatus(ConnectionState.Connecting, "Жду, пока запустится служба Тропы (так бывает сразу после входа в Windows)…"));
+                await WaitForServiceAsync(ServiceStartWait, ct).ConfigureAwait(false);
+            }
+
             // Ядро для сервера ещё не определено — быстро проверяем: сначала Xray, потом sing-box.
             if (State.ActiveProfile is { } active && CoreFor(active.Id) == CoreChoice.Auto
                 && active.Protocol != Protocol.Hysteria2 && active.Transport.Type != TransportType.Xhttp
@@ -628,7 +678,7 @@ public sealed class TropaEngine : IAsyncDisposable
 
             await StartCoreAsync(ct).ConfigureAwait(false);
             var note = State.Settings.Connection.Mode == CaptureMode.Tun && !TunAvailable
-                ? "Служба Тропы не установлена, поэтому режим «Весь компьютер» недоступен. Сейчас через Тропу идут браузеры и программы, использующие прокси Windows."
+                ? NoTunReason() + " Сейчас через Тропу идут только браузеры и программы, использующие прокси Windows."
                 : null;
             // Другой VPN рядом — частая причина «подключено, но ничего не открывается».
             if (ForeignVpnWarning() is { } foreign)
@@ -1037,20 +1087,9 @@ public sealed class TropaEngine : IAsyncDisposable
         var clashPort = ServerTester.FreePort();
         var clashSecret = SecretStore.NewRandomToken();
         int? exitProbePort = !effective.General.HideExitRegion ? ServerTester.FreePort() : null;
-        var group = effective.Connection.AutoSelect
-            ? State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null && !p.Hidden
-                    && ProfileCompat.Issues(p.Profile).Count == 0
-                    && !(p.Profile.Transport.Type == TransportType.Xhttp && p.Profile.ChainVia is not null)
-                    // urltest видит только задержку и «заморозку» не замечает — такие серверы убираем сами.
-                    && !ServerHealth.ShouldExclude(p.LastTest, _now())
-                    // allowInsecureWarn: сервер без проверки сертификата — только если вы выбрали его сами.
-                    && !(effective.Dpi.AllowInsecureWarn && p.Profile.Security.AllowInsecure && p.Profile.Id != active.Id))
-                .Select(p => p.Profile).ToList()
-            : [];
-
         // Гибрид (docs/05-config-generation.md, §1): серверы с XHTTP и те, кому выбрано ядро Xray.
         var allProfiles = State.Profiles.Select(p => p.Profile).ToList();
-        var plan = CorePlan.Make(settings, UsedProfiles(active, group, allProfiles, effective), CoreFor);
+        var plan = CorePlan.Make(settings, UsedProfiles(active, allProfiles, effective), CoreFor);
         string? xrayConfig = null;
         var xrayPorts = new Dictionary<Guid, int>();
         LocalAuth? xrayAuth = null;
@@ -1070,7 +1109,6 @@ public sealed class TropaEngine : IAsyncDisposable
             Settings = settings,
             Active = active,
             Profiles = allProfiles,
-            AutoSelectGroup = group,
             RuleSetDirectory = ruleSetDirectory,
             LocalAuth = Auth,
             ClashApiPort = clashPort,
@@ -1137,8 +1175,8 @@ public sealed class TropaEngine : IAsyncDisposable
             _ = WatchExitRegionAsync(probe, _trafficCts.Token);
     }
 
-    /// <summary>Серверы, которые попадут в конфиг: активный, группа, промежуточные звенья цепочек и серверы из правил.</summary>
-    private static List<Profile> UsedProfiles(Profile active, IReadOnlyList<Profile> group, IReadOnlyList<Profile> all, AppSettings settings)
+    /// <summary>Серверы, которые попадут в конфиг: активный, промежуточные звенья цепочек и серверы из правил.</summary>
+    private static List<Profile> UsedProfiles(Profile active, IReadOnlyList<Profile> all, AppSettings settings)
     {
         var used = new Dictionary<Guid, Profile>();
         void Add(Profile p)
@@ -1150,8 +1188,6 @@ public sealed class TropaEngine : IAsyncDisposable
         }
 
         Add(active);
-        foreach (var p in group)
-            Add(p);
         foreach (var rule in settings.Routing.Rules.Where(r => r.Enabled))
         {
             foreach (var action in new[] { rule.Tcp, rule.Udp })
@@ -1170,15 +1206,13 @@ public sealed class TropaEngine : IAsyncDisposable
     internal TesterOptions? MonitorTesterOptions { get; set; }
 
     /// <summary>
-    /// Фоновая проверка (docs/07-testing-diagnostics.md, §1): urltest видит только задержку, а «заморозку»
-    /// замечает лишь тест скорости. Раз в ≥30 минут скачиваем 1 МБ через текущий сервер; если он
-    /// «замёрз» или перестал отвечать — переключаемся на лучший рабочий (при включённом авто-выборе)
-    /// или предупреждаем.
+    /// Фоновая проверка (docs/07-testing-diagnostics.md, §1): «заморозку» замечает лишь тест скорости.
+    /// Раз в 30 минут скачиваем 1 МБ через текущий сервер; если он «замёрз» или перестал отвечать —
+    /// предупреждаем. Сервер сами не переключаем: авто-выбор убран (ADR-047).
     /// </summary>
     private async Task MonitorAsync(Guid activeId, CancellationToken ct)
     {
-        var interval = MonitorIntervalOverride
-            ?? TimeSpan.FromMinutes(Math.Max(30, State.Settings.Connection.AutoIntervalMinutes * 10));
+        var interval = MonitorIntervalOverride ?? TimeSpan.FromMinutes(30);
         try
         {
             while (!ct.IsCancellationRequested)
@@ -1193,28 +1227,10 @@ public sealed class TropaEngine : IAsyncDisposable
                 if (!results.TryGetValue(activeId, out var r) || !ServerHealth.ShouldExclude(r, _now()))
                     continue;
 
-                var name = active.Name;
-                var replacement = State.Settings.Connection.AutoSelect
-                    ? ServerHealth.PickReplacement(
-                        State.Profiles.Where(p => p.Profile.SubscriptionId == active.SubscriptionId && p.RemovedByProvider is null && !p.Hidden
-                                && !(State.Settings.Dpi.AllowInsecureWarn && p.Profile.Security.AllowInsecure))
-                            .Select(p => (p.Profile.Id, p.LastTest)), activeId, _now())
-                    : null;
-
-                if (replacement is { } next)
-                {
-                    var nextName = State.Profiles.First(p => p.Profile.Id == next).Profile.Name;
-                    // Не ct: переподключение само отменяет этот токен, и с ним подключиться заново было бы нельзя.
-                    await SetActiveAsync(next, CancellationToken.None).ConfigureAwait(false);
-                    if (Status.State == ConnectionState.Connected)
-                        SetStatus(Status with { Message = $"Сервер «{name}» перестал работать ({ServerHealth.Title(ServerHealth.Classify(r)).ToLowerInvariant()}). Переключено на «{nextName}»." });
-                    return;
-                }
-
                 SetStatus(Status with
                 {
-                    Message = $"Сервер «{name}»: {ServerHealth.Title(ServerHealth.Classify(r)).ToLowerInvariant()}. " + ServerHealth.Explain(r)
-                        + (State.Settings.Connection.AutoSelect ? " Проверенных рабочих замен нет — нажмите «Тест всех» на экране «Серверы»." : ""),
+                    Message = $"Сервер «{active.Name}»: {ServerHealth.Title(ServerHealth.Classify(r)).ToLowerInvariant()}. " + ServerHealth.Explain(r)
+                        + " Выберите другой сервер на экране «Серверы».",
                 });
             }
         }

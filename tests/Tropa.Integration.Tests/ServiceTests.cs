@@ -107,7 +107,7 @@ public sealed class ServiceTests : IAsyncLifetime
 
     private string Config(ServiceClient client, int port, CaptureMode mode = CaptureMode.SystemProxy)
     {
-        var settings = new AppSettings { Connection = new ConnectionSettings { Mode = mode, SocksPort = port, AutoSelect = false } };
+        var settings = new AppSettings { Connection = new ConnectionSettings { Mode = mode, SocksPort = port } };
         var profile = ShareLink.Parse($"vless://{Uuid}@127.0.0.1:{_vlessPort}?security=none#local").Profile!;
         return SingBoxConfigBuilder.Build(new SingBoxInput
         {
@@ -327,7 +327,7 @@ public sealed class ServiceTests : IAsyncLifetime
             new EnginePaths(Path.Combine(_work.FullName, "r"), Path.Combine(_work.FullName, "l")), proxy, Cores,
             connectService: ct => ServiceClient.TryConnectAsync(_pipe, Self, TimeSpan.FromSeconds(3), ct));
         var port = FreePort();
-        engine.UpdateSettings(s => s with { Connection = s.Connection with { SocksPort = port, AutoSelect = false } });
+        engine.UpdateSettings(s => s with { Connection = s.Connection with { SocksPort = port } });
         await engine.ImportTextAsync($"vless://{Uuid}@127.0.0.1:{_vlessPort}?security=none#local", null, TestContext.Current.CancellationToken);
 
         await engine.ConnectAsync(TestContext.Current.CancellationToken);

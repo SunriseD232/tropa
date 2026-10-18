@@ -90,19 +90,8 @@
   ],
   "outbounds": [
     {
-      "type": "urltest",
-      "tag": "proxy",
-      "outbounds": [
-        "srv-0000000e",
-        "srv-0000000f"
-      ],
-      "url": "https://www.gstatic.com/generate_204",
-      "interval": "3m",
-      "tolerance": 50
-    },
-    {
       "type": "shadowsocks",
-      "tag": "srv-0000000e",
+      "tag": "proxy",
       "server": "ss.example.com",
       "server_port": 8388,
       "method": "2022-blake3-aes-128-gcm",
@@ -111,24 +100,6 @@
         "enabled": true,
         "protocol": "h2mux",
         "max_streams": 8
-      }
-    },
-    {
-      "type": "hysteria2",
-      "tag": "srv-0000000f",
-      "server": "hy.example.com",
-      "server_port": 443,
-      "password": "hy2pass",
-      "obfs": {
-        "type": "salamander",
-        "password": "obfspw"
-      },
-      "tls": {
-        "enabled": true,
-        "server_name": "hy.example.com",
-        "alpn": [
-          "h3"
-        ]
       }
     },
     {

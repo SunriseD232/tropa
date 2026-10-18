@@ -63,9 +63,6 @@ public sealed record ConnectionSettings
     public int LanPort { get; init; } = 10881;
     public bool RandomPorts { get; init; }
     public bool LanAllow { get; init; }
-    public bool AutoSelect { get; init; } = true;
-    public int AutoIntervalMinutes { get; init; } = 3;
-    public int AutoTolMs { get; init; } = 50;
     public string TestUrl { get; init; } = "https://www.gstatic.com/generate_204";
     public string SpeedUrl { get; init; } = "https://speed.cloudflare.com/__down?bytes=10000000";
     public int SpeedSizeMb { get; init; } = 10;

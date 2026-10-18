@@ -133,7 +133,7 @@ public sealed class EndToEndTests : IAsyncLifetime
         var original = proxyStore.Read();
         await using var engine = OpenEngine(proxyStore);
         var port = FreePort();
-        engine.UpdateSettings(s => s with { Connection = s.Connection with { SocksPort = port, AutoSelect = false } });
+        engine.UpdateSettings(s => s with { Connection = s.Connection with { SocksPort = port } });
         await engine.ImportTextAsync($"vless://{Uuid}@127.0.0.1:{_serverPort}?security=none#local", null, TestContext.Current.CancellationToken);
 
         await engine.ConnectAsync(TestContext.Current.CancellationToken);
@@ -162,7 +162,7 @@ public sealed class EndToEndTests : IAsyncLifetime
         var proxyStore = new FakeProxyStore();
         var original = proxyStore.Read();
         var engine = OpenEngine(proxyStore);
-        engine.UpdateSettings(s => s with { Connection = s.Connection with { SocksPort = FreePort(), AutoSelect = false } });
+        engine.UpdateSettings(s => s with { Connection = s.Connection with { SocksPort = FreePort() } });
         await engine.ImportTextAsync($"vless://{Uuid}@127.0.0.1:{_serverPort}?security=none#local", null, TestContext.Current.CancellationToken);
         await engine.ConnectAsync(TestContext.Current.CancellationToken);
         Assert.Equal(ConnectionState.Connected, engine.Status.State);
@@ -193,7 +193,7 @@ public sealed class EndToEndTests : IAsyncLifetime
         await using var engine = TropaEngine.Open(
             new EnginePaths(Path.Combine(_work.FullName, "r2"), Path.Combine(_work.FullName, "l2")), proxyStore,
             new CoreLocations(fakeCores.FullName, Locations.GeoSourceDirectory));
-        engine.UpdateSettings(s => s with { Connection = s.Connection with { SocksPort = FreePort(), AutoSelect = false } });
+        engine.UpdateSettings(s => s with { Connection = s.Connection with { SocksPort = FreePort() } });
         await engine.ImportTextAsync($"vless://{Uuid}@127.0.0.1:{_serverPort}?security=none#local", null, TestContext.Current.CancellationToken);
         await engine.ConnectAsync(TestContext.Current.CancellationToken);
 

@@ -111,7 +111,7 @@ public sealed class ServiceKillSwitchTests : IAsyncLifetime
 
     private static StartRequest Start(ServiceClient client, int port, bool killSwitch = true)
     {
-        var settings = new AppSettings { Connection = new ConnectionSettings { Mode = CaptureMode.SystemProxy, SocksPort = port, AutoSelect = false } };
+        var settings = new AppSettings { Connection = new ConnectionSettings { Mode = CaptureMode.SystemProxy, SocksPort = port } };
         var profile = ShareLink.Parse("vless://b831381d-6324-4d53-ad4f-8cda48b30811@127.0.0.1:9?security=none#local").Profile!;
         var config = SingBoxConfigBuilder.Build(new SingBoxInput
         {

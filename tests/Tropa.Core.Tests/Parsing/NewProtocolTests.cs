@@ -219,7 +219,7 @@ public sealed class RecommendedSettingsTests
         var user = new AppSettings
         {
             General = new GeneralSettings { Autostart = false, Autoconnect = false, Hotkey = "Ctrl+Alt+K", Theme = AppTheme.Light, KillSwitch = true },
-            Connection = new ConnectionSettings { Mode = CaptureMode.SystemProxy, AutoSelect = false, UwpLoopback = ["S-1-15-2-1"] },
+            Connection = new ConnectionSettings { Mode = CaptureMode.SystemProxy, UwpLoopback = ["S-1-15-2-1"] },
             Dns = new DnsSettings { DnsHijack = false, Hosts = "nas.lan 10.0.0.2" },
             Routing = new RoutingSettings { Preset = RoutePreset.All, BlockQuic = false, Rules = [rule] },
             Cores = new CoreSettings { LastManifestSequence = 7 },
@@ -227,7 +227,6 @@ public sealed class RecommendedSettingsTests
         var r = RecommendedSettings.Apply(user);
         Assert.True(r.General.Autostart && r.General.Autoconnect && r.General.Reconnect);
         Assert.Equal(CaptureMode.Tun, r.Connection.Mode);
-        Assert.True(r.Connection.AutoSelect);
         Assert.True(r.Dns.DnsHijack);
         Assert.Equal(RoutePreset.BlockedOnly, r.Routing.Preset);
         Assert.True(r.Routing.BlockQuic);

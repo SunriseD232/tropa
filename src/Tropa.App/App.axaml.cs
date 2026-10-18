@@ -180,7 +180,9 @@ internal sealed partial class App : Application
                 await Task.Delay(1000);
         }
 
-        await engine.AttachServiceAsync();
+        // Служба стартует вместе с Windows, но может отстать от автозагрузки: ждём её, иначе
+        // «Весь компьютер» молча стал бы «Только браузеры».
+        await engine.WaitForServiceAsync(TropaEngine.ServiceStartWait);
         await engine.ConnectAsync();
     }
 

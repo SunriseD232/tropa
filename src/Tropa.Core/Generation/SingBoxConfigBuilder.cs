@@ -24,9 +24,6 @@ public sealed record SingBoxInput
     /// <summary>Все профили: нужны для цепочек и правил «через конкретный сервер».</summary>
     public IReadOnlyList<Profile> Profiles { get; init; } = [];
 
-    /// <summary>Группа авто-выбора (если авто-выбор включён и серверов больше одного).</summary>
-    public IReadOnlyList<Profile> AutoSelectGroup { get; init; } = [];
-
     /// <summary>Каталог с файлами наборов правил (*.srs).</summary>
     public required string RuleSetDirectory { get; init; }
 
@@ -468,30 +465,13 @@ public static class SingBoxConfigBuilder
             outbounds.Push(Outbound(ctx, p, ctx.TagFor(p)));
         }
 
-        var group = s.Connection.AutoSelect ? ctx.Input.AutoSelectGroup.Where(p => ProfileCompat.Issues(p).Count == 0).ToList() : [];
-        if (group.Count > 1)
-        {
-            foreach (var p in group)
-                AddServer(p);
-            outbounds.Insert(0, new JsonObject
-            {
-                ["type"] = "urltest",
-                ["tag"] = ProxyTag,
-                ["outbounds"] = StrArray(group.Select(ctx.TagFor)),
-                ["url"] = s.Connection.TestUrl,
-                ["interval"] = $"{s.Connection.AutoIntervalMinutes.ToString(CultureInfo.InvariantCulture)}m",
-                ["tolerance"] = s.Connection.AutoTolMs,
-            });
-        }
-        else
-        {
-            var active = ctx.Input.Active;
-            if (active.ChainVia is { } via)
-                AddServer(ctx.FindProfile(via));
-            added.Add(active.Id);
-            ctx.ServerTags[active.Id] = ProxyTag;
-            outbounds.Insert(0, Outbound(ctx, active, ProxyTag));
-        }
+        // Только выбранный сервер: авто-выбор убран, балансировкой занимается провайдер на своей стороне (ADR-047).
+        var active = ctx.Input.Active;
+        if (active.ChainVia is { } via)
+            AddServer(ctx.FindProfile(via));
+        added.Add(active.Id);
+        ctx.ServerTags[active.Id] = ProxyTag;
+        outbounds.Insert(0, Outbound(ctx, active, ProxyTag));
 
         // Серверы, на которые ссылаются правила «через конкретный сервер».
         foreach (var rule in s.Routing.Rules.Where(r => r.Enabled))

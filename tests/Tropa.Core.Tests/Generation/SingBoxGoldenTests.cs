@@ -44,9 +44,13 @@ public sealed class SingBoxGoldenTests
         // Новый маршрут по умолчанию и служебный вход проверки страны выхода (первым правилом — в сервер).
         ["13-default-blocked-only-exit-probe"] = () => Input(new AppSettings(), Reality) with { ExitProbePort = 19191 },
 
-        // Shadowsocks-2022 активный, Hysteria2 в группе авто-выбора; Mux включён — у Hysteria2 его быть не должно.
-        ["12-shadowsocks-hysteria2"] = () => Input(
-            Defaults with { Dpi = Defaults.Dpi with { Mux = true } }, Ss2022, [Ss2022, Hy2], [Ss2022, Hy2]),
+        // Hysteria2 активный, Mux включён — у Hysteria2 (QUIC) его быть не должно.
+        ["12-hysteria2-no-mux"] = () => Input(
+            Defaults with { Dpi = Defaults.Dpi with { Mux = true } }, Hy2, [Ss2022, Hy2]),
+
+        // Shadowsocks-2022 активный, Mux включён — у Shadowsocks он есть.
+        ["15-shadowsocks-2022-mux"] = () => Input(
+            Defaults with { Dpi = Defaults.Dpi with { Mux = true } }, Ss2022, [Ss2022, Hy2]),
 
         ["02-reality-vision-system-proxy"] = () => Input(
             Defaults with { Connection = Defaults.Connection with { Mode = CaptureMode.SystemProxy } }, Reality),
@@ -102,7 +106,6 @@ public sealed class SingBoxGoldenTests
 
         ["05-chain-relay"] = () => Input(Defaults, Reality with { ChainVia = Relay.Id }, profiles: [Reality, Relay]),
 
-        ["06-auto-select"] = () => Input(Defaults, Reality, profiles: [Reality, Trojan, Grpc], group: [Reality, Trojan, Grpc]),
 
         ["07-udp-direct-no-quic-block"] = () => Input(
             Defaults with
@@ -130,7 +133,7 @@ public sealed class SingBoxGoldenTests
             Reality, clashApi: false),
 
         // Гибрид: сервер с XHTTP обслуживает Xray, sing-box — фронт с TUN. Трафик xray.exe идёт напрямую.
-        ["10-hybrid-xhttp-tun"] = () => Input(Defaults, Xhttp, profiles: [Xhttp, Reality], group: [Xhttp, Reality]) with
+        ["10-hybrid-xhttp-tun"] = () => Input(Defaults, Xhttp, profiles: [Xhttp, Reality]) with
         {
             XrayPorts = new Dictionary<Guid, int> { [Xhttp.Id] = 31200 },
             XrayAuth = XrayAuth,
@@ -210,12 +213,11 @@ public sealed class SingBoxGoldenTests
 
 
     private static SingBoxInput Input(AppSettings settings, Profile active, IReadOnlyList<Profile>? profiles = null,
-        IReadOnlyList<Profile>? group = null, bool clashApi = true) => new()
+        bool clashApi = true) => new()
     {
         Settings = settings,
         Active = active,
         Profiles = profiles ?? [active],
-        AutoSelectGroup = group ?? [],
         RuleSetDirectory = GeoDir,
         LocalAuth = Auth,
         ClashApiPort = clashApi ? 19090 : null,

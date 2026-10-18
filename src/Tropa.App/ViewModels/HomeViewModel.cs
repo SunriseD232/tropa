@@ -214,12 +214,7 @@ internal sealed partial class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(Blocking));
     }
 
-    public string ModeNote => (_engine.TunAvailable, _engine.ServiceAvailable) switch
-    {
-        (true, _) => "",
-        (false, true) => "Служба Тропы запущена без прав системы, поэтому режим «Весь компьютер» недоступен. Сейчас Тропа работает как прокси для браузеров.",
-        _ => "Режим «Весь компьютер» требует службу Тропы, а она не установлена или не запущена. Сейчас Тропа работает как прокси для браузеров.",
-    };
+    public string ModeNote => _engine.TunAvailable ? "" : _engine.NoTunReason() + " Сейчас Тропа работает как прокси для браузеров.";
 
     /// <summary>Пояснение «как это работает сейчас» — зависит от того, что реально включится.</summary>
     public string HowItWorks => ModeTun && _engine.TunAvailable

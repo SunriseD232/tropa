@@ -48,7 +48,12 @@ internal static class ServiceInstaller
         {
             if (!exe.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), StringComparison.OrdinalIgnoreCase))
                 Console.Error.WriteLine("Внимание: служба ставится не из Program Files. Каталог должен быть доступен на запись только администраторам.");
-            var code = Sc("create", IpcProtocol.ServiceName, "binPath=", $"\"{exe}\"", "start=", "delayed-auto", "obj=", "LocalSystem", "DisplayName=", "Тропа");
+            // Обычный автозапуск, а не отложенный: отложенная служба поднимается через пару минут после входа,
+            // и Тропа из автозагрузки успевала подключиться в «Только браузеры».
+            var code = Sc("create", IpcProtocol.ServiceName, "binPath=", $"\"{exe}\"", "start=", "auto", "obj=", "LocalSystem", "DisplayName=", "Тропа");
+            // 1073 — служба уже есть (обновление): переводим старую отложенную на обычный автозапуск.
+            if (code == 1073)
+                code = Sc("config", IpcProtocol.ServiceName, "binPath=", $"\"{exe}\"", "start=", "auto");
             if (code != 0)
                 return code;
             Sc("description", IpcProtocol.ServiceName, "Тропа: ядро прокси, режим «Весь компьютер», системные настройки сети.");

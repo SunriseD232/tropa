@@ -79,9 +79,6 @@
 | lanPort | число | 10881 (для устройств в сети, всегда с паролем) |
 | randomPorts | bool | false |
 | lanAllow | bool | false |
-| autoSelect | bool | true |
-| autoInterval | 3/10/30 мин | 3 |
-| autoTol | мс | 50 |
 | testUrl | URL | https://www.gstatic.com/generate_204 |
 | speedUrl | URL | https://speed.cloudflare.com/__down?bytes=10000000 |
 | speedSize | 1/10/25 МБ | 10 |

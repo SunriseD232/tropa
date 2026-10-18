@@ -85,8 +85,6 @@ public static class SettingsBackup
             TestUrl = Check(c.TestUrl ?? "", cc.TestUrl, SettingsValidation.HttpUrl(c.TestUrl ?? "", httpsOnly: false), "Адрес проверки"),
             SpeedUrl = Check(c.SpeedUrl ?? "", cc.SpeedUrl, SettingsValidation.HttpUrl(c.SpeedUrl ?? "", httpsOnly: true), "Адрес теста скорости"),
             StunServer = Check(c.StunServer ?? "", cc.StunServer, SettingsValidation.HostPort(c.StunServer ?? ""), "STUN-сервер"),
-            AutoIntervalMinutes = c.AutoIntervalMinutes is 3 or 10 or 30 ? c.AutoIntervalMinutes : cc.AutoIntervalMinutes,
-            AutoTolMs = Math.Clamp(c.AutoTolMs, 0, 1000),
             SpeedSizeMb = c.SpeedSizeMb is 1 or 10 or 25 ? c.SpeedSizeMb : cc.SpeedSizeMb,
             Parallel = c.Parallel is 2 or 5 or 10 ? c.Parallel : cc.Parallel,
             UwpLoopback = cc.UwpLoopback,
