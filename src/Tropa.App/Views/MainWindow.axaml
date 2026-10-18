@@ -75,7 +75,7 @@
               <Button Classes="info" Command="{Binding Onboarding.ShowInfoCommand}" CommandParameter="autoSetup" />
             </StackPanel>
             <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Тропа включит рекомендуемые настройки: весь компьютер через Тропу, запуск вместе с Windows и автоподключение, выбор самого быстрого сервера, через сервер — только заблокированные сайты, защита DNS. Вам останется только вставить ссылку от продавца VPN. Всё можно поменять потом в «Настройках»." />
+                       Text="Тропа включит рекомендуемые настройки: весь компьютер через Тропу, запуск вместе с Windows и автоподключение, обновление подписок раз в 15 минут, через сервер — только заблокированные сайты, защита DNS. Вам останется только вставить ссылку от продавца VPN. Всё можно поменять потом в «Настройках»." />
             <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
               <Button Content="Нет, настрою сам" Command="{Binding Onboarding.ChooseManualCommand}" />
               <Button Classes="primary" Content="Да, настроить автоматически" Command="{Binding Onboarding.ChooseAutoCommand}" />

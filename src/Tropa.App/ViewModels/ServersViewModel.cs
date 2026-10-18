@@ -29,6 +29,15 @@ internal sealed partial class GroupTab(string title, Guid? subscriptionId, bool 
 
     public string RestoreLabel => $"Вернуть удалённые ({HiddenCount})";
 
+    /// <summary>Подписка от администратора (ADR-048): пояснение и кнопка доверия; null — обычная подписка.</summary>
+    public string? AdminNote { get; init; }
+
+    public bool HasAdmin => AdminNote is not null;
+
+    public bool TrustAdmin { get; init; }
+
+    public string TrustLabel => TrustAdmin ? "Не доверять администратору" : "Доверять администратору";
+
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
 }
@@ -192,6 +201,11 @@ internal sealed partial class ServersViewModel : ObservableObject
             Tabs.Add(new GroupTab($"{sub.Name} · {visible.Count(p => p.Profile.SubscriptionId == sub.Id)}", sub.Id, false)
             {
                 HiddenCount = s.Profiles.Count(p => p.Hidden && p.Profile.SubscriptionId == sub.Id),
+                TrustAdmin = sub.TrustAdmin,
+                AdminNote = sub.Admin is not { } admin ? null
+                    : sub.TrustAdmin
+                        ? $"Подписка от администратора: он выбирает сервер ({admin.ActiveServer ?? "не выбран"}) и присылает правил: {admin.Rules.Count}. Ваши правила главнее. Подписка проверяется раз в {admin.RefreshMinutes ?? 5} мин."
+                        : $"Администратор подписки может выбирать вам сервер и присылать правила (сейчас правил: {admin.Rules.Count}). Пока вы ему не доверите, берутся только серверы.",
             });
         }
 
@@ -234,7 +248,7 @@ internal sealed partial class ServersViewModel : ObservableObject
             if (ProfileCompat.Issues(sp.Profile) is { Count: > 0 } issues)
                 (item.Status, item.StatusKind, item.Explanation) = ("Несовместимые параметры", "bad", issues[0]);
             else if (sp.Profile.Security.AllowInsecure)
-                (item.Status, item.StatusKind, item.Explanation) = ("Без проверки сертификата", "bad", "У сервера отключена проверка сертификата: трафик может прочитать посредник. В авто-выбор такой сервер не попадает.");
+                (item.Status, item.StatusKind, item.Explanation) = ("Без проверки сертификата", "bad", "У сервера отключена проверка сертификата: трафик может прочитать посредник.");
             else if (item.Removed)
                 (item.Status, item.StatusKind) = ("Удалён провайдером", "warn");
             else
@@ -246,6 +260,17 @@ internal sealed partial class ServersViewModel : ObservableObject
         }
 
         Selected = Items.FirstOrDefault(i => i.Id == selectedId) ?? Items.FirstOrDefault(i => i.IsActive) ?? Items.FirstOrDefault();
+    }
+
+    [RelayCommand]
+    private async Task ToggleTrustAdmin()
+    {
+        if (CurrentTab is not { SubscriptionId: { } id } tab)
+            return;
+        await _engine.SetTrustAdminAsync(id, !tab.TrustAdmin);
+        Message = tab.TrustAdmin
+            ? "Администратор больше не выбирает сервер и не присылает правила. Серверы подписки остаются."
+            : "Готово: сервер и правила администратора применяются, изменения доходят сами.";
     }
 
     [RelayCommand]
@@ -439,7 +464,7 @@ internal sealed partial class ServersViewModel : ObservableObject
             var frozen = results.Values.Count(r => r.Frozen);
             Message = kinds == TestKinds.Stability
                 ? null
-                : $"Работают {ok} из {results.Count}." + (frozen > 0 ? $" «Замёрзли» — пинг есть, а данные не идут: {frozen}. Авто-выбор их не возьмёт." : "");
+                : $"Работают {ok} из {results.Count}." + (frozen > 0 ? $" «Замёрзли» — пинг есть, а данные не идут: {frozen}." : "");
             if (ok < results.Count && _engine.ForeignVpnWarning() is { } foreign)
                 Message = (Message is null ? "" : Message + " ") + foreign;
         }

@@ -165,7 +165,7 @@
                 <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="allowInsecure" />
               </StackPanel>
               <TextBlock Classes="muted" Foreground="{DynamicResource BadFg}" IsVisible="{Binding AllowInsecure}"
-                         Text="Трафик сможет прочитать любой посредник. Такой сервер не попадёт в авто-выбор." />
+                         Text="Трафик сможет прочитать любой посредник." />
             </StackPanel>
             <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8" Margin="0,0,0,12" IsVisible="{Binding ShowPlainWarning}">
               <TextBlock Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" Text="Транспорт не шифруется: VLESS в таком виде ничего не скрывает от провайдера, VMess легко распознаётся." />

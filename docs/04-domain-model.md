@@ -41,10 +41,30 @@ record SubscriptionInfo(long Upload, long Download, long Total, DateTimeOffset? 
   - `support-url`, `profile-web-page-url`, `announce`.
 
 ### Формат тела (определять по порядку)
+0. JSON с `"kind": "tropa-admin"` → подписка от администратора (ADR-048), см. ниже.
 1. JSON → импорт sing-box (`outbounds`) или Xray (`outbounds`); только outbound-ы, см. `02-security.md` §3.2.
 2. Иначе: если после удаления пробелов это base64 (стандартный или URL-safe, паддинг необязателен) → декодировать.
 3. Текст: по строке на ссылку. Строки с неизвестной схемой пропускаются и учитываются в отчёте импорта («распознано N, ошибок M»).
 4. Clash YAML — позже (этап 8), только секция `proxies`.
+
+### Подписка от администратора (ADR-048, `Tropa.Core/Parsing/AdminDocument.cs`)
+```json
+{
+  "kind": "tropa-admin", "version": 1,
+  "title": "Серверы от Васи", "revision": "20261018153000", "refresh_minutes": 5,
+  "active": "FI",
+  "servers": [ "vless://…#NL", "vless://…#FI" ],
+  "rules": [
+    { "label": "Discord", "processes": [ "Discord.exe" ], "tcp": "proxy", "udp": "server:FI" },
+    { "domain_suffixes": [ "ya.ru" ], "domains": [], "ip_cidrs": [ "10.0.0.0/8" ], "ports": [ "443", "1000-2000" ], "tcp": "direct", "udp": "block" }
+  ]
+}
+```
+- Серверы — обычные ссылки (`ShareLink`). `active` и `server:Имя` — по имени сервера (у друга свои идентификаторы).
+- Разбор строгий: неизвестные поля игнорируются; процессы и домены нормализуются, как при вводе руками; IP — только корректные сети; правило только с портом отбрасывается; неизвестное действие — «через сервер» (не «напрямую»); `refresh_minutes` — 5…1440; не больше 200 правил и 500 значений в каждом.
+- В подписке хранится `Admin` (что прислал администратор), `TrustAdmin` (согласие пользователя, по умолчанию нет) и `AdminActiveApplied` (последний применённый выбор — ручной выбор друга не перебивается, пока администратор не выберет другой).
+- Правила администратора идут в конфиг после правил пользователя, только при `TrustAdmin`.
+- Публикация: PUT того же адреса с `Authorization: Bearer <ключ>`; адрес и ключ — в secrets.bin (`admin:url`, `admin:key`). Сервер — `tools/tropa-friends-server.py`.
 
 ## 3. Форматы ссылок
 

@@ -92,6 +92,17 @@
       </WrapPanel>
     </StackPanel>
 
+    <!-- Подписка от администратора (ADR-048): доверять ли ему выбор сервера и правила -->
+    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="14,12" IsVisible="{Binding CurrentTabInfo.HasAdmin, FallbackValue=False}">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center">
+          <Button Content="{Binding CurrentTabInfo.TrustLabel, FallbackValue=''}" Command="{Binding ToggleTrustAdminCommand}" />
+          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="adminSub" />
+        </StackPanel>
+        <TextBlock Text="{Binding CurrentTabInfo.AdminNote, FallbackValue=''}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+
     <Border Background="{DynamicResource BadBg}" CornerRadius="12" Padding="14,12" IsVisible="{Binding PendingSubscriptionDelete, Converter={x:Static ObjectConverters.IsNotNull}}">
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center">

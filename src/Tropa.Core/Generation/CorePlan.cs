@@ -11,7 +11,7 @@ public sealed record CorePlan(IReadOnlyList<Profile> XrayProfiles)
 {
     public bool NeedsXray => XrayProfiles.Count > 0;
 
-    /// <param name="used">Серверы, которые попадут в конфиг: активный, группа авто-выбора, цепочки, правила.</param>
+    /// <param name="used">Серверы, которые попадут в конфиг: активный, цепочки, правила.</param>
     /// <param name="coreFor">
     /// Ядро конкретного сервера (выбор пользователя или найденное проверкой). Auto — по общей настройке.
     /// </param>

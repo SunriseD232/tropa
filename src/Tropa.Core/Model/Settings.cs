@@ -126,6 +126,17 @@ public sealed record ExpertSettings
 public sealed record SubscriptionDefaults
 {
     public int UpdateHours { get; init; } = 12;
+
+    /// <summary>
+    /// Частое обновление в минутах (15); 0 — по <see cref="UpdateHours"/>. В settings.json прошлых версий
+    /// поля нет и читается 0 — то есть остаётся прежний интервал в часах.
+    /// </summary>
+    public int UpdateMinutes { get; init; }
+
+    /// <summary>Интервал автообновления; null — только вручную.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public TimeSpan? Interval => UpdateMinutes > 0 ? TimeSpan.FromMinutes(UpdateMinutes)
+        : UpdateHours > 0 ? TimeSpan.FromHours(UpdateHours) : null;
     public bool SubViaProxy { get; init; } = true;
     public UserAgentMode SubUA { get; init; } = UserAgentMode.Tropa;
     public string SubUACustom { get; init; } = "";
@@ -145,4 +156,29 @@ public sealed record AppSettings
     public ExpertSettings Expert { get; init; } = new();
     public SubscriptionDefaults Subscriptions { get; init; } = new();
     public RoutingSettings Routing { get; init; } = new();
+
+    /// <summary>
+    /// Публикация для друзей (ADR-048). Отсутствующий в старом settings.json раздел source-generated
+    /// System.Text.Json передаёт как null — поэтому null превращается в значения по умолчанию.
+    /// </summary>
+    public AdminPublishSettings Admin { get => _admin; init => _admin = value ?? new(); }
+
+    private readonly AdminPublishSettings _admin = new();
+}
+
+/// <summary>
+/// Администратор: Тропа сама публикует «Мои» серверы, выбранный сервер и правила по адресу для друзей.
+/// Адрес и ключ публикации — секреты, они в secrets.bin, а не здесь.
+/// </summary>
+public sealed record AdminPublishSettings
+{
+    public bool Enabled { get; init; }
+
+    /// <summary>Как часто Тропа друзей проверяет документ, минуты. 0 (старый файл) — 5.</summary>
+    public int RefreshMinutes { get; init; } = 5;
+
+    public string Title { get; init; } = "";
+
+    /// <summary>Публиковать и правила (экран «Правила»), не только серверы.</summary>
+    public bool PublishRules { get; init; } = true;
 }

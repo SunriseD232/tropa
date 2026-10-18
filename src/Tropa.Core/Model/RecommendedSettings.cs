@@ -41,7 +41,8 @@ public static class RecommendedSettings
                 LastUpdateCheck = current.Cores.LastUpdateCheck,
             },
             Expert = defaults.Expert,
-            Subscriptions = defaults.Subscriptions,
+            // Новые серверы от провайдера или администратора — без ожидания на полдня.
+            Subscriptions = defaults.Subscriptions with { UpdateMinutes = 15 },
             Routing = current.Routing with
             {
                 Preset = RoutePreset.BlockedOnly,

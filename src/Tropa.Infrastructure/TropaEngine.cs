@@ -42,7 +42,7 @@ public sealed record EnginePaths(string Roaming, string Local)
 /// Движок Тропы для этапа 2: состояние, подписки, тесты, подключение в режиме «Только браузеры».
 /// Интерфейс работает только через него. Все изменения системы идут через журнал и откатываются.
 /// </summary>
-public sealed class TropaEngine : IAsyncDisposable
+public sealed partial class TropaEngine : IAsyncDisposable
 {
     private readonly EnginePaths _paths;
     private readonly StateStore _store;
@@ -279,6 +279,7 @@ public sealed class TropaEngine : IAsyncDisposable
         State = change(State);
         Save();
         StateChanged?.Invoke(this, EventArgs.Empty);
+        SchedulePublish();
     }
 
     private void Save() => _store.Save(State, _secrets, _now());
@@ -457,15 +458,13 @@ public sealed class TropaEngine : IAsyncDisposable
     }
 
     /// <summary>
-    /// Автообновление подписок (subUpdate): обновляет те, что старше заданного интервала. 0 — только вручную.
-    /// Ошибка одной подписки не мешает остальным.
+    /// Автообновление подписок (subUpdate): обновляет те, что старше своего интервала — частоты администратора
+    /// подписки или общей настройки (null — только вручную). Ошибка одной подписки не мешает остальным.
     /// </summary>
     public async Task UpdateDueSubscriptionsAsync(CancellationToken ct = default)
     {
-        var hours = State.Settings.Subscriptions.UpdateHours;
-        if (hours <= 0)
-            return;
-        foreach (var sub in State.Subscriptions.Where(s => s.LastUpdated is null || _now() - s.LastUpdated > TimeSpan.FromHours(hours)).ToList())
+        var defaults = State.Settings.Subscriptions;
+        foreach (var sub in State.Subscriptions.Where(s => s.RefreshInterval(defaults) is { } every && (s.LastUpdated is null || _now() - s.LastUpdated >= every)).ToList())
         {
             try
             {
@@ -482,10 +481,7 @@ public sealed class TropaEngine : IAsyncDisposable
     {
         var sub = State.Subscriptions.FirstOrDefault(s => s.Id == subscriptionId)
             ?? throw new InvalidOperationException("Подписка не найдена.");
-        LocalProxy? proxy = Status.State == ConnectionState.Connected
-            ? new LocalProxy(_mixedPort, CompatRules.Evaluate(State.Settings).Effective.General.LocalPass ? Auth.Username : null,
-                CompatRules.Evaluate(State.Settings).Effective.General.LocalPass ? Auth.Password : null)
-            : null;
+        var proxy = LocalProxyIfConnected();
 
         FetchResult fetched;
         try
@@ -498,7 +494,9 @@ public sealed class TropaEngine : IAsyncDisposable
             return new ImportReport(0, 0, 1, 0, [ex.Message]);
         }
 
-        var parsed = SubscriptionParser.Parse(fetched.Body);
+        // Подписка от администратора (ADR-048): серверы плюс выбор сервера и правила.
+        var admin = AdminDocument.Looks(fetched.Body) ? AdminDocument.TryParse(fetched.Body) : null;
+        var parsed = admin?.Servers ?? SubscriptionParser.Parse(fetched.Body);
         var info = SubscriptionHeaders.Parse(fetched.Headers);
         var merged = SubscriptionMerger.Merge(sub.Id, State.Profiles, parsed.Profiles.Select(p => p.Profile).ToList(), _now());
 
@@ -507,9 +505,11 @@ public sealed class TropaEngine : IAsyncDisposable
             Info = info,
             LastUpdated = _now(),
             LastError = parsed.Profiles.Count == 0 ? "В подписке не найдено серверов. Попробуйте «Представляться как v2rayN»." : null,
-            Name = sub.Name == new Uri(sub.Url.Reveal()).Host && info.Title is { } title ? title : sub.Name,
+            Name = sub.Name == new Uri(sub.Url.Reveal()).Host && (admin?.Channel.Title ?? info.Title) is { } title ? title : sub.Name,
             UpdateHours = info.UpdateIntervalHours ?? sub.UpdateHours,
+            Admin = admin?.Channel,
         };
+        var adminRevisionChanged = sub.TrustAdmin && admin?.Channel.Revision != sub.Admin?.Revision;
         Update(s => s with
         {
             Subscriptions = s.Subscriptions.Select(x => x.Id == sub.Id ? updatedSub : x).ToList(),
@@ -520,12 +520,53 @@ public sealed class TropaEngine : IAsyncDisposable
                     .OrderBy(p => p.Order).FirstOrDefault()?.Profile.Id,
         });
 
+        // Администратор выбрал другой сервер или поменял правила — применяем сразу (если ему доверяют).
+        var activeChanged = ApplyAdminActive(sub.Id);
+        if ((activeChanged || adminRevisionChanged) && Status.State == ConnectionState.Connected)
+        {
+            try
+            {
+                await ReconnectAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException)
+            {
+                Log?.Invoke(this, "Не удалось применить изменения администратора: " + Scrubber.Scrub(ex.Message));
+            }
+        }
+
         var messages = parsed.Errors.Select(e => $"Сервер {e.Position}: {e.Message}").ToList();
+        if (admin is not null)
+            messages.AddRange(admin.Warnings);
+        if (admin is not null && !updatedSub.TrustAdmin && (admin.Channel.ActiveServer is not null || admin.Channel.Rules.Count > 0))
+            messages.Add($"Администратор подписки присылает выбор сервера и правил: {admin.Channel.Rules.Count}. Чтобы они применялись, нажмите «Доверять администратору» на вкладке подписки.");
         if (updatedSub.LastError is { } err)
             messages.Insert(0, err);
         if (fetched.ViaProxy)
             messages.Insert(0, "Адрес подписки недоступен напрямую — загружено через сервер.");
         return new ImportReport(merged.Added, merged.Updated, parsed.Errors.Count, parsed.SkippedUnsupported, messages);
+    }
+
+    /// <summary>
+    /// После подключения: подписка активного сервера старше 5 минут — обновить в фоне (теперь можно и через
+    /// сервер). Так новый сервер или выбор администратора доходит сразу, а не по таймеру.
+    /// </summary>
+    private void RefreshActiveSubscriptionSoon()
+    {
+        if (State.ActiveProfile?.SubscriptionId is not { } subId
+            || State.Subscriptions.FirstOrDefault(s => s.Id == subId) is not { } sub
+            || (sub.LastUpdated is { } at && _now() - at < TimeSpan.FromMinutes(5)))
+            return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await UpdateSubscriptionAsync(subId).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or IOException or InvalidDataException)
+            {
+                Log?.Invoke(this, $"Обновление подписки «{sub.Name}» после подключения не удалось: " + Scrubber.Scrub(ex.Message));
+            }
+        });
     }
 
     private void ReplaceSubscription(Subscription sub) =>
@@ -545,7 +586,7 @@ public sealed class TropaEngine : IAsyncDisposable
     }
 
     /// <summary>
-    /// Проверяет серверы и сохраняет результаты: они видны в списке и учитываются авто-выбором.
+    /// Проверяет серверы и сохраняет результаты: они видны в списке.
     /// Для серверов с ядром «Автоматически» сначала проверяется Xray, а неработающие — ещё раз
     /// через sing-box; на каком ядре сервер заработал, то и запоминается.
     /// </summary>
@@ -684,6 +725,7 @@ public sealed class TropaEngine : IAsyncDisposable
             if (ForeignVpnWarning() is { } foreign)
                 note = note is null ? foreign : foreign + " " + note;
             SetStatus(new ConnectionStatus(ConnectionState.Connected, note, _now()));
+            RefreshActiveSubscriptionSoon();
         }
         catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException or ServiceException or TimeoutException)
         {
@@ -890,6 +932,7 @@ public sealed class TropaEngine : IAsyncDisposable
         var settings = State.Settings with
         {
             Connection = State.Settings.Connection with { Mode = !TunAvailable && State.Settings.Connection.Mode == CaptureMode.Tun ? CaptureMode.SystemProxy : State.Settings.Connection.Mode },
+            Routing = State.Settings.Routing with { Rules = [.. State.Settings.Routing.Rules, .. AdminRules()] },
         };
         var config = SingBoxConfigBuilder.Build(new SingBoxInput
         {
@@ -1058,6 +1101,8 @@ public sealed class TropaEngine : IAsyncDisposable
             {
                 Mode = !TunAvailable && State.Settings.Connection.Mode == CaptureMode.Tun ? CaptureMode.SystemProxy : State.Settings.Connection.Mode,
             },
+            // Правила администраторов подписок, которым доверяют, — после своих: свои главнее (ADR-048).
+            Routing = State.Settings.Routing with { Rules = [.. State.Settings.Routing.Rules, .. AdminRules()] },
         };
         var effective = CompatRules.Evaluate(settings, active).Effective;
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Tropa.Core.Routing;
+using Tropa.Core.Security;
 
 namespace Tropa.Core.Model;
 
@@ -112,6 +113,7 @@ public static class SettingsBackup
             SubUACustom = string.IsNullOrEmpty(s.Subscriptions.SubUACustom) ? ""
                 : Check(s.Subscriptions.SubUACustom, current.Subscriptions.SubUACustom, SettingsValidation.UserAgent(s.Subscriptions.SubUACustom), "Свой User-Agent"),
             UpdateHours = s.Subscriptions.UpdateHours is 0 or 6 or 12 or 24 ? s.Subscriptions.UpdateHours : current.Subscriptions.UpdateHours,
+            UpdateMinutes = s.Subscriptions.UpdateMinutes is 0 or 15 ? s.Subscriptions.UpdateMinutes : current.Subscriptions.UpdateMinutes,
         };
 
         var rules = new List<Rule>();
@@ -145,6 +147,11 @@ public static class SettingsBackup
             Dns = dns,
             Dpi = dpi,
             Subscriptions = subs,
+            Admin = s.Admin with
+            {
+                RefreshMinutes = s.Admin.RefreshMinutes is 5 or 15 or 60 ? s.Admin.RefreshMinutes : current.Admin.RefreshMinutes,
+                Title = (s.Admin.Title ?? "").Length <= 60 ? NameSanitizer.Sanitize(s.Admin.Title ?? "", "") : current.Admin.Title,
+            },
             // Защита от отката обновлений не должна зависеть от импортированного файла.
             Cores = s.Cores with { LastManifestSequence = current.Cores.LastManifestSequence, LastUpdateCheck = current.Cores.LastUpdateCheck },
             Routing = s.Routing with { Rules = rules, GeoEdits = GeoEdits.Sanitize(s.Routing.GeoEdits), CustomLists = GeoEdits.SanitizeCustom(s.Routing.CustomLists) },

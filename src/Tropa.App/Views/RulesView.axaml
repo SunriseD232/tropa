@@ -154,6 +154,24 @@
       </StackPanel>
     </Border>
 
+    <!-- От администратора подписки (ADR-048): только чтение -->
+    <Border Classes="card" IsVisible="{Binding HasAdminRules}">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Text="От администратора подписки" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="adminSub" />
+        </StackPanel>
+        <TextBlock Text="{Binding AdminRulesNote}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" />
+        <ItemsControl ItemsSource="{Binding AdminRules}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="4,3" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+
     <!-- Гео-базы -->
     <Border Classes="card">
       <StackPanel Spacing="12">

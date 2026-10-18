@@ -33,6 +33,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
             Dns(),
             Dpi(),
             CoresSection(),
+            Friends(),
             Expert(),
         ];
         foreach (var row in Sections.SelectMany(s => s.Rows))
@@ -44,6 +45,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
         Current = Sections[0];
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(Load);
         engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(Load);
+        engine.AdminPublishStatusChanged += (_, _) => Dispatcher.UIThread.Post(Load);
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() =>
         {
             if (s.State != ConnectionState.Connected)
@@ -169,9 +171,17 @@ internal sealed partial class SettingsViewModel : ObservableObject
 
     private static SettingsSection Subscriptions() => new("subs", "Подписки", "Значения для подписок. Обновить вручную можно на экране «Серверы».",
     [
-        new ChoiceRow("Обновлять подписки", "subUpdate", Opts("Каждые 6 часов", "Каждые 12 часов", "Раз в сутки", "Только вручную"),
-            s => s.Subscriptions.UpdateHours switch { 6 => 0, 12 => 1, 24 => 2, _ => 3 },
-            (s, i) => s with { Subscriptions = s.Subscriptions with { UpdateHours = i switch { 0 => 6, 1 => 12, 2 => 24, _ => 0 } } }),
+        new ChoiceRow("Обновлять подписки", "subUpdate", Opts("Каждые 15 минут", "Каждые 6 часов", "Каждые 12 часов", "Раз в сутки", "Только вручную"),
+            s => s.Subscriptions.UpdateMinutes > 0 ? 0 : s.Subscriptions.UpdateHours switch { 6 => 1, 12 => 2, 24 => 3, _ => 4 },
+            (s, i) => s with
+            {
+                Subscriptions = s.Subscriptions with
+                {
+                    UpdateMinutes = i == 0 ? 15 : 0,
+                    UpdateHours = i switch { 0 => s.Subscriptions.UpdateHours, 1 => 6, 2 => 12, 3 => 24, _ => 0 },
+                },
+            },
+            hint: "Подписку от администратора Тропа проверяет так часто, как он задал (обычно раз в 5 минут), и сразу после подключения."),
         new ToggleRow("Обновлять через подключение", "subViaProxy", s => s.Subscriptions.SubViaProxy, (s, v) => s with { Subscriptions = s.Subscriptions with { SubViaProxy = v } }),
         new ChoiceRow("Представляться провайдеру как", "subUA", Opts("Тропа", "v2rayN", "sing-box", "Свой"),
             s => (int)s.Subscriptions.SubUA, (s, i) => s with { Subscriptions = s.Subscriptions with { SubUA = (UserAgentMode)i } }),
@@ -239,7 +249,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
             s => s.Dpi.Utls switch { "firefox" => 1, "edge" => 2, "safari" => 3, "random" or "randomized" => 4, _ => 0 },
             (s, i) => s with { Dpi = s.Dpi with { Utls = i switch { 1 => "firefox", 2 => "edge", 3 => "safari", 4 => "random", _ => "chrome" } } }),
         new ToggleRow("Предупреждать о серверах без проверки сертификата", "allowInsecureWarn", s => s.Dpi.AllowInsecureWarn,
-            (s, v) => s with { Dpi = s.Dpi with { AllowInsecureWarn = v } }, hint: "Такие серверы не попадают в авто-выбор."),
+            (s, v) => s with { Dpi = s.Dpi with { AllowInsecureWarn = v } }),
         new ToggleRow("Mux (несколько соединений в одном)", "mux", s => s.Dpi.Mux, (s, v) => s with { Dpi = s.Dpi with { Mux = v } }),
         TextRow.Number("Соединений в одном Mux", "muxConc", s => s.Dpi.MuxConc, (s, v) => s with { Dpi = s.Dpi with { MuxConc = v } },
             v => v is >= 1 and <= 128 ? null : "От 1 до 128."),
@@ -256,6 +266,58 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new ToggleRow("Скачивать обновления через подключение", "geoViaProxy", s => s.Cores.GeoViaProxy, (s, v) => s with { Cores = s.Cores with { GeoViaProxy = v } }),
         new ToggleRow("Сообщать о новой версии Тропы", "appUpdate", s => s.Cores.AppCheck, (s, v) => s with { Cores = s.Cores with { AppCheck = v } }),
     ]);
+
+    /// <summary>Тексты для буфера обмена — только по нажатию кнопки (docs/02-security.md, правило 8).</summary>
+    public event EventHandler<string>? CopyRequested;
+
+    // Администратор (ADR-048): «Мои» серверы, выбранный сервер и правила уходят друзьям сами.
+    private SettingsSection Friends() => new("friends", "Для друзей", "Если вы раздаёте серверы друзьям: Тропа публикует ваши «Мои» серверы, выбранный сервер и правила, а Тропа друзей подхватывает их сама.",
+    [
+        new ToggleRow("Публиковать для друзей", "adminPublish", s => s.Admin.Enabled, (s, v) => s with { Admin = s.Admin with { Enabled = v } },
+            hint: "После каждого изменения серверов, выбора сервера или правил — через 3 секунды."),
+        new TextRow("Адрес публикации", "adminUrl", _ => _engine.AdminUrlMasked, (s, v) =>
+            {
+                _engine.SetAdminUrl(v);
+                return s;
+            },
+            v => v.Contains('•', StringComparison.Ordinal) || v.Trim().Length == 0 ? null : Infrastructure.Net.AdminPublisher.ValidateUrl(v),
+            placeholder: "https://ваш-сервер/tropa/friends", hint: "Этот же адрес друзья добавляют как подписку. Адрес — секрет: в нём ваши серверы."),
+        new TextRow("Название для друзей", "adminPublish", s => s.Admin.Title, (s, v) => s with { Admin = s.Admin with { Title = v } },
+            v => v.Length <= 60 ? null : "Не длиннее 60 символов.", placeholder: "Например: Серверы от Васи"),
+        new ChoiceRow("Как часто Тропа друзей проверяет", "adminRefresh", Opts("Каждые 5 минут", "Каждые 15 минут", "Раз в час"),
+            s => s.Admin.RefreshMinutes switch { 15 => 1, 60 => 2, _ => 0 },
+            (s, i) => s with { Admin = s.Admin with { RefreshMinutes = i switch { 1 => 15, 2 => 60, _ => 5 } } }),
+        new ToggleRow("Отправлять и правила", "adminRules", s => s.Admin.PublishRules, (s, v) => s with { Admin = s.Admin with { PublishRules = v } },
+            hint: "Правила с экрана «Правила». Свои правила друга главнее ваших."),
+        new LabelRow("Состояние", "adminPublish", () => _engine.AdminPublishStatus
+            ?? (_engine.HasAdminUrl ? $"Ещё не публиковали. Серверов для друзей: {_engine.FriendsServerCount}." : "Укажите адрес публикации.")),
+        new ActionRow("Публикация", "adminPublish", null,
+            ("Опубликовать сейчас", new AsyncRelayCommand(async () =>
+            {
+                var error = await _engine.PublishForFriendsAsync();
+                Report(error ?? "Опубликовано.", error: error is not null);
+            })),
+            ("Скопировать ссылку для друзей", new RelayCommand(() => Copy(_engine.RevealAdminUrl(), "Ссылка для друзей скопирована. Отправьте её другу — он вставит её в Тропу как подписку.")))),
+        new ActionRow("Ключ публикации", "adminKey", "Ключ нужен серверу публикации, друзьям — нет.",
+            ("Скопировать ключ", new RelayCommand(() => Copy(_engine.RevealAdminKey(), "Ключ публикации скопирован."))),
+            ("Новый ключ", new RelayCommand(() =>
+            {
+                _engine.RegenerateAdminKey();
+                Report("Создан новый ключ. Замените его на сервере публикации, иначе публикация не пройдёт.");
+            }))),
+    ]);
+
+    private void Copy(string? text, string done)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            Report("Сначала укажите адрес публикации.", error: true);
+            return;
+        }
+
+        CopyRequested?.Invoke(this, text);
+        Report(done);
+    }
 
     private SettingsSection Expert() => new("expert", "Для экспертов", "Обычно менять не нужно.",
     [

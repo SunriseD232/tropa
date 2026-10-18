@@ -96,11 +96,19 @@ internal sealed partial class SettingsView : UserControl
                 vm.ExportRequested -= OnExport;
                 vm.ImportRequested -= OnImport;
                 vm.SiteFileRequested -= OnSiteFile;
+                vm.CopyRequested -= OnCopy;
+                vm.CopyRequested += OnCopy;
                 vm.ExportRequested += OnExport;
                 vm.ImportRequested += OnImport;
                 vm.SiteFileRequested += OnSiteFile;
             }
         };
+    }
+
+    private async void OnCopy(object? sender, string text)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+            await clipboard.SetTextAsync(text);
     }
 
     // Файл выбирает только пользователь в диалоге (docs/02-security.md, §3.7).

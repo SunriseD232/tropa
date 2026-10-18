@@ -68,10 +68,10 @@ internal sealed partial class App : Application
             _hotkey = new Services.GlobalHotkey(_window, () => Dispatcher.UIThread.Post(() => _ = ToggleAsync()));
             _hotkey.Register(_engine.State.Settings.General.Hotkey);
             _engine.StartNetworkWatch();
-            // Автообновление подписок (subUpdate): первая проверка через минуту, потом раз в 15 минут.
+            // Автообновление подписок (subUpdate): раз в минуту смотрим, какие пора обновить — у каждой свой
+            // интервал (подписка администратора — раз в 5 минут, ADR-048). Сама проверка ничего не скачивает.
             _subscriptionTimer = new DispatcherTimer(TimeSpan.FromMinutes(1), DispatcherPriority.Background, async (_, _) =>
             {
-                _subscriptionTimer!.Interval = TimeSpan.FromMinutes(15);
                 if (_engine is { } e)
                     await e.UpdateDueSubscriptionsAsync();
             });

@@ -149,9 +149,13 @@ public sealed class StateStore(string directory)
 
     public static string SubscriptionUrlKey(Guid subscriptionId) => "sub:" + subscriptionId.ToString("N");
 
+    /// <summary>Адрес и ключ публикации для друзей (ADR-048).</summary>
+    public const string AdminUrlKey = "admin:url";
+    public const string AdminKeyKey = "admin:key";
+
     private static HashSet<string> ReferencedSecretKeys(AppState state)
     {
-        var keys = new HashSet<string>(StringComparer.Ordinal) { LocalUserKey, LocalPasswordKey };
+        var keys = new HashSet<string>(StringComparer.Ordinal) { LocalUserKey, LocalPasswordKey, AdminUrlKey, AdminKeyKey };
         foreach (var p in state.Profiles)
         {
             keys.Add(CredentialKey(p.Profile.Id));
@@ -193,6 +197,9 @@ public sealed class StateStore(string directory)
                 Info = s.Info,
                 LastUpdated = s.LastUpdated,
                 LastError = s.LastError,
+                Admin = s.Admin,
+                TrustAdmin = s.TrustAdmin,
+                AdminActiveApplied = s.AdminActiveApplied,
             }).ToList(),
             Profiles = state.Profiles.Select(sp => new StoredProfileDto
             {
@@ -240,6 +247,9 @@ public sealed class StateStore(string directory)
                 Info = s.Info,
                 LastUpdated = s.LastUpdated,
                 LastError = s.LastError,
+                Admin = s.Admin,
+                TrustAdmin = s.TrustAdmin,
+                AdminActiveApplied = s.AdminActiveApplied,
             });
         }
 
@@ -303,6 +313,9 @@ internal sealed record SubscriptionDto
     public SubscriptionInfo? Info { get; init; }
     public DateTimeOffset? LastUpdated { get; init; }
     public string? LastError { get; init; }
+    public AdminChannel? Admin { get; init; }
+    public bool TrustAdmin { get; init; }
+    public string? AdminActiveApplied { get; init; }
 }
 
 internal sealed record StoredProfileDto

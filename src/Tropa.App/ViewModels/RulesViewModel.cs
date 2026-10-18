@@ -172,6 +172,15 @@ internal sealed partial class RulesViewModel : ObservableObject
 
     public ObservableCollection<RuleItemViewModel> Sites { get; } = [];
 
+    /// <summary>Правила от администраторов подписок (ADR-048): только показ, менять их может администратор.</summary>
+    public ObservableCollection<string> AdminRules { get; } = [];
+
+    [ObservableProperty]
+    public partial bool HasAdminRules { get; set; }
+
+    [ObservableProperty]
+    public partial string AdminRulesNote { get; set; } = "";
+
     public ObservableCollection<string> RunningApps { get; } = [];
 
     private List<StoreAppViewModel> _allStoreApps = [];
@@ -255,8 +264,41 @@ internal sealed partial class RulesViewModel : ObservableObject
 
     private IReadOnlyList<Rule>? _shownRules;
 
+    private void LoadAdminRules()
+    {
+        var list = _engine.AdminRuleList();
+        var lines = list.Select(x => (x.Trusted ? "" : "(не применяется) ") + Describe(x.Subscription, x.Rule)).ToList();
+        if (!lines.SequenceEqual(AdminRules))
+        {
+            AdminRules.Clear();
+            foreach (var line in lines)
+                AdminRules.Add(line);
+        }
+
+        HasAdminRules = lines.Count > 0;
+        AdminRulesNote = list.Any(x => !x.Trusted)
+            ? "Правила с пометкой «не применяется» начнут работать, когда вы доверите администратору подписку на экране «Серверы». Ваши правила выше всегда главнее."
+            : "Их меняет администратор подписки. Ваши правила выше главнее: чтобы сделать иначе, добавьте своё.";
+
+        static string Describe(string sub, AdminRule r)
+        {
+            var what = string.Join(", ", r.Match.Processes.Concat(r.Match.DomainSuffixes).Concat(r.Match.Domains).Concat(r.Match.IpCidrs).Take(4))
+                + (r.Match.Processes.Count + r.Match.DomainSuffixes.Count + r.Match.Domains.Count + r.Match.IpCidrs.Count > 4 ? " и ещё" : "");
+            return $"«{sub}»{(r.Label is { Length: > 0 } l ? " · " + l : "")}: {what} — TCP {Act(r.Tcp)}, UDP {Act(r.Udp)}";
+        }
+
+        static string Act(AdminAction a) => a.Kind switch
+        {
+            RuleActionKind.Direct => "напрямую",
+            RuleActionKind.Block => "блокировать",
+            RuleActionKind.Server => "через «" + a.ServerName + "»",
+            _ => "через сервер",
+        };
+    }
+
     private void Load()
     {
+        LoadAdminRules();
         _loading = true;
         var routing = _engine.State.Settings.Routing;
         PresetIndex = (int)routing.Preset;
