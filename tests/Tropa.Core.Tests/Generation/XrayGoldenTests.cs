@@ -66,6 +66,15 @@ public sealed class XrayGoldenTests
         Assert.Throws<UnsupportedProfileException>(() =>
             XrayConfigBuilder.Build([new(Xhttp with { ChainVia = Ws.Id }, 1)], Defaults, Auth));
 
+    [Fact]
+    public void Insecure_tls_is_refused_for_xray()
+    {
+        // Xray 26.9 убрал allowInsecure: с true ядро не запускается — такие серверы идут в sing-box.
+        var insecure = Ws with { Security = Ws.Security with { AllowInsecure = true } };
+        Assert.Throws<UnsupportedProfileException>(() => XrayConfigBuilder.Build([new(insecure, 1)], Defaults, Auth));
+        Assert.DoesNotContain("allowInsecure", XrayConfigBuilder.Build([new(Ws, 1)], Defaults, Auth), StringComparison.Ordinal);
+    }
+
     private static string Base => All["x01-servers"]();
 
     public static TheoryData<string, string> Malicious => new()
@@ -76,7 +85,7 @@ public sealed class XrayGoldenTests
         { "порт наружу", Base.Replace("\"listen\": \"127.0.0.1\"", "\"listen\": \"0.0.0.0\"", StringComparison.Ordinal) },
         { "без пароля", Base.Replace("\"auth\": \"password\"", "\"auth\": \"noauth\"", StringComparison.Ordinal) },
         { "dokodemo", Base.Replace("\"protocol\": \"socks\"", "\"protocol\": \"dokodemo-door\"", StringComparison.Ordinal) },
-        { "сертификат с диска", Base.Replace("\"allowInsecure\": false", "\"allowInsecure\": false, \"certificates\": [ { \"certificateFile\": \"C:\\\\x.pem\" } ]", StringComparison.Ordinal) },
+        { "сертификат с диска", Base.Replace("\"serverName\": \"fi.example.com\",", "\"serverName\": \"fi.example.com\", \"certificates\": [ { \"certificateFile\": \"C:\\\\x.pem\" } ]", StringComparison.Ordinal) },
         { "неизвестный выход", Base.Replace("\"protocol\": \"blackhole\"", "\"protocol\": \"dokodemo-door\"", StringComparison.Ordinal) },
         { "битый JSON", "{" },
         { "DNS из файла", Base.Replace("\"log\": {", "\"dns\": { \"servers\": [ \"file:///C:/x\" ] }, \"log\": {", StringComparison.Ordinal) },

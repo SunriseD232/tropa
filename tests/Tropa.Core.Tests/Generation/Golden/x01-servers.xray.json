@@ -132,7 +132,6 @@
         "tlsSettings": {
           "serverName": "cdn.example.com",
           "fingerprint": "chrome",
-          "allowInsecure": false,
           "alpn": [
             "h2",
             "http/1.1"
@@ -160,8 +159,7 @@
         },
         "tlsSettings": {
           "serverName": "fi.example.com",
-          "fingerprint": "chrome",
-          "allowInsecure": false
+          "fingerprint": "chrome"
         }
       }
     },

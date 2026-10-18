@@ -49,6 +49,28 @@ public sealed class SystemProxy(IProxySettingsStore store, ChangeJournal journal
     }
 
     public bool IsAppliedByUs => journal.Pending().Any(e => e.Kind == JournalKind);
+
+    /// <summary>Текущие настройки прокси Windows для диагностики.</summary>
+    public Tropa.Core.Diagnostics.ProxySnapshot Snapshot()
+    {
+        var current = store.Read();
+        return new Tropa.Core.Diagnostics.ProxySnapshot(current.GetValueOrDefault(Enable) == "1", current.GetValueOrDefault(Server),
+            current.GetValueOrDefault(AutoConfig), IsAppliedByUs);
+    }
+
+    /// <summary>
+    /// Выключает прокси, оставшийся от прошлого режима «Только браузеры» (указывает на наш порт, а в журнале
+    /// записи нет). В журнал не пишется: вернуть его при отключении значило бы снова сломать браузерам интернет.
+    /// Адрес и исключения не трогаем — выключаем только флаг. Возвращает адрес снятого прокси или null.
+    /// </summary>
+    public string? DisableStaleOwn(IEnumerable<int> ownPorts)
+    {
+        var snapshot = Snapshot();
+        if (!Tropa.Core.Diagnostics.Diagnosis.IsStaleOwnProxy(snapshot, ownPorts))
+            return null;
+        store.Write(new Dictionary<string, string?> { [Enable] = "0" });
+        return snapshot.Server;
+    }
 }
 
 /// <summary>Реальный реестр: HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings.</summary>

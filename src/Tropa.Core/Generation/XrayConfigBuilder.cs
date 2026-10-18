@@ -197,11 +197,13 @@ public static class XrayConfigBuilder
         var fingerprint = sec.Fingerprint ?? s.Dpi.Utls;
         if (sec.Type == SecurityType.Tls)
         {
+            // Поле allowInsecure в Xray 26.9 убрано (true не запускается). Такие серверы CorePlan отдаёт sing-box.
+            if (CorePlan.XrayRefuses(p))
+                throw new UnsupportedProfileException($"Сервер «{p.Name}» без проверки сертификата: Xray 26.9 такой режим не поддерживает, нужен sing-box.");
             var tls = new JsonObject
             {
                 ["serverName"] = sec.Sni ?? p.Address,
                 ["fingerprint"] = fingerprint,
-                ["allowInsecure"] = sec.AllowInsecure,
             };
             if (sec.Alpn is { } alpn)
                 tls["alpn"] = Arr(alpn.Split(','));

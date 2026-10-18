@@ -572,7 +572,7 @@ public sealed class TropaEngine : IAsyncDisposable
         // На каком ядре проверять: Auto — определить (сначала Xray, потом sing-box).
         CoreChoice KeyFor(Profile p)
         {
-            if (p.Protocol == Protocol.Hysteria2)
+            if (p.Protocol == Protocol.Hysteria2 || (CorePlan.XrayRefuses(p) && p.Transport.Type != TransportType.Xhttp))
                 return CoreChoice.SingBox;
             if (p.Transport.Type == TransportType.Xhttp)
                 return CoreChoice.Xray;
@@ -899,9 +899,11 @@ public sealed class TropaEngine : IAsyncDisposable
         RunDirectory = _paths.RunDirectory,
         Scrubber = Scrubber,
         Log = line => Log?.Invoke(this, line),
+        SystemProxy = _systemProxy.Snapshot(),
+        MixedPort = _mixedPort != 0 ? _mixedPort : State.Settings.Connection.SocksPort,
     };
 
-    /// <summary>Девять шагов диагностики; текущее подключение не трогается.</summary>
+    /// <summary>Десять шагов диагностики; текущее подключение не трогается.</summary>
     public Task<IReadOnlyList<StepResult>> RunDiagnosticsAsync(IProgress<StepResult>? progress, CancellationToken ct = default) =>
         DiagnosticsRunner.RunAsync(DiagnosticsInputNow(), progress, ct);
 
@@ -1017,6 +1019,11 @@ public sealed class TropaEngine : IAsyncDisposable
         var heldByOurOldCore = _servicePending && previousPort == _mixedPort;
         if (!heldByOurOldCore && !await WaitPortFreeAsync(_mixedPort, ct).ConfigureAwait(false))
             throw new InvalidOperationException($"Порт {_mixedPort} занят другой программой. Закройте её или выберите другой порт в настройках.");
+
+        // Прокси Windows, оставшийся от прошлого режима «Только браузеры», уводит браузеры и Discord во вход
+        // с паролем — они не открывают ничего. В режиме «Только браузеры» его к тому же записали бы как исходный.
+        if (!_systemProxyApplied && _systemProxy.DisableStaleOwn([_mixedPort, effective.Connection.SocksPort]) is { } stale)
+            Log?.Invoke(this, $"Выключен старый системный прокси Тропы ({stale}): он мешал браузерам и Discord.");
 
         // Через службу наборы правил читает она — из своего защищённого каталога.
         var service = ServiceAvailable ? _service : null;

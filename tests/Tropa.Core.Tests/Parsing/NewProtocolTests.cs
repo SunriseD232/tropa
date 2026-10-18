@@ -261,4 +261,18 @@ public sealed class PerServerCoreTests
         var ex = Assert.Throws<UnsupportedProfileException>(() => CorePlan.Make(new AppSettings(), [x], id => choices[id]));
         Assert.Contains("XHTTP", ex.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Insecure_tls_goes_to_sing_box_even_when_xray_is_chosen()
+    {
+        var a = P("vless://b831381d-6324-4d53-ad4f-8cda48b30811@a.example.com:443?security=tls&sni=a.example.com&allowInsecure=1#A");
+        var r = P("vless://b831381d-6324-4d53-ad4f-8cda48b30811@r.example.com:443?security=tls&sni=r.example.com#R");
+        var xray = new AppSettings { Cores = new CoreSettings { CoreChoice = CoreChoice.Xray } };
+        var plan = CorePlan.Make(xray, [a, r], _ => CoreChoice.Xray);
+        Assert.Equal([r.Id], plan.XrayProfiles.Select(p => p.Id));
+
+        var x = P("vless://b831381d-6324-4d53-ad4f-8cda48b30811@x.example.com:443?type=xhttp&path=%2Fx&security=tls&sni=x.example.com&allowInsecure=1#X");
+        var ex = Assert.Throws<UnsupportedProfileException>(() => CorePlan.Make(new AppSettings(), [x]));
+        Assert.Contains("allowInsecure", ex.Message, StringComparison.Ordinal);
+    }
 }

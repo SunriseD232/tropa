@@ -27,13 +27,19 @@ public sealed record DiagnosticsInput
     public required SecretScrubber Scrubber { get; init; }
     public required Action<string> Log { get; init; }
     public TesterOptions? TesterOptions { get; init; }
+
+    /// <summary>Настройки прокси Windows; null — не проверять (тесты без реестра).</summary>
+    public ProxySnapshot? SystemProxy { get; init; }
+
+    /// <summary>Порт входа Тропы (mixed), чтобы узнать в системном прокси свой старый.</summary>
+    public int MixedPort { get; init; }
 }
 
 /// <summary>Ответ провайдера и туннеля для одного домена (инструмент «Проверка домена»).</summary>
 public sealed record DomainCheck(string Domain, DnsAnswer? Provider, DnsAnswer? Tunnel, DnsVerdict Verdict, string? ProviderDns);
 
 /// <summary>
-/// Девять шагов диагностики (docs/07-testing-diagnostics.md, §2). Шаги независимы: сбой одного
+/// Десять шагов диагностики (docs/07-testing-diagnostics.md, §2). Шаги независимы: сбой одного
 /// не останавливает остальные. В сеть «напрямую» ходит временное ядро мимо туннеля, через сервер —
 /// временный вход через активный сервер; текущее подключение не трогается.
 /// </summary>
@@ -50,6 +56,7 @@ public static class DiagnosticsRunner
         ("udpTest", "UDP"),
         ("leaks", "Утечки"),
         ("otherVpn", "Другой VPN"),
+        ("sysProxy", "Системный прокси"),
     ];
 
     /// <summary>Домены для проверки подмены DNS: заблокированные в России сервисы.</summary>
@@ -121,6 +128,11 @@ public static class DiagnosticsRunner
         var foreignAdapters = Diagnosis.ForeignVpnAdapters(adapters);
         var foreignProcesses = LocalNetwork.ForeignProcesses(input.Locations);
         Set(Diagnosis.OtherVpn(foreignAdapters, foreignProcesses));
+
+        // 10: системный прокси Windows — не уводит ли он браузеры и Discord мимо туннеля.
+        Set(input.SystemProxy is { } proxy
+            ? Diagnosis.SystemProxy(proxy, effective.Connection.Mode, input.Connected, input.MixedPort)
+            : new StepResult("sysProxy", StepStatus.Skipped, "Системный прокси не проверялся"));
 
         // Рукопожатие не прошло, а рядом работает другой клиент обхода — почти всегда причина в нём:
         // v2rayN и подобные подменяют адрес соединения, и Reality уходит на настоящий сайт-маску.

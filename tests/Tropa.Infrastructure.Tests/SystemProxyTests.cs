@@ -33,6 +33,35 @@ public sealed class SystemProxyTests : IDisposable
     private string JournalPath => Path.Combine(_dir.FullName, "journal.json");
 
     [Fact]
+    public void Stale_proxy_to_own_port_is_disabled_without_journal()
+    {
+        var store = new FakeProxyStore();
+        store.Values["ProxyServer"] = "127.0.0.1:10880";
+        var proxy = new SystemProxy(store, new ChangeJournal(JournalPath));
+
+        Assert.Equal("127.0.0.1:10880", proxy.DisableStaleOwn([10880]));
+        Assert.Equal("0", store.Values["ProxyEnable"]);
+        Assert.Equal("127.0.0.1:10880", store.Values["ProxyServer"]);
+        Assert.False(proxy.IsAppliedByUs);
+        Assert.Null(proxy.DisableStaleOwn([10880]));
+    }
+
+    [Fact]
+    public void Foreign_or_own_journaled_proxy_is_left_alone()
+    {
+        var store = new FakeProxyStore();
+        store.Values["ProxyServer"] = "127.0.0.1:10808";
+        var proxy = new SystemProxy(store, new ChangeJournal(JournalPath));
+        Assert.Null(proxy.DisableStaleOwn([10880]));
+        Assert.Equal("1", store.Values["ProxyEnable"]);
+
+        proxy.Apply(10880, "", Now);
+        Assert.Null(proxy.DisableStaleOwn([10880]));
+        Assert.Equal("1", store.Values["ProxyEnable"]);
+        Assert.True(proxy.Snapshot().AppliedByUs);
+    }
+
+    [Fact]
     public void Apply_then_restore_returns_original_settings()
     {
         var store = new FakeProxyStore();

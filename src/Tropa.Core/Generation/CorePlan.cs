@@ -31,6 +31,16 @@ public sealed record CorePlan(IReadOnlyList<Profile> XrayProfiles)
             var choice = coreFor?.Invoke(p.Id) ?? CoreChoice.Auto;
             if (choice == CoreChoice.Auto)
                 choice = s.Cores.CoreChoice;
+            // В Xray 26.9 отключение проверки сертификата (allowInsecure) убрано — такой конфиг не запускается.
+            // Поэтому сервер с ним идёт в sing-box при любом выборе ядра (и найденном проверкой), как Hysteria2.
+            if (XrayRefuses(p))
+            {
+                if (p.Transport.Type == TransportType.Xhttp)
+                    throw new UnsupportedProfileException(
+                        $"Сервер «{p.Name}» использует XHTTP без проверки сертификата (allowInsecure): XHTTP есть только в Xray, а Xray 26.9 такой режим не поддерживает.");
+                continue;
+            }
+
             if (p.Transport.Type == TransportType.Xhttp)
             {
                 if (choice == CoreChoice.SingBox)
@@ -45,5 +55,12 @@ public sealed record CorePlan(IReadOnlyList<Profile> XrayProfiles)
         }
 
         return new CorePlan(viaXray);
+    }
+
+    /// <summary>Сервер, который Xray 26.9 не запустит: TLS без проверки сертификата.</summary>
+    public static bool XrayRefuses(Profile p)
+    {
+        ArgumentNullException.ThrowIfNull(p);
+        return p.Security.Type == SecurityType.Tls && p.Security.AllowInsecure;
     }
 }
