@@ -96,6 +96,24 @@ public sealed record DpiSettings
     public bool AllowInsecureWarn { get; init; } = true;
     public bool Mux { get; init; }
     public int MuxConc { get; init; } = 8;
+
+    /// <summary>
+    /// Полоса Hysteria2 по умолчанию (Мбит/с, к серверу и от сервера) для серверов, где она не задана.
+    /// Без полосы Hysteria2 на «узком» плече даёт ~10 Мбит/с вместо 150. В старом settings.json полей нет
+    /// и читается 0 — это значит «по умолчанию».
+    /// </summary>
+    public int Hy2UpMbps { get => _hy2Up > 0 ? _hy2Up : DefaultHy2UpMbps; init => _hy2Up = value; }
+
+    public int Hy2DownMbps { get => _hy2Down > 0 ? _hy2Down : DefaultHy2DownMbps; init => _hy2Down = value; }
+
+    public const int DefaultHy2UpMbps = 50;
+    public const int DefaultHy2DownMbps = 200;
+
+    private readonly int _hy2Up;
+    private readonly int _hy2Down;
+
+    /// <summary>Полоса, с которой ядро запустит сервер Hysteria2: своя у сервера или по умолчанию; 0 — без Brutal.</summary>
+    public (int Up, int Down) Hy2Bandwidth(Profile p) => (p.UpMbps ?? Hy2UpMbps, p.DownMbps ?? Hy2DownMbps);
 }
 
 public sealed record CoreSettings

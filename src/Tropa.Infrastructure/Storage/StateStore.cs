@@ -212,6 +212,8 @@ public sealed class StateStore(string directory)
                 Flow = sp.Profile.Flow,
                 VmessCipher = sp.Profile.VmessCipher,
                 SsMethod = sp.Profile.SsMethod,
+                UpMbps = sp.Profile.UpMbps,
+                DownMbps = sp.Profile.DownMbps,
                 Transport = sp.Profile.Transport,
                 Security = sp.Profile.Security,
                 ChainVia = sp.Profile.ChainVia,
@@ -273,6 +275,8 @@ public sealed class StateStore(string directory)
                     VmessCipher = p.VmessCipher,
                     SsMethod = p.SsMethod,
                     Obfs = secrets.Get(ObfsKey(p.Id)) is { } obfs ? new Secret(obfs) : null,
+                    UpMbps = p.UpMbps,
+                    DownMbps = p.DownMbps,
                     Transport = p.Transport,
                     Security = p.Security,
                     ChainVia = p.ChainVia,
@@ -329,6 +333,8 @@ internal sealed record StoredProfileDto
     public VlessFlow Flow { get; init; }
     public string VmessCipher { get; init; } = "auto";
     public string? SsMethod { get; init; }
+    public int? UpMbps { get; init; }
+    public int? DownMbps { get; init; }
     public TransportSettings Transport { get; init; } = TransportSettings.Tcp;
     public SecuritySettings Security { get; init; } = SecuritySettings.None;
     public Guid? ChainVia { get; init; }

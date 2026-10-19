@@ -107,6 +107,44 @@ public sealed class NewProtocolTests
     }
 
     [Fact]
+    public void Hysteria2_bandwidth_filled_automatically()
+    {
+        // Ссылка без полосы (как у владельца): ядро всё равно получает 50 / 200 — Brutal включён.
+        var plain = Ok("hysteria2://pw@85.159.231.149:443/?obfs=salamander&obfs-password=o&sni=www.bing.com&insecure=1#HY2");
+        Assert.Null(plain.UpMbps);
+        Assert.Equal((50, 200), new DpiSettings().Hy2Bandwidth(plain));
+        Assert.Equal((30, 100), new DpiSettings { Hy2UpMbps = 30, Hy2DownMbps = 100 }.Hy2Bandwidth(plain));
+
+        // Старый settings.json без полей читается как 0 — это «по умолчанию», а не «без Brutal».
+        Assert.Equal((50, 200), new DpiSettings { Hy2UpMbps = 0, Hy2DownMbps = 0 }.Hy2Bandwidth(plain));
+
+        // Своя полоса из ссылки (upmbps/downmbps, up/down, «100 mbps») и её возврат в ссылку.
+        var own = Ok("hysteria2://pw@1.2.3.4:443?upmbps=20&down=100%20mbps#hy");
+        Assert.Equal(20, own.UpMbps);
+        Assert.Equal(100, own.DownMbps);
+        var again = Ok(ShareLink.Build(own));
+        Assert.Equal((20, 100), (again.UpMbps!.Value, again.DownMbps!.Value));
+        Assert.DoesNotContain("mbps", ShareLink.Build(plain), StringComparison.Ordinal);
+
+        var bad = ShareLink.Parse("hysteria2://pw@1.2.3.4:443?upmbps=fast#hy");
+        Assert.True(bad.Success);
+        Assert.Null(bad.Profile!.UpMbps);
+        Assert.Contains(bad.Warnings, w => w.Contains("upmbps", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Hysteria2_bandwidth_survives_subscription_update()
+    {
+        var sub = Guid.NewGuid();
+        var link = "hysteria2://pw@1.2.3.4:443?sni=hy.example.com#hy";
+        var edited = Ok(link) with { SubscriptionId = sub, UpMbps = 30, DownMbps = 0 };
+        var r = SubscriptionMerger.Merge(sub, [new StoredProfile { Profile = edited }], [Ok(link)], DateTimeOffset.UtcNow);
+        var merged = Assert.Single(r.Profiles).Profile;
+        Assert.Equal(30, merged.UpMbps);
+        Assert.Equal(0, merged.DownMbps);
+    }
+
+    [Fact]
     public void Hysteria2_never_goes_to_xray()
     {
         var hy = Ok("hysteria2://pw@1.2.3.4:443#hy");

@@ -554,6 +554,14 @@ public static class SingBoxConfigBuilder
                 ob["password"] = p.Credential.Reveal();
                 if (p.Obfs is { } obfs)
                     ob["obfs"] = new JsonObject { ["type"] = "salamander", ["password"] = obfs.Reveal() };
+                // С полосой ядро включает Brutal: он не сбрасывает скорость на потерях трансграничного плеча.
+                // Без неё — BBR, и на том же канале выходит ~10 Мбит/с вместо ~150.
+                var (up, down) = ctx.S.Dpi.Hy2Bandwidth(p);
+                if (up > 0 && down > 0)
+                {
+                    ob["up_mbps"] = up;
+                    ob["down_mbps"] = down;
+                }
                 break;
         }
 

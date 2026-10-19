@@ -9,7 +9,7 @@ using Tropa.Core.Security;
 namespace Tropa.Core.Parsing;
 
 /// <summary>
-/// Разбор и сборка ссылок vless://, vmess://, trojan:// (docs/04-domain-model.md, §3).
+/// Разбор и сборка ссылок vless://, vmess://, trojan://, ss://, hysteria2:// (docs/04-domain-model.md, §3).
 /// Разбор не проверяет совместимость параметров между собой — это делает CompatRules,
 /// чтобы профиль из подписки импортировался с пометкой, а не терялся молча.
 /// </summary>
@@ -168,6 +168,10 @@ public static class ShareLink
             Port = port,
             Credential = new Secret(Validation.Password(url.UserInfo)),
             Obfs = obfs,
+            // Стандартного поля полосы у hysteria2:// нет; NekoBox и Тропа пишут upmbps/downmbps.
+            // Нет в ссылке — null: ядро возьмёт полосу по умолчанию из настроек.
+            UpMbps = Mbps(q, warnings, "upmbps", "up"),
+            DownMbps = Mbps(q, warnings, "downmbps", "down"),
             Security = new SecuritySettings
             {
                 Type = SecurityType.Tls,
@@ -176,6 +180,31 @@ public static class ShareLink
                 AllowInsecure = insecure,
             },
         };
+    }
+
+    /// <summary>Наибольшая полоса Hysteria2, которую Тропа примет из ссылки или поля, Мбит/с.</summary>
+    public const int MaxMbps = 10_000;
+
+    /// <summary>«50», «50 mbps», «100Mbps» → 50/100; мусор — предупреждение и null.</summary>
+    private static int? Mbps(IReadOnlyDictionary<string, string> q, List<string> warnings, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (q.GetValueOrDefault(key) is not { Length: > 0 } raw)
+                continue;
+            var digits = raw.Trim();
+            var n = 0;
+            while (n < digits.Length && char.IsAsciiDigit(digits[n]))
+                n++;
+            var unit = digits[n..].Trim();
+            if (n > 0 && n <= 6 && (unit.Length == 0 || unit.Equals("mbps", StringComparison.OrdinalIgnoreCase))
+                && int.Parse(digits[..n], System.Globalization.CultureInfo.InvariantCulture) is var v and <= MaxMbps)
+                return v;
+            warnings.Add($"Полоса Hysteria2 «{key}» не распознана, используется значение из настроек.");
+            return null;
+        }
+
+        return null;
     }
 
     // ---------------- Trojan ----------------
@@ -401,6 +430,11 @@ public static class ShareLink
 
         if (p.Security.AllowInsecure)
             q.Add(new("insecure", "1"));
+        // Своя полоса сервера уходит в ссылку (и в подписку для друзей); «по умолчанию» — нет.
+        if (p.UpMbps is { } up)
+            q.Add(new("upmbps", up.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        if (p.DownMbps is { } down)
+            q.Add(new("downmbps", down.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         return q;
     }
 

@@ -111,6 +111,9 @@
 | allowInsecureWarn | bool | true |
 | mux | bool | false |
 | muxConc | число | 8 |
+| hy2Bandwidth (`Hy2UpMbps` / `Hy2DownMbps`) | число, Мбит/с | 50 / 200 |
+
+Скорость Hysteria2 по умолчанию — для серверов, где своя не задана (ADR-049). В окне сервера Hysteria2 поля «Отдача» и «Загрузка» заполнены сразу (своя скорость сервера или эта), 0 — без Brutal.
 
 ### Ядра и обновления
 Таблица версий (из подписанного манифеста), `coreChoice` (auto/singbox/xray) с предупреждением о последствиях, таблица возможностей, гео-базы (`geoUpdate`, `geoViaProxy`), обновление Тропы (`appChannel`, `appCheck`).

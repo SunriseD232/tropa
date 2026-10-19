@@ -12,9 +12,23 @@ public sealed class SubscriptionParserTests
         "",
         "# комментарий",
         "trojan://secret@fi.example.com:443?sni=fi.example.com#Helsinki",
-        "ss://YWVzLTI1Ni1nY206cGFzcw@1.2.3.4:8388#ss",
+        "tuic://uuid:pass@1.2.3.4:443#tuic",
         "vless://broken@a.example.com:443",
         VmessWs);
+
+    [Fact]
+    public void Hysteria2_and_ss_links_are_imported_from_paste()
+    {
+        // Вставка владельца: hysteria2-ссылка с хвостом от разметки и ss рядом — обе должны дойти до разбора.
+        var r = SubscriptionParser.Parse(
+            "hysteria2://pw@85.159.231.149:443/?obfs=salamander&obfs-password=o&sni=www.bing.com&insecure=1#HY2-RU-PL (→ www.bing.com&insecure=1)\n"
+            + "hy2://pw@1.2.3.4:443#short\n"
+            + "ss://aes-128-gcm:pw@1.2.3.4:8388#ss");
+        Assert.Equal(0, r.SkippedUnsupported);
+        Assert.Empty(r.Errors);
+        Assert.Equal([Protocol.Hysteria2, Protocol.Hysteria2, Protocol.Shadowsocks], r.Profiles.Select(p => p.Profile.Protocol));
+        Assert.Equal("85.159.231.149", r.Profiles[0].Profile.Address);
+    }
 
     [Fact]
     public void Plain_link_list()

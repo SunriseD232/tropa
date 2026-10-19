@@ -78,6 +78,19 @@
               <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Classes="f" Text="Пароль маскировки (obfs, необязательно)" /><Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="security" /></StackPanel>
               <TextBox Text="{Binding ObfsPassword}" PasswordChar="•" RevealPassword="{Binding ShowCredential}" FontFamily="{StaticResource Mono}" />
             </StackPanel>
+            <StackPanel Classes="field" IsVisible="{Binding IsHysteria2}">
+              <Grid ColumnDefinitions="*,*">
+                <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                  <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Classes="f" Text="Отдача, Мбит/с" /><Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="hy2Bandwidth" /></StackPanel>
+                  <TextBox Text="{Binding UpMbps}" FontFamily="{StaticResource Mono}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Classes="f" Text="Загрузка, Мбит/с" />
+                  <TextBox Text="{Binding DownMbps}" FontFamily="{StaticResource Mono}" />
+                </StackPanel>
+              </Grid>
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding BandwidthHint}" />
+            </StackPanel>
             <StackPanel Classes="field" IsVisible="{Binding HasTransport}">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <CheckBox Content="XTLS Vision (flow)" IsChecked="{Binding Vision}" IsEnabled="{Binding VisionEnabled}" />

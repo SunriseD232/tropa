@@ -99,6 +99,8 @@
         "type": "salamander",
         "password": "obfspw"
       },
+      "up_mbps": 50,
+      "down_mbps": 200,
       "tls": {
         "enabled": true,
         "server_name": "hy.example.com",

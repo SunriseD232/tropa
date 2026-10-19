@@ -82,10 +82,11 @@ public static class SubscriptionParser
         return new(format, profiles, errors, skipped);
     }
 
+    /// <summary>Схемы, которые понимает <see cref="ShareLink.Parse"/>: остальные строки считаются неподдерживаемыми.</summary>
+    private static readonly string[] SupportedSchemes = ["vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "hy2://"];
+
     private static bool IsSupportedScheme(string line) =>
-        line.StartsWith("vless://", StringComparison.OrdinalIgnoreCase)
-        || line.StartsWith("vmess://", StringComparison.OrdinalIgnoreCase)
-        || line.StartsWith("trojan://", StringComparison.OrdinalIgnoreCase);
+        SupportedSchemes.Any(s => line.StartsWith(s, StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>

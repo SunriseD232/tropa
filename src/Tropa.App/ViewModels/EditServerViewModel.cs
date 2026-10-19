@@ -95,6 +95,13 @@ internal sealed partial class EditServerViewModel : ObservableObject
     public IReadOnlyList<string> CoreOptions { get; } = ["Автоматически (сначала Xray, потом sing-box)", "Всегда sing-box", "Всегда Xray"];
     private CoreChoice? _detectedCore;
     [ObservableProperty] public partial string ObfsPassword { get; set; } = "";
+    /// <summary>Полоса Hysteria2, Мбит/с. Заполняется сразу (своя у сервера или из настроек); пусто — по умолчанию.</summary>
+    [ObservableProperty] public partial string UpMbps { get; set; } = "";
+    [ObservableProperty] public partial string DownMbps { get; set; } = "";
+    public string BandwidthHint => $"С полосой Hysteria2 включает Brutal и не теряет скорость на потерях. "
+        + $"По умолчанию {Dpi.Hy2UpMbps} / {Dpi.Hy2DownMbps} (меняется в «Настройки → Соединение»). "
+        + "Ставьте чуть ниже настоящей скорости своего интернета; 0 — выключить Brutal.";
+    private DpiSettings Dpi => _engine.State.Settings.Dpi;
     [ObservableProperty] public partial string Link { get; set; } = "";
     [ObservableProperty] public partial string? Error { get; set; }
     [ObservableProperty] public partial string CoreNote { get; set; } = "";
@@ -144,7 +151,9 @@ internal sealed partial class EditServerViewModel : ObservableObject
         _id = p?.Id ?? Guid.NewGuid();
         _subscriptionId = p?.SubscriptionId;
         SubscriptionNote = p?.SubscriptionId is null ? null
-            : "Это сервер из подписки: при её обновлении параметры вернутся к присланным провайдером. Сохраняется только цепочка.";
+            : p.Protocol == Core.Model.Protocol.Hysteria2
+                ? "Это сервер из подписки: при её обновлении параметры вернутся к присланным провайдером. Сохраняются цепочка и скорость."
+                : "Это сервер из подписки: при её обновлении параметры вернутся к присланным провайдером. Сохраняется только цепочка.";
         Name = p?.Name ?? "";
         Address = p?.Address ?? "";
         Port = (p?.Port ?? 443).ToString(CultureInfo.InvariantCulture);
@@ -167,6 +176,10 @@ internal sealed partial class EditServerViewModel : ObservableObject
         CoreIndex = stored?.Core switch { CoreChoice.SingBox => 1, CoreChoice.Xray => 2, _ => 0 };
         _detectedCore = stored?.DetectedCore;
         ObfsPassword = p?.Obfs?.Reveal() ?? "";
+        var (up, down) = Dpi.Hy2Bandwidth(p ?? ProbeProfile());
+        UpMbps = up.ToString(CultureInfo.InvariantCulture);
+        DownMbps = down.ToString(CultureInfo.InvariantCulture);
+        OnPropertyChanged(nameof(BandwidthHint));
 
         Check(Protocols, p?.Protocol switch
         {
@@ -356,6 +369,16 @@ internal sealed partial class EditServerViewModel : ObservableObject
                 q.Add("obfs=salamander&obfs-password=" + Uri.EscapeDataString(ObfsPassword.Trim()));
             if (AllowInsecure)
                 q.Add("insecure=1");
+            // Совпадает с настройками — не закрепляем: сервер пойдёт за значением по умолчанию.
+            foreach (var (key, text, fallback) in new[] { ("upmbps", UpMbps, Dpi.Hy2UpMbps), ("downmbps", DownMbps, Dpi.Hy2DownMbps) })
+            {
+                var t = text.Trim();
+                if (t.Length == 0 || t == fallback.ToString(CultureInfo.InvariantCulture))
+                    continue;
+                if (!int.TryParse(t, NumberStyles.None, CultureInfo.InvariantCulture, out var mbps) || mbps > ShareLink.MaxMbps)
+                    return (null, $"Скорость Hysteria2 — целое число Мбит/с от 0 до {ShareLink.MaxMbps}.");
+                q.Add($"{key}={mbps}");
+            }
             link = $"hysteria2://{Uri.EscapeDataString(Credential.Trim())}@{hostPart}:{Port.Trim()}?{string.Join('&', q)}#{Uri.EscapeDataString(Name)}";
         }
         else if (Protocol == "vmess")

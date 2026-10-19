@@ -90,6 +90,15 @@ public sealed record Profile
     /// <summary>Пароль маскировки Salamander для Hysteria2; null — без маскировки.</summary>
     public Secret? Obfs { get; init; }
 
+    /// <summary>
+    /// Полоса Hysteria2 «к серверу», Мбит/с: с ней ядро включает Brutal, без неё на потерях скорость падает
+    /// в разы. null — значение по умолчанию из настроек (<see cref="DpiSettings.Hy2UpMbps"/>), 0 — без Brutal.
+    /// </summary>
+    public int? UpMbps { get; init; }
+
+    /// <summary>Полоса Hysteria2 «от сервера», Мбит/с; null — из настроек, 0 — без Brutal.</summary>
+    public int? DownMbps { get; init; }
+
     public TransportSettings Transport { get; init; } = TransportSettings.Tcp;
 
     public SecuritySettings Security { get; init; } = SecuritySettings.None;

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Tropa.Core.Compatibility;
 using Tropa.Core.Model;
+using Tropa.Core.Parsing;
 using Tropa.Infrastructure;
 using Tropa.Infrastructure.SystemIntegration;
 using V = Tropa.Core.Model.SettingsValidation;
@@ -253,6 +254,11 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new ToggleRow("Mux (несколько соединений в одном)", "mux", s => s.Dpi.Mux, (s, v) => s with { Dpi = s.Dpi with { Mux = v } }),
         TextRow.Number("Соединений в одном Mux", "muxConc", s => s.Dpi.MuxConc, (s, v) => s with { Dpi = s.Dpi with { MuxConc = v } },
             v => v is >= 1 and <= 128 ? null : "От 1 до 128."),
+        TextRow.Number("Hysteria2: отдача по умолчанию, Мбит/с", "hy2Bandwidth", s => s.Dpi.Hy2UpMbps,
+            (s, v) => s with { Dpi = s.Dpi with { Hy2UpMbps = v } }, v => v is >= 1 and <= ShareLink.MaxMbps ? null : $"От 1 до {ShareLink.MaxMbps}.",
+            hint: "Для серверов Hysteria2, где скорость не задана своя."),
+        TextRow.Number("Hysteria2: загрузка по умолчанию, Мбит/с", "hy2Bandwidth", s => s.Dpi.Hy2DownMbps,
+            (s, v) => s with { Dpi = s.Dpi with { Hy2DownMbps = v } }, v => v is >= 1 and <= ShareLink.MaxMbps ? null : $"От 1 до {ShareLink.MaxMbps}."),
     ]);
 
     private SettingsSection CoresSection() => new("cores", "Ядра и обновления", null,

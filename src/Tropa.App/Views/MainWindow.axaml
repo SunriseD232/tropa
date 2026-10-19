@@ -139,7 +139,7 @@
               <Button Classes="info" Command="{Binding Import.ShowInfoCommand}" CommandParameter="importMethods" ToolTip.Tip="Что можно вставить" />
             </StackPanel>
           </DockPanel>
-          <TextBlock Classes="muted" Text="Вставьте адрес подписки (https://…) или одну или несколько ссылок vless://, vmess://, trojan://. Ctrl+V в любом месте окна тоже работает." />
+          <TextBlock Classes="muted" Text="Вставьте адрес подписки (https://…) или одну или несколько ссылок vless://, vmess://, trojan://, ss://, hysteria2://. Ctrl+V в любом месте окна тоже работает." />
           <TextBox Text="{Binding Import.Text}" AcceptsReturn="True" TextWrapping="Wrap" Height="140" FontFamily="{StaticResource Mono}" PlaceholderText="https://… или vless://…" />
           <StackPanel Spacing="6" IsVisible="{Binding Import.LooksLikeSubscription}">
             <StackPanel Orientation="Horizontal" Spacing="8">

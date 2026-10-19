@@ -427,7 +427,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
             .Concat(parsed.Profiles.SelectMany(p => p.Warnings.Select(w => $"{p.Profile.Name}: {w}")))
             .ToList();
         if (parsed.Profiles.Count == 0 && parsed.Errors.Count == 0)
-            messages.Add("Не найдено ни одной ссылки vless://, vmess:// или trojan://.");
+            messages.Add("Не найдено ни одной ссылки vless://, vmess://, trojan://, ss:// или hysteria2://.");
         return new ImportReport(fresh.Count, 0, parsed.Errors.Count, parsed.SkippedUnsupported, messages);
     }
 

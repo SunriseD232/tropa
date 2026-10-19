@@ -35,7 +35,15 @@ public static class SubscriptionMerger
 
             if (byKey.TryGetValue(key, out var old))
             {
-                var merged = profile with { Id = old.Profile.Id, SubscriptionId = subscriptionId, ChainVia = old.Profile.ChainVia };
+                // Полосу Hysteria2, заданную пользователем, ссылка без полосы не сбрасывает.
+                var merged = profile with
+                {
+                    Id = old.Profile.Id,
+                    SubscriptionId = subscriptionId,
+                    ChainVia = old.Profile.ChainVia,
+                    UpMbps = profile.UpMbps ?? old.Profile.UpMbps,
+                    DownMbps = profile.DownMbps ?? old.Profile.DownMbps,
+                };
                 if (merged != old.Profile)
                     updated++;
                 result.Add(old with { Profile = merged, RemovedByProvider = null, Order = order++ });
