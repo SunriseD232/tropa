@@ -168,6 +168,19 @@ internal sealed partial class SettingsViewModel : ObservableObject
                 App.ApplyTheme(theme);
                 return s with { General = s.General with { Theme = theme } };
             }),
+        new ChoiceRow("Вид окна", "layout", Opts("Тропа", "Как в v2rayN"),
+            s => s.General.Layout == WindowLayout.V2rayN ? 1 : 0,
+            (s, i) => s with { General = s.General with { Layout = i == 1 ? WindowLayout.V2rayN : WindowLayout.Tropa } },
+            hint: "Меняется сразу. Серверы, настройки и подключение те же — другое только расположение."),
+        new ActionRow("Права администратора", "runAsAdmin",
+            Services.Elevation.IsAdmin
+                ? "Тропа запущена от имени администратора. Чтобы вернуться к обычным правам, закройте её (Выход в трее) и запустите снова."
+                : "Тропа запущена с правами обычного пользователя — так и рекомендуется: всё системное делает служба.",
+            ("Перезапустить от имени администратора", new AsyncRelayCommand(async () =>
+            {
+                if (await App.RestartElevatedAsync() is { } reason)
+                    Report(reason, error: true);
+            }))),
         new ActionRow("Резервная копия настроек и правил", "backup", "Серверы, подписки и ключи в файл не попадают — им можно поделиться.",
             ("Сохранить в файл…", new RelayCommand(() => ExportRequested?.Invoke(this, EventArgs.Empty))),
             ("Загрузить из файла…", new RelayCommand(() => ImportRequested?.Invoke(this, EventArgs.Empty)))),
@@ -175,17 +188,28 @@ internal sealed partial class SettingsViewModel : ObservableObject
 
     private static SettingsSection Subscriptions() => new("subs", "Подписки", "Значения для подписок. Обновить вручную можно на экране «Серверы».",
     [
-        new ChoiceRow("Обновлять подписки", "subUpdate", Opts("Каждые 15 минут", "Каждые 6 часов", "Каждые 12 часов", "Раз в сутки", "Только вручную"),
-            s => s.Subscriptions.UpdateMinutes > 0 ? 0 : s.Subscriptions.UpdateHours switch { 6 => 1, 12 => 2, 24 => 3, _ => 4 },
+        new ChoiceRow("Обновлять подписки", "subUpdate", Opts("Каждые 15 минут", "Каждые 6 часов", "Каждые 12 часов", "Раз в сутки", "Только вручную", "Свой интервал"),
+            s => s.Subscriptions.CustomInterval ? 5
+                : s.Subscriptions.UpdateMinutes > 0 ? 0 : s.Subscriptions.UpdateHours switch { 6 => 1, 12 => 2, 24 => 3, _ => 4 },
             (s, i) => s with
             {
-                Subscriptions = s.Subscriptions with
-                {
-                    UpdateMinutes = i == 0 ? 15 : 0,
-                    UpdateHours = i switch { 0 => s.Subscriptions.UpdateHours, 1 => 6, 2 => 12, 3 => 24, _ => 0 },
-                },
+                Subscriptions = i == 5
+                    // «Свой интервал»: оставляем уже свой, иначе начинаем с часа — дальше число в поле ниже.
+                    ? s.Subscriptions.CustomInterval ? s.Subscriptions : s.Subscriptions with { UpdateMinutes = 60 }
+                    : s.Subscriptions with
+                    {
+                        UpdateMinutes = i == 0 ? 15 : 0,
+                        UpdateHours = i switch { 0 => s.Subscriptions.UpdateHours, 1 => 6, 2 => 12, 3 => 24, _ => 0 },
+                    },
             },
             hint: "Подписку от администратора Тропа проверяет так часто, как он задал (обычно раз в 5 минут), и сразу после подключения."),
+        TextRow.Number("Свой интервал, минут", "subInterval",
+            s => s.Subscriptions.Interval is { } every ? (int)every.TotalMinutes : 0,
+            (s, v) => s with { Subscriptions = s.Subscriptions with { UpdateMinutes = v } },
+            v => v is >= SubscriptionDefaults.MinCustomMinutes and <= SubscriptionDefaults.MaxCustomMinutes
+                ? null
+                : $"От {SubscriptionDefaults.MinCustomMinutes} до {SubscriptionDefaults.MaxCustomMinutes} (неделя).",
+            compatKey: "subInterval", hint: "Например, 30 — раз в полчаса, 180 — раз в 3 часа."),
         new ToggleRow("Обновлять через подключение", "subViaProxy", s => s.Subscriptions.SubViaProxy, (s, v) => s with { Subscriptions = s.Subscriptions with { SubViaProxy = v } }),
         new ChoiceRow("Представляться провайдеру как", "subUA", Opts("Тропа", "v2rayN", "sing-box", "Свой"),
             s => (int)s.Subscriptions.SubUA, (s, i) => s with { Subscriptions = s.Subscriptions with { SubUA = (UserAgentMode)i } }),
@@ -254,6 +278,9 @@ internal sealed partial class SettingsViewModel : ObservableObject
             (s, i) => s with { Dpi = s.Dpi with { Utls = i switch { 1 => "firefox", 2 => "edge", 3 => "safari", 4 => "random", _ => "chrome" } } }),
         new ToggleRow("Предупреждать о серверах без проверки сертификата", "allowInsecureWarn", s => s.Dpi.AllowInsecureWarn,
             (s, v) => s with { Dpi = s.Dpi with { AllowInsecureWarn = v } }),
+        new ToggleRow("Фрагментация соединения с сервером", "serverFragment", s => s.Dpi.ServerFragment,
+            (s, v) => s with { Dpi = s.Dpi with { ServerFragment = v } }, compatKey: "serverFragment",
+            hint: "Как «Включить фрагментацию» в v2rayN. Режется только подключение к VPN-серверу, сайты напрямую не затрагиваются."),
         new ToggleRow("Mux (несколько соединений в одном)", "mux", s => s.Dpi.Mux, (s, v) => s with { Dpi = s.Dpi with { Mux = v } }),
         TextRow.Number("Соединений в одном Mux", "muxConc", s => s.Dpi.MuxConc, (s, v) => s with { Dpi = s.Dpi with { MuxConc = v } },
             v => v is >= 1 and <= 128 ? null : "От 1 до 128."),

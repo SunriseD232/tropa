@@ -224,6 +224,29 @@ public static class XrayConfigBuilder
             };
         }
 
+        // Фрагментация соединения до сервера (ADR-055): «finalmask» Xray режет TCP с TLS-рукопожатием.
+        // Значения — как по умолчанию у v2rayN. length/delay — для старых Xray, lengths/delays — для новых:
+        // Xray молча пропускает незнакомые поля, поэтому пишем оба вида.
+        if (s.Dpi.ServerFragment && sec.Type != SecurityType.None)
+        {
+            stream["finalmask"] = new JsonObject
+            {
+                ["tcp"] = new JsonArray((JsonNode)new JsonObject
+                {
+                    ["type"] = "fragment",
+                    ["settings"] = new JsonObject
+                    {
+                        ["packets"] = "tlshello",
+                        ["lengths"] = Arr(["50-100"]),
+                        ["delays"] = Arr(["10-20"]),
+                        ["maxSplit"] = 0,
+                        ["length"] = "50-100",
+                        ["delay"] = "10-20",
+                    },
+                }),
+            };
+        }
+
         return stream;
     }
 

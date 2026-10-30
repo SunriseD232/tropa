@@ -105,6 +105,7 @@ public sealed class SingBoxGoldenTests
             Trojan, profiles: [Trojan, Reality]),
 
         ["05-chain-relay"] = () => Input(Defaults, Reality with { ChainVia = Relay.Id }, profiles: [Reality, Relay]),
+        ["16-server-fragment"] = () => Input(Defaults with { Dpi = Defaults.Dpi with { ServerFragment = true } }, Reality with { ChainVia = Relay.Id }, profiles: [Reality, Relay]),
 
 
         ["07-udp-direct-no-quic-block"] = () => Input(

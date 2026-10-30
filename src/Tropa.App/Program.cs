@@ -22,14 +22,25 @@ internal static class Program
         if (Environment.GetEnvironmentVariable("TROPA_DATA_DIR") is { Length: > 0 } dataDir)
             mutexName += "." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(dataDir)))[..12];
 #endif
-        using var single = new Mutex(initiallyOwned: true, mutexName, out var createdNew);
+        var single = new Mutex(initiallyOwned: true, mutexName, out var createdNew);
+        // Перезапуск от имени администратора (ADR-052): старый экземпляр ещё закрывается — ждём его до 20 с.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        while (!createdNew && args.Contains(Services.Elevation.WaitInstanceArgument, StringComparer.Ordinal) && DateTime.UtcNow < deadline)
+        {
+            single.Dispose();
+            Thread.Sleep(300);
+            single = new Mutex(initiallyOwned: true, mutexName, out createdNew);
+        }
+
+        using var _ = single;
         if (!createdNew)
             return 0;
 
         App.StartMinimized = args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
         // Перезапуск установщиком после обновления из Тропы (installer/tropa.iss, RelaunchArgs).
         App.AfterUpdate = args.Contains("--after-update", StringComparer.OrdinalIgnoreCase);
-        App.ReconnectAfterUpdate = App.AfterUpdate && args.Contains("--reconnect", StringComparer.OrdinalIgnoreCase);
+        App.ReconnectAfterUpdate = (App.AfterUpdate && args.Contains("--reconnect", StringComparer.OrdinalIgnoreCase))
+            || args.Contains(Services.Elevation.ReconnectArgument, StringComparer.Ordinal);
         App.FromAutostart = args.Contains(Infrastructure.SystemIntegration.Autostart.Argument, StringComparer.OrdinalIgnoreCase);
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }

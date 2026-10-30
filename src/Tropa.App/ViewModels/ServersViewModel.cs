@@ -5,7 +5,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Tropa.App.Services;
 using Tropa.Core.Compatibility;
+using Tropa.Core.Generation;
 using Tropa.Core.Model;
+using Tropa.Core.Parsing;
 using Tropa.Core.Testing;
 using Tropa.Infrastructure;
 using Tropa.Infrastructure.Testing;
@@ -42,6 +44,36 @@ internal sealed partial class GroupTab(string title, Guid? subscriptionId, bool 
     public partial bool IsSelected { get; set; }
 }
 
+/// <summary>Стрелка сортировки у заголовка колонки: « ↑», « ↓» или "".</summary>
+internal sealed class SortMarks : ObservableObject
+{
+    private static readonly string[] Columns = ["type", "name", "address", "port", "network", "tls", "sub", "delay", "speed", "country", "status"];
+
+    private string? _column;
+    private bool _descending;
+
+    public string Type => Mark("type");
+    public string Name => Mark("name");
+    public string Address => Mark("address");
+    public string Port => Mark("port");
+    public string Network => Mark("network");
+    public string Tls => Mark("tls");
+    public string Sub => Mark("sub");
+    public string Delay => Mark("delay");
+    public string Speed => Mark("speed");
+    public string Country => Mark("country");
+    public string Status => Mark("status");
+
+    private string Mark(string column) => column == _column ? (_descending ? " ↓" : " ↑") : "";
+
+    public void Set(string? column, bool descending)
+    {
+        (_column, _descending) = (column, descending);
+        foreach (var c in Columns)
+            OnPropertyChanged(char.ToUpperInvariant(c[0]) + c[1..]);
+    }
+}
+
 internal static class CoreTexts
 {
     public static string Name(CoreChoice c) => c switch { CoreChoice.Xray => "Xray", CoreChoice.SingBox => "sing-box", _ => "авто" };
@@ -72,6 +104,34 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
     public bool HasFlag => Flag is not null;
     public string Protocol => Format.Protocol(Profile);
     public string Transport => Format.Transport(Profile);
+
+    // Отдельные колонки для вида «как в v2rayN» (ADR-051).
+    public string Address => Profile.Address;
+    public int Port => Profile.Port;
+
+    public string Network => Profile.Transport.Type switch
+    {
+        TransportType.Tcp => "tcp",
+        TransportType.Ws => "ws",
+        TransportType.Grpc => "grpc",
+        TransportType.HttpUpgrade => "httpupgrade",
+        _ => "xhttp",
+    };
+
+    public string Tls => Profile.Security.Type switch
+    {
+        SecurityType.Reality => "reality",
+        SecurityType.Tls => "tls",
+        _ => "",
+    };
+
+    /// <summary>Название подписки сервера; «Мои» — добавленные вручную.</summary>
+    public string SubscriptionName { get; init; } = "";
+
+    /// <summary>Для сортировки: числа последней проверки (null — не проверялся или не ответил).</summary>
+    public long? DelayMs { get; private set; }
+
+    public double? SpeedMbps { get; private set; }
 
     /// <summary>Ядро сервера: выбранное пользователем или найденное проверкой.</summary>
     public string CoreLabel { get; init; } = "";
@@ -124,6 +184,8 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
         CountryTip = r.ExitCountry is { } code
             ? $"Выход: {new Tropa.Core.Diagnostics.ExitRegion(code, r.At).Name}. Проверено {r.At.ToLocalTime():dd.MM HH:mm}; при следующей проверке может быть другой, если сервер переключает выход."
             : "Страну выхода узнать не удалось: сервер не ответил или проверка страны выключена в настройках";
+        DelayMs = r.DelayMs;
+        SpeedMbps = r.Frozen ? 0 : r.SpeedMbps;
         Delay = r.DelayMs is { } ms ? $"{ms} мс" : "—";
         Speed = r.Frozen ? "замерзает" : r.SpeedMbps is { } sp ? sp.ToString("0.#", Ru) + " Мбит/с" : "—";
         Tcp = r.TcpMs is { } tcp ? $"{tcp} мс" : Profile.ChainVia is null ? "нет ответа" : "через цепочку";
@@ -234,7 +296,8 @@ internal sealed partial class ServersViewModel : ObservableObject
         var s = _engine.State;
         var tab = CurrentTab;
         var selectedId = Selected?.Id;
-        Items.Clear();
+        var subNames = s.Subscriptions.ToDictionary(x => x.Id, x => x.Name);
+        var rows = new List<ServerItemViewModel>();
         foreach (var sp in s.Profiles.Where(p => !p.Hidden).OrderBy(p => p.Order))
         {
             if (tab is { All: false } && (tab.Manual ? sp.Profile.SubscriptionId is not null : sp.Profile.SubscriptionId != tab.SubscriptionId))
@@ -244,6 +307,7 @@ internal sealed partial class ServersViewModel : ObservableObject
                 IsActive = sp.Profile.Id == s.ActiveProfileId,
                 Removed = sp.RemovedByProvider is not null,
                 CoreLabel = CoreText(sp),
+                SubscriptionName = sp.Profile.SubscriptionId is { } subId ? subNames.GetValueOrDefault(subId, "") : "Мои",
             };
             if (ProfileCompat.Issues(sp.Profile) is { Count: > 0 } issues)
                 (item.Status, item.StatusKind, item.Explanation) = ("Несовместимые параметры", "bad", issues[0]);
@@ -256,10 +320,96 @@ internal sealed partial class ServersViewModel : ObservableObject
 
             if (item.IsActive && string.IsNullOrEmpty(item.Status))
                 (item.Status, item.StatusKind) = ("Выбран", "ok");
-            Items.Add(item);
+            if (Matches(item, Filter))
+                rows.Add(item);
         }
 
+        Items.Clear();
+        foreach (var item in Sorted(rows))
+            Items.Add(item);
         Selected = Items.FirstOrDefault(i => i.Id == selectedId) ?? Items.FirstOrDefault(i => i.IsActive) ?? Items.FirstOrDefault();
+    }
+
+    /// <summary>Поиск по имени, адресу, протоколу, транспорту и стране. Пусто — все серверы вкладки.</summary>
+    [ObservableProperty]
+    public partial string? Filter { get; set; }
+
+    partial void OnFilterChanged(string? value) => RebuildItems();
+
+    /// <summary>Колонка сортировки показа (type, name, address, port, network, tls, sub, delay, speed, country, status); null — свой порядок.</summary>
+    [ObservableProperty]
+    public partial string? SortColumn { get; private set; }
+
+    [ObservableProperty]
+    public partial bool SortDescending { get; private set; }
+
+    /// <summary>Стрелки у заголовков колонок: Marks.Delay → « ↑», « ↓» или "".</summary>
+    public SortMarks Marks { get; } = new();
+
+    /// <summary>Щелчок по заголовку: по возрастанию → по убыванию → свой порядок. Сохранённый порядок не меняется.</summary>
+    [RelayCommand]
+    private void SortBy(string column)
+    {
+        if (SortColumn != column)
+            (SortColumn, SortDescending) = (column, false);
+        else if (!SortDescending)
+            SortDescending = true;
+        else
+            (SortColumn, SortDescending) = (null, false);
+        Marks.Set(SortColumn, SortDescending);
+        RebuildItems();
+    }
+
+    /// <summary>Вид «Тропа» без поиска и сортировки: показ возвращается к своему порядку и всем серверам вкладки.</summary>
+    public void ResetView()
+    {
+        (SortColumn, SortDescending) = (null, false);
+        Marks.Set(null, false);
+        if (Filter is null)
+            RebuildItems();
+        else
+            Filter = null;
+    }
+
+    private static bool Matches(ServerItemViewModel item, string? filter)
+    {
+        if (string.IsNullOrWhiteSpace(filter))
+            return true;
+        var f = filter.Trim();
+        return item.Name.Contains(f, StringComparison.OrdinalIgnoreCase)
+            || item.Address.Contains(f, StringComparison.OrdinalIgnoreCase)
+            || item.Protocol.Contains(f, StringComparison.OrdinalIgnoreCase)
+            || item.Transport.Contains(f, StringComparison.OrdinalIgnoreCase)
+            || item.SubscriptionName.Contains(f, StringComparison.OrdinalIgnoreCase)
+            || item.Country.Equals(f, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private IEnumerable<ServerItemViewModel> Sorted(List<ServerItemViewModel> rows)
+    {
+        if (SortColumn is null)
+            return rows;
+        var ru = StringComparer.Create(CultureInfo.GetCultureInfo("ru-RU"), ignoreCase: true);
+        // Числа без результата (не проверялся, нет ответа) всегда в конце, в какую сторону ни сортируй.
+        IOrderedEnumerable<ServerItemViewModel> ByNumber(Func<ServerItemViewModel, double?> key) => SortDescending
+            ? rows.OrderBy(r => key(r) is null).ThenByDescending(r => key(r))
+            : rows.OrderBy(r => key(r) is null).ThenBy(r => key(r));
+        IEnumerable<ServerItemViewModel> ByText(Func<ServerItemViewModel, string> key) => SortDescending
+            ? rows.OrderByDescending(key, ru)
+            : rows.OrderBy(key, ru);
+        return SortColumn switch
+        {
+            "type" => ByText(r => r.Protocol),
+            "address" => ByText(r => r.Address),
+            "port" => ByNumber(r => r.Port),
+            "network" => ByText(r => r.Network),
+            "tls" => ByText(r => r.Tls),
+            "sub" => ByText(r => r.SubscriptionName),
+            "delay" => ByNumber(r => r.DelayMs),
+            "speed" => ByNumber(r => r.SpeedMbps),
+            "country" => ByText(r => r.Country),
+            "status" => ByNumber(r => r.StatusKind switch { "ok" => 0, "warn" => 1, "bad" => 2, _ => null }),
+            _ => ByText(r => r.Name),
+        };
     }
 
     [RelayCommand]
@@ -303,9 +453,79 @@ internal sealed partial class ServersViewModel : ObservableObject
             await _engine.SetActiveAsync(item.Id);
     }
 
+    // ---------------- Выделение нескольких серверов (как в v2rayN) ----------------
+
+    private List<ServerItemViewModel> _picked = [];
+
+    /// <summary>Выделенные строки (Ctrl/Shift + щелчок, Ctrl+A). Пусто — действует строка под курсором.</summary>
+    public void SetPicked(IEnumerable<ServerItemViewModel> items)
+    {
+        _picked = items.ToList();
+        OnPropertyChanged(nameof(PickedCount));
+    }
+
+    public int PickedCount => _picked.Count;
+
+    /// <summary>С чем работает действие: все выделенные, а если выделена одна строка или ни одной — текущая.</summary>
+    private List<ServerItemViewModel> Targets() =>
+        _picked.Count > 1 ? _picked.Where(Items.Contains).ToList() : Selected is { } s ? [s] : [];
+
+    // ---------------- Подтверждение действий над многими серверами ----------------
+
+    private Action? _pendingAction;
+
+    /// <summary>Вопрос перед удалением нескольких серверов или выгрузкой ключей; null — спрашивать нечего.</summary>
+    [ObservableProperty]
+    public partial string? PendingConfirm { get; set; }
+
+    [ObservableProperty]
+    public partial string PendingConfirmLabel { get; set; } = "Удалить";
+
+    private void Ask(string question, string confirmLabel, Action action)
+    {
+        PendingSubscriptionDelete = null;
+        (_pendingAction, PendingConfirmLabel, PendingConfirm) = (action, confirmLabel, question);
+    }
+
+    [RelayCommand]
+    private void CancelPending() => (_pendingAction, PendingConfirm) = (null, null);
+
+    [RelayCommand]
+    private void ConfirmPending()
+    {
+        var action = _pendingAction;
+        (_pendingAction, PendingConfirm) = (null, null);
+        action?.Invoke();
+    }
+
+    /// <summary>Сколько из удаляемых — свои (стираются насовсем), остальные из подписок только скрываются.</summary>
+    private string RemovalNote(IReadOnlyCollection<Guid> ids)
+    {
+        var own = _engine.State.Profiles.Count(p => ids.Contains(p.Profile.Id) && p.Profile.SubscriptionId is null);
+        return own == 0
+            ? "Серверы подписок только скрываются — вернуть: «Вернуть удалённые»."
+            : $"Ваши серверы ({own}) удалятся насовсем, серверы подписок только скроются.";
+    }
+
+    private void RemoveMany(IReadOnlyCollection<Guid> ids, string done)
+    {
+        _engine.RemoveProfiles(ids);
+        Refresh();
+        Message = done;
+    }
+
     [RelayCommand]
     private void RemoveSelected()
     {
+        var targets = Targets();
+        if (targets.Count > 1)
+        {
+            var ids = targets.Select(t => t.Id).ToList();
+            Ask($"Удалить выделенные серверы ({ids.Count})? {RemovalNote(ids)}", "Удалить",
+                () => RemoveMany(ids, $"Удалено серверов: {ids.Count}."));
+            return;
+        }
+
         if (Selected is not { } item)
             return;
         var index = Items.IndexOf(item);
@@ -329,6 +549,14 @@ internal sealed partial class ServersViewModel : ObservableObject
     {
         if (item is null)
             return;
+        // Двигаем в своём порядке: при сортировке по колонке «выше/ниже» иначе ничего бы не значило.
+        if (SortColumn is not null)
+        {
+            (SortColumn, SortDescending) = (null, false);
+            Marks.Set(null, false);
+            RebuildItems();
+        }
+
         _engine.MoveProfile(item.Id, delta, Items.Select(i => i.Id).ToList());
         Refresh();
         Selected = Items.FirstOrDefault(i => i.Id == item.Id);
@@ -430,9 +658,131 @@ internal sealed partial class ServersViewModel : ObservableObject
         "Проверяю серверы: пинг, задержка, скорость и UDP. Текущее подключение не прерывается…");
 
     [RelayCommand]
-    private Task TestSelectedAsync() => Selected is { } s
-        ? RunTestsAsync([s], TestKinds.Standard, $"Проверяю «{s.Name}»…")
-        : Task.CompletedTask;
+    private Task TestSelectedAsync() => Targets() switch
+    {
+        [] => Task.CompletedTask,
+        [var one] => RunTestsAsync([one], TestKinds.Standard, $"Проверяю «{one.Name}»…"),
+        var many => RunTestsAsync(many, TestKinds.Standard, $"Проверяю выделенные серверы ({many.Count})…"),
+    };
+
+    [RelayCommand]
+    private void Clone()
+    {
+        if (Selected is not { } item)
+            return;
+        var copy = _engine.CloneProfile(item.Id);
+        Refresh();
+        Selected = Items.FirstOrDefault(i => i.Id == copy.Id) ?? Selected;
+        Message = $"Создана копия «{copy.Name}» в «Мои». Её можно менять, не трогая исходный сервер.";
+    }
+
+    [RelayCommand]
+    private void RemoveDuplicates()
+    {
+        var ids = _engine.FindDuplicates();
+        if (ids.Count == 0)
+        {
+            Message = "Дубликатов нет: все серверы отличаются хотя бы одним параметром, кроме названия.";
+            return;
+        }
+
+        Ask($"Найдено дубликатов: {ids.Count} (совпадает всё, кроме названия). Из каждой группы останется выбранный или верхний. {RemovalNote(ids)}",
+            "Удалить дубликаты", () => RemoveMany(ids, $"Удалено дубликатов: {ids.Count}."));
+    }
+
+    [RelayCommand]
+    private void RemoveDead()
+    {
+        var ids = _engine.FindDead();
+        if (ids.Count == 0)
+        {
+            Message = "Нерабочих по последней проверке нет. Сначала нажмите «Тест всех» — удаляются только те, что на ней не ответили или «замёрзли». Выбранный сервер не трогается.";
+            return;
+        }
+
+        Ask($"Удалить серверы, не работавшие на последней проверке ({ids.Count})? Выбранный сейчас сервер остаётся. {RemovalNote(ids)}",
+            "Удалить нерабочие", () => RemoveMany(ids, $"Удалено нерабочих: {ids.Count}."));
+    }
+
+    // ---------------- Поделиться: ссылка, QR, полный конфиг ----------------
+
+    /// <summary>Ссылка выбранного сервера — с ключом, поэтому только по кнопке и с очисткой буфера через 60 с.</summary>
+    [RelayCommand]
+    private async Task CopyLinkAsync()
+    {
+        if (Selected is not { } item)
+            return;
+        Message = await Services.UiHost.CopySecretAsync(ShareLink.Build(item.Profile))
+            ? $"Ссылка «{item.Name}» скопирована. В ней ключ доступа — через 60 секунд Тропа уберёт её из буфера обмена."
+            : "Буфер обмена недоступен.";
+    }
+
+    [ObservableProperty]
+    public partial Avalonia.Media.Imaging.Bitmap? QrImage { get; set; }
+
+    [ObservableProperty]
+    public partial string QrTitle { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string? QrNote { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsQrOpen { get; set; }
+
+    private ServerItemViewModel? _qrItem;
+
+    [RelayCommand]
+    private void ShowQr()
+    {
+        if (Selected is not { } item)
+            return;
+        _qrItem = item;
+        QrTitle = item.Name;
+        QrNote = null;
+        QrImage = Services.QrCodes.Render(ShareLink.Build(item.Profile));
+        IsQrOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseQr()
+    {
+        IsQrOpen = false;
+        QrImage = null;
+        _qrItem = null;
+    }
+
+    [RelayCommand]
+    private async Task CopyQrLinkAsync()
+    {
+        if (_qrItem is { } item && await Services.UiHost.CopySecretAsync(ShareLink.Build(item.Profile)))
+            QrNote = "Ссылка скопирована — через 60 секунд Тропа уберёт её из буфера обмена.";
+    }
+
+    /// <summary>Полный конфиг ядра с ключами (ADR-054): сначала предупреждение, потом файл через диалог.</summary>
+    [RelayCommand]
+    private void ExportConfig()
+    {
+        if (Selected is not { } item)
+            return;
+        Ask($"Выгрузить полный конфиг «{item.Name}» в файл? В нём будут ключ доступа к серверу и пароль локального прокси — "
+            + "кто получит файл, сможет пользоваться сервером. Не пересылайте его и не выкладывайте.",
+            "Понимаю, выгрузить", () => _ = ExportConfigAsync(item));
+    }
+
+    private async Task ExportConfigAsync(ServerItemViewModel item)
+    {
+        try
+        {
+            var (config, core) = _engine.ExportFullConfig(item.Id);
+            var safeName = string.Concat(item.Name.Select(c => char.IsLetterOrDigit(c) ? c : '-')).Trim('-');
+            var file = await Services.UiHost.SaveTextAsync($"Полный конфиг {core} с ключами", $"tropa-{core.ToLowerInvariant()}-{safeName}.json", config);
+            Message = file is null ? null : $"Сохранено: {file} (конфиг {core}, с ключами — храните как пароль).";
+        }
+        catch (Exception ex) when (ex is UnsupportedProfileException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            Message = _engine.Scrubber.Scrub(ex.Message);
+        }
+    }
 
     [RelayCommand]
     private Task StabilitySelectedAsync() => Selected is { } s

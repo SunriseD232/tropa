@@ -17,7 +17,7 @@ public sealed class CompatRulesTests
         var r = CompatRules.Evaluate(Defaults);
         // По умолчанию TUN: недоступны только настройки системного прокси и зависимые от выключенных опций.
         Assert.Equal(
-            ["lanPort", "muxConc", "subUACustom", "sysBypass", "templateText", "uwpLoopback"],
+            ["lanPort", "muxConc", "subInterval", "subUACustom", "sysBypass", "templateText", "uwpLoopback"],
             r.Disabled.Keys.Order(StringComparer.Ordinal));
     }
 

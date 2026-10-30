@@ -86,6 +86,8 @@
             </StackPanel>
           </Button>
         </WrapPanel>
+        <Button Classes="small" Content="Удалить дубликаты" Command="{Binding RemoveDuplicatesCommand}" ToolTip.Tip="Убрать лишние копии одинаковых серверов" />
+        <Button Classes="small" Content="Удалить нерабочие" Command="{Binding RemoveDeadCommand}" ToolTip.Tip="Убрать серверы, не работавшие на последней проверке (кроме выбранного)" />
         <Button Classes="small" Content="{Binding CurrentTabInfo.RestoreLabel, FallbackValue=''}" Command="{Binding RestoreHiddenCommand}"
                 IsVisible="{Binding CurrentTabInfo.HasHidden, FallbackValue=False}"
                 ToolTip.Tip="Показать снова серверы, которые вы удалили из подписки" />
@@ -110,6 +112,16 @@
           <Button Classes="primary" Content="Удалить" Command="{Binding ConfirmRemoveSubscriptionCommand}" />
         </StackPanel>
         <TextBlock Text="{Binding PendingSubscriptionDelete}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+
+    <Border Background="{DynamicResource BadBg}" CornerRadius="12" Padding="14,12" IsVisible="{Binding PendingConfirm, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center">
+          <Button Content="Отмена" Command="{Binding CancelPendingCommand}" />
+          <Button Classes="primary" Content="{Binding PendingConfirmLabel}" Command="{Binding ConfirmPendingCommand}" />
+        </StackPanel>
+        <TextBlock Text="{Binding PendingConfirm}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" VerticalAlignment="Center" />
       </DockPanel>
     </Border>
 
@@ -144,7 +156,8 @@
             </StackPanel>
           </Grid>
           <TextBlock Classes="muted" Margin="12,4,12,12" Text="Здесь пусто: все серверы этой вкладки удалены." IsVisible="{Binding !Items.Count}" />
-          <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Background="Transparent" DoubleTapped="OnDoubleTapped">
+          <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Background="Transparent" DoubleTapped="OnDoubleTapped"
+                   SelectionMode="Multiple" SelectionChanged="OnSelectionChanged">
             <ListBox.KeyBindings>
               <KeyBinding Gesture="Delete" Command="{Binding RemoveSelectedCommand}" />
               <KeyBinding Gesture="Alt+Up" Command="{Binding MoveUpCommand}" />
@@ -160,6 +173,14 @@
                 <Separator />
                 <MenuItem Header="Изменить" Command="{Binding EditSelectedCommand}" />
                 <MenuItem Header="Удалить" InputGesture="Delete" Command="{Binding RemoveSelectedCommand}" />
+                <Separator />
+                <MenuItem Header="Создать копию" Command="{Binding CloneCommand}" />
+                <MenuItem Header="Скопировать ссылку" Command="{Binding CopyLinkCommand}" />
+                <MenuItem Header="Показать QR-код" Command="{Binding ShowQrCommand}" />
+                <MenuItem Header="Выгрузить полный конфиг (с ключами)…" Command="{Binding ExportConfigCommand}" />
+                <Separator />
+                <MenuItem Header="Удалить дубликаты" Command="{Binding RemoveDuplicatesCommand}" />
+                <MenuItem Header="Удалить нерабочие (по последней проверке)" Command="{Binding RemoveDeadCommand}" />
               </ContextMenu>
             </ListBox.ContextMenu>
             <ListBox.ItemTemplate>
@@ -255,7 +276,15 @@
               </StackPanel>
             </Button>
           </UniformGrid>
-          <TextBlock Classes="muted" Text="Ключ доступа хранится зашифрованным и здесь не показывается." />
+          <UniformGrid Columns="2">
+            <Button Content="Ссылка" Command="{Binding CopyLinkCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,4,0"
+                    ToolTip.Tip="Скопировать ссылку сервера (с ключом; через 60 с уберётся из буфера)" />
+            <Button Content="QR-код" Command="{Binding ShowQrCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="4,0,0,0"
+                    ToolTip.Tip="Показать QR-код для телефона" />
+          </UniformGrid>
+          <Button Content="Создать копию" Command="{Binding CloneCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  ToolTip.Tip="Копия в «Мои»: можно менять, не трогая исходный сервер" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="Ключ доступа хранится зашифрованным и показывается только по кнопкам «Ссылка» и «QR-код». Ctrl/Shift + щелчок — выделить несколько." />
         </StackPanel>
       </Border>
     </Grid>

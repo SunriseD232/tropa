@@ -27,6 +27,7 @@ public static class RecommendedSettings
                 KillSwitch = current.General.KillSwitch,
                 Hotkey = current.General.Hotkey,
                 Theme = current.General.Theme,
+                Layout = current.General.Layout,
                 Lang = current.General.Lang,
                 OnboardingDone = current.General.OnboardingDone,
                 AutoSetupAsked = current.General.AutoSetupAsked,

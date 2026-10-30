@@ -31,6 +31,8 @@ public sealed class XrayGoldenTests
             [new(SingBoxGoldenTests.Ss2022, 31220)], Defaults, Auth),
         ["x03-mux"] = () => XrayConfigBuilder.Build(
             [new(Ws, 31201), new(Vision, 31203)], Defaults with { Dpi = Defaults.Dpi with { Mux = true, MuxConc = 4 } }, Auth),
+        ["x05-server-fragment"] = () => XrayConfigBuilder.Build(
+            [new(Ws, 31201), new(Vision, 31203)], Defaults with { Dpi = Defaults.Dpi with { ServerFragment = true } }, Auth),
     };
 
     [Theory]

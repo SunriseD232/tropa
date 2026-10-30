@@ -1,0 +1,393 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Tropa.App.ViewModels"
+             xmlns:svc="using:Tropa.App.Services"
+             x:Class="Tropa.App.Views.V2rayLayoutView"
+             x:DataType="vm:MainWindowViewModel">
+  <!--
+    Вид «как в v2rayN» (ADR-051): меню сверху, таблица серверов, журнал внизу, строка состояния с режимом и маршрутом.
+    Только разметка: команды и данные — те же модели, что у вида «Тропа».
+  -->
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+E" Command="{Binding Servers.TestAllCommand}" />
+  </UserControl.KeyBindings>
+  <UserControl.Styles>
+    <!-- Плотнее, чем у вида «Тропа»: только в полосах этого вида, экраны внутри не трогаем -->
+    <Style Selector=".v2bar Button">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector=".v2bar TextBox">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector=".v2bar ComboBox">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector=".v2bar TextBlock">
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="ToggleButton.group">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Margin" Value="0,0,4,4" />
+    </Style>
+    <Style Selector="Button.head">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="6,0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.head TextBlock">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource Label}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="ListBox.table ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="ListBox.table ListBoxItem TextBlock">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Margin" Value="6,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+    <Style Selector="TextBlock.ok"><Setter Property="Foreground" Value="{DynamicResource OkFg}" /></Style>
+    <Style Selector="TextBlock.warn"><Setter Property="Foreground" Value="{DynamicResource WarnFg}" /></Style>
+    <Style Selector="TextBlock.bad"><Setter Property="Foreground" Value="{DynamicResource BadFg}" /></Style>
+    <Style Selector="TextBlock.active"><Setter Property="FontWeight" Value="SemiBold" /></Style>
+    <Style Selector="Border.sep">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Margin" Value="10,4" />
+      <Setter Property="Background" Value="{DynamicResource Line}" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+    <!-- Меню -->
+    <Border DockPanel.Dock="Top" Classes="v2bar" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="6,2">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="8,0">
+          <Image Source="/Assets/logo.png" Width="18" Height="18" />
+          <TextBlock Classes="muted" Text="{Binding CoreVersions}" VerticalAlignment="Center" />
+        </StackPanel>
+        <Menu>
+          <MenuItem Header="_Серверы">
+            <MenuItem Header="Вставить ссылки из буфера" InputGesture="Ctrl+V" Click="OnPasteClick" />
+            <MenuItem Header="QR-код с экрана" Click="OnScanScreenClick" />
+            <MenuItem Header="QR-код из картинки…" Click="OnScanImageClick" />
+            <MenuItem Header="Добавить подписку или ссылки…" Command="{Binding Servers.AddCommand}" />
+            <MenuItem Header="Добавить сервер вручную…" Command="{Binding Servers.AddManualCommand}" />
+            <Separator />
+            <MenuItem Header="Сделать активным" InputGesture="Enter" Command="{Binding Servers.UseSelectedCommand}" />
+            <MenuItem Header="Изменить…" Command="{Binding Servers.EditSelectedCommand}" />
+            <MenuItem Header="Удалить" InputGesture="Delete" Command="{Binding Servers.RemoveSelectedCommand}" />
+            <MenuItem Header="Создать копию" Command="{Binding Servers.CloneCommand}" />
+            <MenuItem Header="Удалить дубликаты" Command="{Binding Servers.RemoveDuplicatesCommand}" />
+            <MenuItem Header="Удалить нерабочие (по последней проверке)" Command="{Binding Servers.RemoveDeadCommand}" />
+            <Separator />
+            <MenuItem Header="Скопировать ссылку" Command="{Binding Servers.CopyLinkCommand}" />
+            <MenuItem Header="Показать QR-код" Command="{Binding Servers.ShowQrCommand}" />
+            <MenuItem Header="Выгрузить полный конфиг (с ключами)…" Command="{Binding Servers.ExportConfigCommand}" />
+            <Separator />
+            <MenuItem Header="Проверить все" InputGesture="Ctrl+E" Command="{Binding Servers.TestAllCommand}" IsEnabled="{Binding Servers.NotBusy}" />
+            <MenuItem Header="Проверить выбранный" Command="{Binding Servers.TestSelectedCommand}" IsEnabled="{Binding Servers.NotBusy}" />
+            <MenuItem Header="Стабильность выбранного" Command="{Binding Servers.StabilitySelectedCommand}" IsEnabled="{Binding Servers.NotBusy}" />
+          </MenuItem>
+          <MenuItem Header="_Подписки">
+            <MenuItem Header="Обновить все подписки" Command="{Binding Servers.UpdateSubscriptionsCommand}" IsEnabled="{Binding Servers.NotBusy}" />
+            <MenuItem Header="Обновить открытую подписку" Command="{Binding Servers.UpdateCurrentSubscriptionCommand}"
+                      IsEnabled="{Binding Servers.CurrentTabInfo.IsSubscription, FallbackValue=False}" />
+            <MenuItem Header="Добавить подписку…" Command="{Binding Servers.AddCommand}" />
+            <Separator />
+            <MenuItem Header="Вернуть удалённые серверы" Command="{Binding Servers.RestoreHiddenCommand}"
+                      IsEnabled="{Binding Servers.CurrentTabInfo.HasHidden, FallbackValue=False}" />
+            <MenuItem Header="Удалить открытую подписку…" Command="{Binding Servers.AskRemoveSubscriptionCommand}"
+                      IsEnabled="{Binding Servers.CurrentTabInfo.IsSubscription, FallbackValue=False}" />
+          </MenuItem>
+          <MenuItem Header="_Настройки">
+            <MenuItem Header="Параметры…" Command="{Binding NavigateCommand}" CommandParameter="settings" />
+            <MenuItem Header="Маршрутизация и правила…" Command="{Binding NavigateCommand}" CommandParameter="rules" />
+            <MenuItem Header="Диагностика…" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" />
+            <Separator />
+            <MenuItem Header="Вид окна «Тропа»" Command="{Binding SwitchLayoutCommand}" CommandParameter="tropa" />
+            <Separator />
+            <MenuItem Header="Перезапустить от имени администратора" Command="{Binding RestartElevatedCommand}" IsEnabled="{x:Static svc:Elevation.CanElevate}" />
+          </MenuItem>
+          <MenuItem Header="Спр_авка">
+            <MenuItem Header="Этот вид окна" Command="{Binding ShowInfoCommand}" CommandParameter="layout" />
+            <MenuItem Header="Режим: весь компьютер или браузеры" Command="{Binding ShowInfoCommand}" CommandParameter="mode" />
+            <MenuItem Header="Маршрут" Command="{Binding ShowInfoCommand}" CommandParameter="route" />
+            <MenuItem Header="Статусы серверов" Command="{Binding ShowInfoCommand}" CommandParameter="status" />
+            <MenuItem Header="Реальная задержка" Command="{Binding ShowInfoCommand}" CommandParameter="realDelay" />
+          </MenuItem>
+        </Menu>
+      </DockPanel>
+    </Border>
+
+    <!-- Строка состояния -->
+    <Border DockPanel.Dock="Bottom" Classes="v2bar" Background="{DynamicResource Side}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="10,4">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <TextBlock Classes="mono" VerticalAlignment="Center" IsVisible="{Binding Home.IsConnected}"
+                     ToolTip.Tip="Скорость через Тропу: загрузка и отдача">
+            <Run Text="↓" /><Run Text="{Binding Home.Down}" /><Run Text="  ↑" /><Run Text="{Binding Home.Up}" />
+          </TextBlock>
+          <TextBlock VerticalAlignment="Center" Text="{Binding Home.ExitRegion}" ToolTip.Tip="{Binding Home.ExitRegionTip}"
+                     IsVisible="{Binding Home.ExitRegion, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <Button Classes="primary" Content="{Binding Home.ActionText}" Command="{Binding Home.ToggleCommand}" IsEnabled="{Binding !Home.IsBusy}"
+                  MinWidth="110" HorizontalContentAlignment="Center" ToolTip.Tip="Подключить или отключить Тропу" />
+        </StackPanel>
+        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Classes="muted mono" Text="{Binding PortText}" VerticalAlignment="Center" />
+            <Border Classes="sep" />
+            <ToggleSwitch IsChecked="{Binding Home.TunToggle}" OnContent="" OffContent="" MinWidth="0" VerticalAlignment="Center"
+                          ToolTip.Tip="Включено — весь компьютер через виртуальную сетевую карту (TUN). Выключено — только браузеры через прокси Windows."
+                          AutomationProperties.Name="Весь компьютер (TUN)" />
+            <TextBlock Text="Весь компьютер (TUN)" VerticalAlignment="Center" />
+            <Border Classes="sep" />
+            <TextBlock Text="Маршрут" Classes="muted" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <ComboBox SelectedIndex="{Binding Home.RouteIndex}" Width="230" VerticalAlignment="Center" ToolTip.Tip="{Binding Home.RouteDescription}"
+                      AutomationProperties.Name="Маршрут">
+              <ComboBoxItem Content="Всё, кроме российского" />
+              <ComboBoxItem Content="Только заблокированное (рекомендуется)" />
+              <ComboBoxItem Content="Всё через прокси" />
+            </ComboBox>
+            <Border Classes="sep" />
+          </StackPanel>
+          <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" ToolTip.Tip="{Binding Home.ServerDetails}">
+            <Run Text="{Binding FooterStatus}" FontWeight="SemiBold" /><Run Text=" · " /><Run Text="{Binding Home.ServerName}" />
+          </TextBlock>
+        </Grid>
+      </DockPanel>
+    </Border>
+
+    <!-- Предупреждение при запуске -->
+    <Border DockPanel.Dock="Top" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" Classes="v2bar"
+            Background="{DynamicResource WarnBg}" Padding="10,6">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="Понятно" Command="{Binding DismissWarningCommand}" />
+        <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
+      </DockPanel>
+    </Border>
+
+    <Grid RowDefinitions="*,5,170">
+      <!-- Таблица серверов -->
+      <DockPanel Grid.Row="0" IsVisible="{Binding ShowsServerTable}">
+        <DockPanel DockPanel.Dock="Top" Classes="v2bar" Margin="8,6,8,2">
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+            <ProgressBar IsIndeterminate="True" Width="60" MinWidth="0" IsVisible="{Binding Servers.IsBusy}" VerticalAlignment="Center" />
+            <TextBox Text="{Binding Servers.Filter}" Width="200" PlaceholderText="Поиск: имя, адрес, страна" AutomationProperties.Name="Поиск по серверам" />
+            <Button Content="Проверить все" Command="{Binding Servers.TestAllCommand}" IsEnabled="{Binding Servers.NotBusy}" ToolTip.Tip="Пинг, задержка, скорость и UDP (Ctrl+E)" />
+            <Button Content="Обновить подписки" Command="{Binding Servers.UpdateSubscriptionsCommand}" IsEnabled="{Binding Servers.NotBusy}" />
+          </StackPanel>
+          <ItemsControl ItemsSource="{Binding Servers.Tabs}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:GroupTab">
+                <ToggleButton Classes="group" Content="{Binding Title}" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                              Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).Servers.SelectTabCommand}" CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </DockPanel>
+
+        <!-- Сообщения экрана серверов -->
+        <StackPanel DockPanel.Dock="Top" Classes="v2bar" Margin="8,0,8,4" Spacing="4">
+          <Border Background="{DynamicResource BadBg}" CornerRadius="6" Padding="10,6" IsVisible="{Binding Servers.PendingSubscriptionDelete, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">
+                <Button Content="Отмена" Command="{Binding Servers.CancelRemoveSubscriptionCommand}" />
+                <Button Classes="primary" Content="Удалить" Command="{Binding Servers.ConfirmRemoveSubscriptionCommand}" />
+              </StackPanel>
+              <TextBlock Text="{Binding Servers.PendingSubscriptionDelete}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
+          <Border Background="{DynamicResource InfoBg}" CornerRadius="6" Padding="10,6" IsVisible="{Binding Servers.CurrentTabInfo.HasAdmin, FallbackValue=False}">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Margin="12,0,0,0" Content="{Binding Servers.CurrentTabInfo.TrustLabel, FallbackValue=''}" Command="{Binding Servers.ToggleTrustAdminCommand}" />
+              <TextBlock Text="{Binding Servers.CurrentTabInfo.AdminNote, FallbackValue=''}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
+          <Border Background="{DynamicResource BadBg}" CornerRadius="6" Padding="10,6" IsVisible="{Binding Servers.PendingConfirm, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">
+                <Button Content="Отмена" Command="{Binding Servers.CancelPendingCommand}" />
+                <Button Classes="primary" Content="{Binding Servers.PendingConfirmLabel}" Command="{Binding Servers.ConfirmPendingCommand}" />
+              </StackPanel>
+              <TextBlock Text="{Binding Servers.PendingConfirm}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
+          <Border Background="{DynamicResource InfoBg}" CornerRadius="6" Padding="10,6" IsVisible="{Binding Servers.Message, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{Binding Servers.Message}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
+          </Border>
+        </StackPanel>
+
+        <Border BorderBrush="{DynamicResource Line}" BorderThickness="1" Margin="8,0,8,0" Background="{DynamicResource Card}">
+          <Panel>
+            <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="20"
+                       IsVisible="{Binding !Servers.Items.Count}"
+                       Text="Серверов нет. Скопируйте ссылку подписки и нажмите Ctrl+V или выберите «Серверы → Добавить подписку или ссылки…». Если идёт поиск — очистите поле поиска." />
+            <ScrollViewer x:Name="TableScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" SizeChanged="OnTableScrollSizeChanged"
+                          IsVisible="{Binding Servers.Items.Count}">
+              <Grid x:Name="Table" RowDefinitions="Auto,*" MinWidth="960" HorizontalAlignment="Left">
+                <!-- Ширины колонок одинаковы у заголовка и строк -->
+                <Border Grid.Row="0" Background="{DynamicResource Card2}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                  <Grid ColumnDefinitions="22,84,2*,1.3*,58,88,66,1*,82,90,54,1.2*">
+                    <Button Grid.Column="1" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="type">
+                      <TextBlock><Run Text="Тип" /><Run Text="{Binding Servers.Marks.Type}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="2" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="name">
+                      <TextBlock><Run Text="Имя" /><Run Text="{Binding Servers.Marks.Name}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="3" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="address">
+                      <TextBlock><Run Text="Адрес" /><Run Text="{Binding Servers.Marks.Address}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="4" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="port">
+                      <TextBlock><Run Text="Порт" /><Run Text="{Binding Servers.Marks.Port}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="5" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="network">
+                      <TextBlock><Run Text="Транспорт" /><Run Text="{Binding Servers.Marks.Network}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="6" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="tls">
+                      <TextBlock><Run Text="TLS" /><Run Text="{Binding Servers.Marks.Tls}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="7" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="sub">
+                      <TextBlock><Run Text="Подписка" /><Run Text="{Binding Servers.Marks.Sub}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="8" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="delay" ToolTip.Tip="Реальная задержка через сервер">
+                      <TextBlock><Run Text="Задержка" /><Run Text="{Binding Servers.Marks.Delay}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="9" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="speed">
+                      <TextBlock><Run Text="Скорость" /><Run Text="{Binding Servers.Marks.Speed}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="10" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="country" ToolTip.Tip="Страна выхода по последней проверке">
+                      <TextBlock><Run Text="Выход" /><Run Text="{Binding Servers.Marks.Country}" /></TextBlock>
+                    </Button>
+                    <Button Grid.Column="11" Classes="head" Command="{Binding Servers.SortByCommand}" CommandParameter="status">
+                      <TextBlock><Run Text="Статус" /><Run Text="{Binding Servers.Marks.Status}" /></TextBlock>
+                    </Button>
+                  </Grid>
+                </Border>
+
+                <ListBox Grid.Row="1" Classes="table" ItemsSource="{Binding Servers.Items}" SelectedItem="{Binding Servers.Selected}"
+                         Background="Transparent" DoubleTapped="OnRowDoubleTapped" AutomationProperties.Name="Серверы"
+                         SelectionMode="Multiple" SelectionChanged="OnRowsSelectionChanged">
+                  <ListBox.KeyBindings>
+                    <KeyBinding Gesture="Enter" Command="{Binding Servers.UseSelectedCommand}" />
+                    <KeyBinding Gesture="Delete" Command="{Binding Servers.RemoveSelectedCommand}" />
+                    <KeyBinding Gesture="Alt+Up" Command="{Binding Servers.MoveUpCommand}" />
+                    <KeyBinding Gesture="Alt+Down" Command="{Binding Servers.MoveDownCommand}" />
+                  </ListBox.KeyBindings>
+                  <ListBox.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="Сделать активным" InputGesture="Enter" Command="{Binding Servers.UseSelectedCommand}" />
+                      <MenuItem Header="Изменить…" Command="{Binding Servers.EditSelectedCommand}" />
+                      <MenuItem Header="Удалить" InputGesture="Delete" Command="{Binding Servers.RemoveSelectedCommand}" />
+                      <MenuItem Header="Создать копию" Command="{Binding Servers.CloneCommand}" />
+                      <MenuItem Header="Скопировать ссылку" Command="{Binding Servers.CopyLinkCommand}" />
+                      <MenuItem Header="Показать QR-код" Command="{Binding Servers.ShowQrCommand}" />
+                      <MenuItem Header="Выгрузить полный конфиг (с ключами)…" Command="{Binding Servers.ExportConfigCommand}" />
+                      <Separator />
+                      <MenuItem Header="Удалить дубликаты" Command="{Binding Servers.RemoveDuplicatesCommand}" />
+                      <MenuItem Header="Удалить нерабочие" Command="{Binding Servers.RemoveDeadCommand}" />
+                      <Separator />
+                      <MenuItem Header="Проверить" Command="{Binding Servers.TestSelectedCommand}" IsEnabled="{Binding Servers.NotBusy}" />
+                      <MenuItem Header="Стабильность" Command="{Binding Servers.StabilitySelectedCommand}" IsEnabled="{Binding Servers.NotBusy}" />
+                      <MenuItem Header="Проверить все" InputGesture="Ctrl+E" Command="{Binding Servers.TestAllCommand}" IsEnabled="{Binding Servers.NotBusy}" />
+                      <Separator />
+                      <MenuItem Header="Выше" InputGesture="Alt+Up" Command="{Binding Servers.MoveUpCommand}" />
+                      <MenuItem Header="Ниже" InputGesture="Alt+Down" Command="{Binding Servers.MoveDownCommand}" />
+                    </ContextMenu>
+                  </ListBox.ContextMenu>
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ServerItemViewModel">
+                      <Grid ColumnDefinitions="22,84,2*,1.3*,58,88,66,1*,82,90,54,1.2*" Background="Transparent" ToolTip.Tip="{Binding Explanation}">
+                        <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{DynamicResource Accent}" IsVisible="{Binding IsActive}"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip.Tip="Активный сервер" />
+                        <TextBlock Grid.Column="1" Text="{Binding Protocol}" />
+                        <TextBlock Grid.Column="2" Text="{Binding Name}" Classes.active="{Binding IsActive}" />
+                        <TextBlock Grid.Column="3" Text="{Binding Address}" FontFamily="{StaticResource Mono}" />
+                        <TextBlock Grid.Column="4" Text="{Binding Port}" FontFamily="{StaticResource Mono}" />
+                        <TextBlock Grid.Column="5" Text="{Binding Network}" />
+                        <TextBlock Grid.Column="6" Text="{Binding Tls}" />
+                        <TextBlock Grid.Column="7" Text="{Binding SubscriptionName}" />
+                        <Panel Grid.Column="8">
+                          <TextBlock Text="{Binding Delay}" FontFamily="{StaticResource Mono}" IsVisible="{Binding !Testing}"
+                                     Classes.ok="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsOk}}"
+                                     Classes.warn="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsWarn}}"
+                                     Classes.bad="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsBad}}" />
+                          <ProgressBar IsIndeterminate="True" Width="56" MinWidth="0" Margin="6,0" IsVisible="{Binding Testing}" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                        </Panel>
+                        <TextBlock Grid.Column="9" Text="{Binding Speed}" FontFamily="{StaticResource Mono}" />
+                        <StackPanel Grid.Column="10" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0" ToolTip.Tip="{Binding CountryTip}">
+                          <Image Source="{Binding Flag}" Width="20" Height="14" Stretch="UniformToFill" IsVisible="{Binding HasFlag}" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                          <TextBlock Text="{Binding Country}" IsVisible="{Binding !HasFlag}" Margin="0" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="11" Text="{Binding Status}" ToolTip.Tip="{Binding Status}"
+                                   Classes.ok="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsOk}}"
+                                   Classes.warn="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsWarn}}"
+                                   Classes.bad="{Binding StatusKind, Converter={x:Static vm:StatusConverters.IsBad}}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </ScrollViewer>
+          </Panel>
+        </Border>
+      </DockPanel>
+
+      <!-- Экран из меню «Настройки» на месте таблицы -->
+      <DockPanel Grid.Row="0" IsVisible="{Binding !ShowsServerTable}">
+        <Border DockPanel.Dock="Top" Classes="v2bar" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="8,6">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Button Content="← Серверы" Command="{Binding NavigateCommand}" CommandParameter="servers" ToolTip.Tip="Вернуться к таблице серверов" />
+            <TextBlock Text="{Binding PageTitle}" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </StackPanel>
+        </Border>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <ContentControl Content="{Binding PageContent}" Margin="28,20" />
+        </ScrollViewer>
+      </DockPanel>
+
+      <GridSplitter Grid.Row="1" Background="{DynamicResource Line}" ResizeDirection="Rows" />
+
+      <!-- Журнал -->
+      <DockPanel Grid.Row="2" Classes="v2bar" Margin="8,4,8,6">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+          <TextBox DockPanel.Dock="Right" Text="{Binding LogFilter}" Width="220" PlaceholderText="Фильтр журнала" AutomationProperties.Name="Фильтр журнала" />
+          <TextBlock Text="Журнал" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <TextBlock Classes="muted" Text="  ·  ключи и ссылки подписок в журнале скрыты" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBox x:Name="LogBox" Text="{Binding LogText}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                 FontFamily="{StaticResource Mono}" FontSize="12" CornerRadius="0" VerticalContentAlignment="Top"
+                 TextChanged="OnLogTextChanged" AutomationProperties.Name="Журнал"
+                 PlaceholderText="Здесь появятся сообщения Тропы и ядер: подключение, проверки, обновление подписок." />
+      </DockPanel>
+    </Grid>
+  </DockPanel>
+</UserControl>

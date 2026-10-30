@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Tropa.App.ViewModels"
+             x:Class="Tropa.App.Views.TropaLayoutView"
+             x:DataType="vm:MainWindowViewModel">
+  <!-- Вид «Тропа»: боковое меню и экраны -->
+  <Grid ColumnDefinitions="232,*">
+    <!-- Боковое меню -->
+    <Border Grid.Column="0" Background="{DynamicResource Side}" BorderBrush="{DynamicResource SideLine}" BorderThickness="0,0,1,0" Padding="14,20">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="10" Margin="10,4,10,20">
+            <Image Source="/Assets/logo.png" Width="28" Height="28" />
+            <TextBlock Text="Тропа" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
+          </StackPanel>
+          <Button Classes="nav" Classes.on="{Binding IsHome}" Content="Главная" Command="{Binding NavigateCommand}" CommandParameter="home" />
+          <Button Classes="nav" Classes.on="{Binding IsServers}" Content="Серверы" Command="{Binding NavigateCommand}" CommandParameter="servers" />
+          <Button Classes="nav" Classes.on="{Binding IsRules}" Content="Правила" Command="{Binding NavigateCommand}" CommandParameter="rules" />
+          <Button Classes="nav" Classes.on="{Binding IsDiagnostics}" Content="Диагностика" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" />
+          <Button Classes="nav" Classes.on="{Binding IsSettings}" Content="Настройки" Command="{Binding NavigateCommand}" CommandParameter="settings" />
+        </StackPanel>
+        <Border DockPanel.Dock="Bottom" VerticalAlignment="Bottom" Background="{DynamicResource SideFooter}" CornerRadius="12" Padding="12">
+          <StackPanel Spacing="4">
+            <TextBlock Text="{Binding FooterStatus}" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding CoreVersions}" Classes="muted" />
+          </StackPanel>
+        </Border>
+      </DockPanel>
+    </Border>
+  
+    <!-- Содержимое -->
+    <DockPanel Grid.Column="1">
+      <Border DockPanel.Dock="Top" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}"
+              Background="{DynamicResource WarnBg}" Padding="16,10" Margin="36,20,36,0" CornerRadius="12">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Понятно" Command="{Binding DismissWarningCommand}" />
+          <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
+        </DockPanel>
+      </Border>
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <ContentControl Content="{Binding CurrentPage}" Margin="36,28" />
+      </ScrollViewer>
+    </DockPanel>
+  </Grid>
+</UserControl>

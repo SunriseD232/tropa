@@ -18,6 +18,9 @@ public enum LocalDnsRule { Russian, DirectRules, None }
 
 public enum AppTheme { Dark, Light, System }
 
+/// <summary>Вид главного окна (ADR-051). Первое значение — вид Тропы: в старом settings.json поля нет, и читается 0.</summary>
+public enum WindowLayout { Tropa, V2rayN }
+
 public sealed record GeneralSettings
 {
     public bool Autostart { get; init; } = true;
@@ -38,6 +41,9 @@ public sealed record GeneralSettings
     /// </summary>
     public bool HideExitRegion { get; init; }
     public AppTheme Theme { get; init; } = AppTheme.Dark;
+
+    /// <summary>Вид окна: свой или «как в v2rayN» — меняется только представление, логика одна.</summary>
+    public WindowLayout Layout { get; init; }
     public string Lang { get; init; } = "ru";
 
     /// <summary>Мастер первого запуска пройден или пропущен.</summary>
@@ -98,6 +104,14 @@ public sealed record DpiSettings
     public int MuxConc { get; init; } = 8;
 
     /// <summary>
+    /// Фрагментация соединения ДО VPN-сервера (ADR-055, как «Включить фрагментацию» в v2rayN): первое
+    /// TLS-сообщение уходит кусками, чтобы ТСПУ не узнал и не оборвал подключение к серверу. Прямой трафик
+    /// к сайтам не трогается — это не обход без VPN (ADR-037). Только встроенными средствами ядер.
+    /// По умолчанию выключено; в старом settings.json поля нет — читается false.
+    /// </summary>
+    public bool ServerFragment { get; init; }
+
+    /// <summary>
     /// Полоса Hysteria2 по умолчанию (Мбит/с, к серверу и от сервера) для серверов, где она не задана.
     /// Без полосы Hysteria2 на «узком» плече даёт ~10 Мбит/с вместо 150. В старом settings.json полей нет
     /// и читается 0 — это значит «по умолчанию».
@@ -150,6 +164,13 @@ public sealed record SubscriptionDefaults
     /// поля нет и читается 0 — то есть остаётся прежний интервал в часах.
     /// </summary>
     public int UpdateMinutes { get; init; }
+
+    /// <summary>Свой интервал (не из списка «15 минут / 6 / 12 / 24 часа / вручную»): от 5 минут до недели.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool CustomInterval => UpdateMinutes is not (0 or 15) || (UpdateMinutes == 0 && UpdateHours is not (0 or 6 or 12 or 24));
+
+    public const int MinCustomMinutes = 5;
+    public const int MaxCustomMinutes = 7 * 24 * 60;
 
     /// <summary>Интервал автообновления; null — только вручную.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

@@ -74,6 +74,23 @@ public sealed class StorageTests : IDisposable
     }
 
     [Fact]
+    public void Window_layout_survives_save_and_is_tropa_in_older_settings()
+    {
+        var store = new StateStore(_dir.FullName);
+        var state = SampleState();
+        state = state with { Settings = state.Settings with { General = state.Settings.General with { Layout = WindowLayout.V2rayN } } };
+        store.Save(state, store.Load().Secrets, Now);
+        Assert.Equal(WindowLayout.V2rayN, new StateStore(_dir.FullName).Load().State.Settings.General.Layout);
+
+        // В settings.json до 0.1.19 поля нет — открывается привычный вид Тропы.
+        var text = File.ReadAllText(store.SettingsPath);
+        var cut = System.Text.RegularExpressions.Regex.Replace(text, @"""layout""\s*:\s*""V2rayN""\s*,?", "");
+        Assert.NotEqual(text, cut);
+        File.WriteAllText(store.SettingsPath, cut);
+        Assert.Equal(WindowLayout.Tropa, new StateStore(_dir.FullName).Load().State.Settings.General.Layout);
+    }
+
+    [Fact]
     public void Corrupted_settings_fall_back_to_backup()
     {
         var store = new StateStore(_dir.FullName);

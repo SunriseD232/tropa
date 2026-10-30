@@ -214,6 +214,27 @@ internal sealed partial class App : Application
         _window.Activate();
     }
 
+    /// <summary>
+    /// «Перезапустить от имени администратора» (ADR-052): копия с запросом прав, текущий экземпляр закрывается
+    /// штатно (отключение и откат прокси). null — перезапуск начат; иначе причина, почему нет.
+    /// </summary>
+    public static async Task<string?> RestartElevatedAsync()
+    {
+        if (Instance is not { _engine: { } engine } app)
+            return "Тропа ещё не запустилась.";
+        if (Services.Elevation.IsAdmin)
+            return "Тропа уже запущена от имени администратора.";
+#if DEBUG
+        // Окно UAC не передаёт переменные окружения: копия открыла бы настоящий профиль вместо TROPA_DATA_DIR.
+        if (Environment.GetEnvironmentVariable("TROPA_DATA_DIR") is { Length: > 0 })
+            return "В отладочной сборке с TROPA_DATA_DIR перезапуск с правами недоступен.";
+#endif
+        if (!Services.Elevation.StartElevatedCopy(reconnect: engine.Status.State == ConnectionState.Connected))
+            return "Перезапуск отменён в окне Windows «Контроль учётных записей».";
+        await app.ExitAsync();
+        return null;
+    }
+
     private async Task ExitAsync()
     {
         if (_exiting)

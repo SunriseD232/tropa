@@ -45,6 +45,62 @@ internal sealed partial class ImportViewModel(TropaEngine engine, InfoViewModel 
     [RelayCommand]
     private void ShowInfo(string key) => info.Show(key);
 
+    /// <summary>QR-код с экрана (ADR-053): окно прячется, снимок только в памяти, найденное — в поле, как вставленное руками.</summary>
+    [RelayCommand]
+    private async Task ScanScreenAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var shot = await Services.UiHost.CaptureScreenAsync();
+            Found(shot is null ? [] : await Task.Run(() => Services.QrCodes.Decode(shot.Bgra, shot.Width, shot.Height)),
+                "На экране не найден QR-код. Откройте его крупно (в Telegram, браузере) и нажмите ещё раз.");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ScanImageAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            using var image = await Services.UiHost.PickImageAsync();
+            if (image is null)
+                return;
+            Found(Services.QrCodes.Decode(image), "На картинке не найден QR-код.");
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            Result = "Картинку не удалось открыть: " + ex.Message;
+            HasResult = true;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    // Найденный текст — недоверенный: только подставляем в поле, добавляет пользователь кнопкой.
+    private void Found(IReadOnlyList<string> codes, string none)
+    {
+        if (codes.Count == 0)
+        {
+            Result = none;
+            HasResult = true;
+            return;
+        }
+
+        Text = string.Join("\n", codes);
+        Result = codes.Count == 1
+            ? "QR-код распознан. Проверьте и нажмите «Добавить»."
+            : $"Распознано QR-кодов: {codes.Count}. Проверьте и нажмите «Добавить».";
+        HasResult = true;
+    }
+
     [RelayCommand]
     private async Task ImportAsync()
     {

@@ -2,9 +2,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Tropa.App.ViewModels"
         xmlns:v="using:Tropa.App.Views"
+        xmlns:svc="using:Tropa.App.Services"
         x:Class="Tropa.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="Тропа"
+        Title="{x:Static svc:Elevation.WindowTitle}"
         Icon="/Assets/tropa.ico"
         Width="1180" Height="780" MinWidth="900" MinHeight="620"
         WindowStartupLocation="CenterScreen">
@@ -18,44 +19,8 @@
   </Window.DataTemplates>
 
   <Panel>
-    <Grid ColumnDefinitions="232,*">
-      <!-- Боковое меню -->
-      <Border Grid.Column="0" Background="{DynamicResource Side}" BorderBrush="{DynamicResource SideLine}" BorderThickness="0,0,1,0" Padding="14,20">
-        <DockPanel>
-          <StackPanel DockPanel.Dock="Top" Spacing="4">
-            <StackPanel Orientation="Horizontal" Spacing="10" Margin="10,4,10,20">
-              <Image Source="/Assets/logo.png" Width="28" Height="28" />
-              <TextBlock Text="Тропа" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-            </StackPanel>
-            <Button Classes="nav" Classes.on="{Binding IsHome}" Content="Главная" Command="{Binding NavigateCommand}" CommandParameter="home" />
-            <Button Classes="nav" Classes.on="{Binding IsServers}" Content="Серверы" Command="{Binding NavigateCommand}" CommandParameter="servers" />
-            <Button Classes="nav" Classes.on="{Binding IsRules}" Content="Правила" Command="{Binding NavigateCommand}" CommandParameter="rules" />
-            <Button Classes="nav" Classes.on="{Binding IsDiagnostics}" Content="Диагностика" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" />
-            <Button Classes="nav" Classes.on="{Binding IsSettings}" Content="Настройки" Command="{Binding NavigateCommand}" CommandParameter="settings" />
-          </StackPanel>
-          <Border DockPanel.Dock="Bottom" VerticalAlignment="Bottom" Background="{DynamicResource SideFooter}" CornerRadius="12" Padding="12">
-            <StackPanel Spacing="4">
-              <TextBlock Text="{Binding FooterStatus}" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding CoreVersions}" Classes="muted" />
-            </StackPanel>
-          </Border>
-        </DockPanel>
-      </Border>
-
-      <!-- Содержимое -->
-      <DockPanel Grid.Column="1">
-        <Border DockPanel.Dock="Top" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}"
-                Background="{DynamicResource WarnBg}" Padding="16,10" Margin="36,20,36,0" CornerRadius="12">
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Content="Понятно" Command="{Binding DismissWarningCommand}" />
-            <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
-          </DockPanel>
-        </Border>
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-          <ContentControl Content="{Binding CurrentPage}" Margin="36,28" />
-        </ScrollViewer>
-      </DockPanel>
-    </Grid>
+    <!-- Вид окна (ADR-051): TropaLayoutView или V2rayLayoutView, подставляется в MainWindow.axaml.cs -->
+    <ContentControl x:Name="LayoutHost" />
 
     <!-- Первый запуск -->
     <Border IsVisible="{Binding Onboarding.IsOpen}" Background="{DynamicResource Overlay}">
@@ -151,10 +116,43 @@
           <Border IsVisible="{Binding Import.HasResult}" Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12">
             <TextBlock Text="{Binding Import.Result}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
           </Border>
+          <DockPanel>
+          <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8">
+            <Button Content="QR с экрана" Command="{Binding Import.ScanScreenCommand}" IsEnabled="{Binding !Import.IsBusy}"
+                    ToolTip.Tip="Тропа ненадолго свернётся и найдёт QR-код на экране (снимок никуда не сохраняется)" />
+            <Button Content="QR из картинки…" Command="{Binding Import.ScanImageCommand}" IsEnabled="{Binding !Import.IsBusy}" />
+          </StackPanel>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
             <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding Import.IsBusy}" />
             <Button Content="Отмена" Command="{Binding Import.CloseCommand}" />
             <Button Classes="primary" Content="Добавить" Command="{Binding Import.ImportCommand}" IsEnabled="{Binding !Import.IsBusy}" />
+          </StackPanel>
+          </DockPanel>
+        </StackPanel>
+      </Border>
+    </Border>
+
+    <!-- QR-код сервера (ADR-053): в нём ключ доступа, показывается только по кнопке -->
+    <Border IsVisible="{Binding Servers.IsQrOpen}" Background="{DynamicResource Overlay}">
+      <Border Classes="card" Width="440" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Spacing="12">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Width="40" Command="{Binding Servers.CloseQrCommand}" ToolTip.Tip="Закрыть" AutomationProperties.Name="Закрыть QR-код">
+<v:Icon Data="{StaticResource IconClose}" />
+</Button>
+            <TextBlock Text="{Binding Servers.QrTitle}" FontSize="19" FontWeight="Bold" TextWrapping="Wrap" VerticalAlignment="Center" />
+          </DockPanel>
+          <Border Background="White" CornerRadius="8" Padding="8" HorizontalAlignment="Center">
+            <Image Source="{Binding Servers.QrImage}" Width="320" Height="320" RenderOptions.BitmapInterpolationMode="None"
+                   AutomationProperties.Name="QR-код сервера" />
+          </Border>
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Наведите камеру телефона (v2rayNG, Hiddify, Happ, Streisand). В коде ключ доступа: не показывайте его посторонним и не выкладывайте скриншот." />
+          <TextBlock Text="{Binding Servers.QrNote}" Foreground="{DynamicResource OkFg}" TextWrapping="Wrap"
+                     IsVisible="{Binding Servers.QrNote, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <Button Content="Скопировать ссылку" Command="{Binding Servers.CopyQrLinkCommand}" />
+            <Button Classes="primary" Content="Закрыть" Command="{Binding Servers.CloseQrCommand}" />
           </StackPanel>
         </StackPanel>
       </Border>

@@ -114,7 +114,7 @@ public static class SettingsBackup
             SubUACustom = string.IsNullOrEmpty(s.Subscriptions.SubUACustom) ? ""
                 : Check(s.Subscriptions.SubUACustom, current.Subscriptions.SubUACustom, SettingsValidation.UserAgent(s.Subscriptions.SubUACustom), "Свой User-Agent"),
             UpdateHours = s.Subscriptions.UpdateHours is 0 or 6 or 12 or 24 ? s.Subscriptions.UpdateHours : current.Subscriptions.UpdateHours,
-            UpdateMinutes = s.Subscriptions.UpdateMinutes is 0 or 15 ? s.Subscriptions.UpdateMinutes : current.Subscriptions.UpdateMinutes,
+            UpdateMinutes = s.Subscriptions.UpdateMinutes is 0 or (>= SubscriptionDefaults.MinCustomMinutes and <= SubscriptionDefaults.MaxCustomMinutes) ? s.Subscriptions.UpdateMinutes : current.Subscriptions.UpdateMinutes,
         };
 
         var rules = new List<Rule>();

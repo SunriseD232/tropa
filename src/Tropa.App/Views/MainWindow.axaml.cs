@@ -9,6 +9,34 @@ internal sealed partial class MainWindow : Window
 {
     public MainWindow() => InitializeComponent();
 
+    private MainWindowViewModel? _vm;
+
+    // Вид окна (ADR-051): живёт только один из двух, чтобы скрытый не держал свои экраны и подписки.
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (_vm is not null)
+            _vm.PropertyChanged -= OnViewModelChanged;
+        _vm = DataContext as MainWindowViewModel;
+        if (_vm is not null)
+            _vm.PropertyChanged += OnViewModelChanged;
+        ApplyLayout();
+    }
+
+    private void OnViewModelChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.IsV2rayLayout))
+            ApplyLayout();
+    }
+
+    private void ApplyLayout()
+    {
+        var v2ray = _vm?.IsV2rayLayout == true;
+        if (LayoutHost.Content is Control current && current is V2rayLayoutView == v2ray)
+            return;
+        LayoutHost.Content = v2ray ? new V2rayLayoutView() : new TropaLayoutView();
+    }
+
     /// <summary>true — окно закрывается по-настоящему (выход из трея), иначе прячется в трей.</summary>
     public bool AllowClose { get; set; }
 

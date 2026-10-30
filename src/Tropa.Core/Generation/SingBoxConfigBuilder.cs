@@ -609,6 +609,12 @@ public static class SingBoxConfigBuilder
                 ["fingerprint"] = sec.Fingerprint ?? ctx.S.Dpi.Utls,
             };
         }
+        // Фрагментация соединения до сервера (ADR-055): TLS-рукопожатие кусками и несколькими TLS-записями.
+        if (ctx.S.Dpi.ServerFragment && p.Protocol != Protocol.Hysteria2)
+        {
+            tls["fragment"] = true;
+            tls["record_fragment"] = true;
+        }
         if (sec.Type == SecurityType.Reality)
         {
             var r = sec.Reality!;

@@ -27,6 +27,13 @@ internal sealed partial class ServersView : UserControl
         Details.Margin = narrow ? new Avalonia.Thickness(0, 16, 0, 0) : default;
     }
 
+    // Выделение нескольких серверов: модель знает, к чему применять «Удалить» и «Проверить».
+    private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is ServersViewModel vm && sender is ListBox list)
+            vm.SetPicked(list.SelectedItems?.OfType<ServerItemViewModel>() ?? []);
+    }
+
     // Двойной щелчок по серверу — сделать его текущим.
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
     {

@@ -59,8 +59,13 @@ public static class CompatRules
             "у XHTTP своё мультиплексирование",
             s => s with { Dpi = s.Dpi with { Mux = false } }),
         new("muxConc", (s, _) => !s.Dpi.Mux, "Mux выключен"),
+        new("serverFragment", (_, p) => p?.Protocol == Protocol.Hysteria2,
+            "Hysteria2 работает поверх QUIC (UDP) — TLS-рукопожатие по TCP здесь нечего резать"),
+        new("serverFragment", (_, p) => p is { Protocol: not Protocol.Hysteria2 } && p.Security.Type == SecurityType.None,
+            "у выбранного сервера нет TLS — фрагментация режет только TLS-рукопожатие"),
         new("templateText", (s, _) => !s.Expert.Template, "включите свой шаблон"),
         new("subUACustom", (s, _) => s.Subscriptions.SubUA != UserAgentMode.Custom, "выберите «Свой»"),
+        new("subInterval", (s, _) => !s.Subscriptions.CustomInterval, "выберите «Свой интервал»"),
     ];
 
     public static CompatResult Evaluate(AppSettings settings, Profile? activeProfile = null)

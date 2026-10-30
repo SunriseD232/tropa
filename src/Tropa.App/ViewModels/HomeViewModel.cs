@@ -221,7 +221,26 @@ internal sealed partial class HomeViewModel : ObservableObject
         ? "Служба Тропы создаёт виртуальную сетевую карту, и через неё идёт трафик всех программ: игры, голос Discord, мессенджеры. Правила для приложений работают. При отключении, сбое или закрытии Тропы служба останавливает подключение и возвращает настройки DNS Windows."
         : "Тропа включает прокси Windows, и через сервер идут браузеры и программы, которые его используют. При отключении и даже после сбоя прежние настройки прокси возвращаются.";
 
-    partial void OnModeTunChanged(bool value) => OnPropertyChanged(nameof(HowItWorks));
+    partial void OnModeTunChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HowItWorks));
+        OnPropertyChanged(nameof(TunToggle));
+    }
+
+    /// <summary>Переключатель «TUN» в строке состояния вида «как в v2rayN»: то же, что выбор режима на главной.</summary>
+    public bool TunToggle
+    {
+        get => ModeTun;
+        set
+        {
+            if (value != ModeTun)
+                SetMode(value ? "tun" : "proxy");
+        }
+    }
+
+    /// <summary>Подпись кнопки подключения в строке состояния: что произойдёт по нажатию.</summary>
+    [ObservableProperty]
+    public partial string ActionText { get; set; } = "Подключить";
 
     private void Refresh()
     {
@@ -309,6 +328,14 @@ internal sealed partial class HomeViewModel : ObservableObject
         Message = s.Message;
         OnExitRegion();
         OnPropertyChanged(nameof(Blocking));
+        ActionText = s.State switch
+        {
+            ConnectionState.Connected => "Отключить",
+            ConnectionState.Connecting => "Подключение…",
+            ConnectionState.Disconnecting => "Отключение…",
+            ConnectionState.Error => "Повторить",
+            _ => "Подключить",
+        };
         StateText = s.State switch
         {
             ConnectionState.Connected => "Подключено",
