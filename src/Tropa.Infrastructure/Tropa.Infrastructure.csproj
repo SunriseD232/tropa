@@ -17,6 +17,8 @@
     <EmbeddedResource Include="..\..\tools\geo.lock.json" LogicalName="Tropa.geo.lock.json" />
     <!-- Адрес манифеста, публичный ключ подписи и номер выпуска, с которым собран установщик (ADR-023). -->
     <EmbeddedResource Include="..\..\tools\update.config.json" LogicalName="Tropa.update.config.json" />
+    <!-- Адрес и ключ сервера журнала для разработчика (ADR-050). Пустой адрес — журнал выключен. -->
+    <EmbeddedResource Include="..\..\tools\telemetry.config.json" LogicalName="Tropa.telemetry.config.json" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Tropa.Infrastructure.Tests" />

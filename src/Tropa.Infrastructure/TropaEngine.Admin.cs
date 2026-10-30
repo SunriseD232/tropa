@@ -185,7 +185,7 @@ public sealed partial class TropaEngine
         });
         var activeChanged = trust && ApplyAdminActive(subscriptionId);
         if (Status.State == ConnectionState.Connected)
-            await ReconnectAsync(ct).ConfigureAwait(false);
+            await ReconnectAsync("trust-admin", ct).ConfigureAwait(false);
         else if (activeChanged)
             StateChanged?.Invoke(this, EventArgs.Empty);
     }

@@ -194,7 +194,7 @@ internal sealed partial class OnboardingViewModel : ObservableObject
 
             await _engine.SetActiveAsync(id);
             Message = "Подключаюсь к " + _engine.State.ActiveProfile?.Name + "…";
-            await _engine.ConnectAsync();
+            await _engine.ConnectAsync("onboarding");
             if (_engine.Status.State == ConnectionState.Connected)
                 Finish();
             else

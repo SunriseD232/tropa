@@ -33,6 +33,7 @@ public static class SettingsBackup
         {
             Connection = settings.Connection with { UwpLoopback = [] },
             Cores = settings.Cores with { LastManifestSequence = 0, LastUpdateCheck = null },
+            Telemetry = new(),
             Routing = settings.Routing with
             {
                 Rules = settings.Routing.Rules.Select(r => r with { Tcp = Portable(r.Tcp), Udp = Portable(r.Udp) }).ToList(),
@@ -154,6 +155,8 @@ public static class SettingsBackup
             },
             // Защита от отката обновлений не должна зависеть от импортированного файла.
             Cores = s.Cores with { LastManifestSequence = current.Cores.LastManifestSequence, LastUpdateCheck = current.Cores.LastUpdateCheck },
+            // Имя и согласие на журнал — личное, из чужого файла не берём.
+            Telemetry = current.Telemetry,
             Routing = s.Routing with { Rules = rules, GeoEdits = GeoEdits.Sanitize(s.Routing.GeoEdits), CustomLists = GeoEdits.SanitizeCustom(s.Routing.CustomLists) },
         };
         return (result, warnings);

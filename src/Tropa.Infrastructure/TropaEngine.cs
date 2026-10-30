@@ -13,6 +13,8 @@ using Tropa.Infrastructure.Net;
 using Tropa.Infrastructure.Service;
 using Tropa.Infrastructure.Storage;
 using Tropa.Infrastructure.SystemIntegration;
+using Tropa.Core.Telemetry;
+using Tropa.Infrastructure.Telemetry;
 using Tropa.Infrastructure.Testing;
 using Tropa.Infrastructure.Updates;
 using Tropa.Core.Updates;
@@ -67,9 +69,10 @@ public sealed partial class TropaEngine : IAsyncDisposable
     private CancellationTokenSource? _trafficCts;
     private int _mixedPort;
     private bool _systemProxyApplied;
+    private bool _lastPlanNeedsXray;
 
     private TropaEngine(EnginePaths paths, StateStore store, LoadResult loaded, SystemProxy systemProxy, CoreLocations locations,
-        Func<DateTimeOffset> now, Func<CancellationToken, Task<ServiceClient?>> connectService, Func<bool> serviceInstalled)
+        Func<DateTimeOffset> now, Func<CancellationToken, Task<ServiceClient?>> connectService, Func<bool> serviceInstalled, TelemetryConfig telemetry)
     {
         _paths = paths;
         _store = store;
@@ -82,6 +85,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         State = loaded.State;
         StartupWarning = loaded.Warning;
         Log += (_, line) => Remember(line);
+        InitTelemetry(telemetry);
     }
 
     /// <summary>
@@ -161,6 +165,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
             client.Status += OnServiceStatus;
             client.Disconnected += OnServiceDisconnected;
             _service = client;
+            Rec(Ev.ServiceAttached, ("tun", Flag(client.TunSupported)), ("cores", client.CoreVersions));
             // Узнаём, не держит ли служба блокировку после прошлого сеанса.
             try
             {
@@ -233,7 +238,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
 
     public static TropaEngine Open(EnginePaths paths, IProxySettingsStore? proxyStore = null, CoreLocations? locations = null,
         Func<DateTimeOffset>? now = null, Func<CancellationToken, Task<ServiceClient?>>? connectService = null,
-        Func<bool>? serviceInstalled = null)
+        Func<bool>? serviceInstalled = null, TelemetryConfig? telemetry = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         Directory.CreateDirectory(paths.Roaming);
@@ -246,7 +251,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         var effectiveLocations = locations ?? new UpdateStore(paths.UpdatesDirectory, UpdateConfig.Embedded).Load(CoreLocations.Default());
         var engine = new TropaEngine(paths, store, loaded, systemProxy, effectiveLocations, now ?? (() => DateTimeOffset.Now),
             connectService ?? (_ => Task.FromResult<ServiceClient?>(null)),
-            serviceInstalled ?? (connectService is null ? () => false : ServiceRegistered));
+            serviceInstalled ?? (connectService is null ? () => false : ServiceRegistered), telemetry ?? TelemetryConfig.Embedded);
 
         // Откат после сбоя: если в журнале остались наши изменения, возвращаем систему в исходное состояние.
         if (systemProxy.IsAppliedByUs)
@@ -276,8 +281,11 @@ public sealed partial class TropaEngine : IAsyncDisposable
 
     private void Update(Func<AppState, AppState> change)
     {
+        var before = State.Settings;
         State = change(State);
         Save();
+        if (!ReferenceEquals(before, State.Settings))
+            OnSettingsChangedForTelemetry(before, State.Settings);
         StateChanged?.Invoke(this, EventArgs.Empty);
         SchedulePublish();
     }
@@ -292,8 +300,9 @@ public sealed partial class TropaEngine : IAsyncDisposable
         if (State.Profiles.All(p => p.Profile.Id != profileId || p.Hidden))
             return;
         Update(s => s with { ActiveProfileId = profileId });
+        Rec(Ev.ActiveServer, ServerFields(State.ActiveProfile));
         if (Status.State == ConnectionState.Connected)
-            await ReconnectAsync(ct).ConfigureAwait(false);
+            await ReconnectAsync("server", ct).ConfigureAwait(false);
     }
 
     /// <summary>Добавляет или заменяет сервер. Если он сейчас используется — переподключение.</summary>
@@ -308,8 +317,9 @@ public sealed partial class TropaEngine : IAsyncDisposable
                 : [.. s.Profiles, new StoredProfile { Profile = profile, Order = s.Profiles.Count }],
             ActiveProfileId = s.ActiveProfileId ?? profile.Id,
         });
+        Rec(Ev.ServerSaved, [("new", Flag(!existed)), .. ServerFields(profile)]);
         if (Status.State == ConnectionState.Connected && State.ActiveProfileId == profile.Id)
-            await ReconnectAsync(ct).ConfigureAwait(false);
+            await ReconnectAsync("server-edit", ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -319,6 +329,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
     public void RemoveProfiles(IReadOnlyCollection<Guid> profileIds)
     {
         ArgumentNullException.ThrowIfNull(profileIds);
+        Rec(Ev.ServersRemoved, ("n", Num(profileIds.Count)));
         Update(s =>
         {
             var ids = profileIds.ToHashSet();
@@ -343,7 +354,9 @@ public sealed partial class TropaEngine : IAsyncDisposable
             Profiles = s.Profiles.Select(p => p.Hidden && (subscriptionId is null || p.Profile.SubscriptionId == subscriptionId) ? p with { Hidden = false } : p).ToList(),
         });
 
-    public void RemoveSubscription(Guid subscriptionId) =>
+    public void RemoveSubscription(Guid subscriptionId)
+    {
+        Rec(Ev.SubscriptionRemoved, ("servers", Num(State.Profiles.Count(p => p.Profile.SubscriptionId == subscriptionId))));
         Update(s =>
         {
             var profiles = s.Profiles.Where(p => p.Profile.SubscriptionId != subscriptionId).ToList();
@@ -354,6 +367,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
                 ActiveProfileId = KeepActive(profiles, s.ActiveProfileId),
             };
         });
+    }
 
     /// <summary>Сдвигает подписку на одну позицию (delta = −1 — левее, +1 — правее).</summary>
     public void MoveSubscription(Guid subscriptionId, int delta) =>
@@ -428,6 +442,8 @@ public sealed partial class TropaEngine : IAsyncDisposable
             .ToList();
         if (parsed.Profiles.Count == 0 && parsed.Errors.Count == 0)
             messages.Add("Не найдено ни одной ссылки vless://, vmess://, trojan://, ss:// или hysteria2://.");
+        Rec(Ev.Import, ("added", Num(fresh.Count)), ("found", Num(parsed.Profiles.Count)), ("errors", Num(parsed.Errors.Count)),
+            ("skipped", Num(parsed.SkippedUnsupported)), ("protocols", string.Join(",", fresh.Select(p => p.Protocol).Distinct())));
         return new ImportReport(fresh.Count, 0, parsed.Errors.Count, parsed.SkippedUnsupported, messages);
     }
 
@@ -454,6 +470,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
             FetchViaProxy = defaults.SubViaProxy,
         };
         Update(s => s with { Subscriptions = [.. s.Subscriptions, sub] });
+        Rec(Ev.SubscriptionAdded, ("ua", sub.UserAgent.ToString()), ("viaProxy", Flag(sub.FetchViaProxy)), ("hwid", Flag(sub.SendHwid)));
         return await UpdateSubscriptionAsync(sub.Id, ct).ConfigureAwait(false);
     }
 
@@ -491,6 +508,8 @@ public sealed partial class TropaEngine : IAsyncDisposable
         catch (SubscriptionFetchException ex)
         {
             ReplaceSubscription(sub with { LastError = ex.Message });
+            RecUrgent(Ev.SubscriptionUpdated, ("ok", "0"), ("error", NetLogClassifier.Anonymize(Scrubber.Scrub(ex.Message))),
+                ("viaProxyAvailable", Flag(proxy is not null)));
             return new ImportReport(0, 0, 1, 0, [ex.Message]);
         }
 
@@ -520,13 +539,17 @@ public sealed partial class TropaEngine : IAsyncDisposable
                     .OrderBy(p => p.Order).FirstOrDefault()?.Profile.Id,
         });
 
+        Rec(Ev.SubscriptionUpdated, ("ok", Flag(parsed.Profiles.Count > 0)), ("servers", Num(parsed.Profiles.Count)), ("added", Num(merged.Added)),
+            ("updated", Num(merged.Updated)), ("errors", Num(parsed.Errors.Count)), ("skipped", Num(parsed.SkippedUnsupported)),
+            ("viaProxy", Flag(fetched.ViaProxy)), ("admin", Flag(admin is not null)), ("trustAdmin", Flag(sub.TrustAdmin)));
+
         // Администратор выбрал другой сервер или поменял правила — применяем сразу (если ему доверяют).
         var activeChanged = ApplyAdminActive(sub.Id);
         if ((activeChanged || adminRevisionChanged) && Status.State == ConnectionState.Connected)
         {
             try
             {
-                await ReconnectAsync(ct).ConfigureAwait(false);
+                await ReconnectAsync("admin", ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException)
             {
@@ -581,8 +604,9 @@ public sealed partial class TropaEngine : IAsyncDisposable
     public async Task SetServerCoreAsync(Guid profileId, CoreChoice core, CancellationToken ct = default)
     {
         Update(s => s with { Profiles = s.Profiles.Select(p => p.Profile.Id == profileId ? p with { Core = core } : p).ToList() });
-        if (State.ActiveProfileId == profileId)
-            await ApplyIfConnectedAsync(ct).ConfigureAwait(false);
+        Rec(Ev.ServerCore, ("core", core.ToString()), ("active", Flag(State.ActiveProfileId == profileId)));
+        if (State.ActiveProfileId == profileId && Status.State == ConnectionState.Connected)
+            await ReconnectAsync("server-core", ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -650,6 +674,14 @@ public sealed partial class TropaEngine : IAsyncDisposable
                 }
                 : sp).ToList(),
         });
+        Rec(Ev.ServerTest, ("kinds", kinds.ToString()), ("n", Num(results.Count)),
+            ("results", string.Join("; ", profiles.Take(50).Where(p => results.ContainsKey(p.Id)).Select(p =>
+            {
+                var r = results[p.Id];
+                var core = detected.TryGetValue(p.Id, out var d) ? d?.ToString() ?? "none" : KeyFor(p).ToString();
+                return $"{p.Name} [{p.Protocol}/{p.Transport.Type}/{p.Security.Type}]: {ServerHealth.Classify(r)} {r.DelayMs?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-"}ms {core}"
+                    + (r.Error is { } e ? " — " + NetLogClassifier.Template(e) : "");
+            }))));
         return results;
 
         static bool Works(ServerTestResult? r) => ServerHealth.Classify(r) is HealthStatus.Working or HealthStatus.Slow;
@@ -686,19 +718,34 @@ public sealed partial class TropaEngine : IAsyncDisposable
 
     // ---------------- Подключение ----------------
 
-    public async Task ConnectAsync(CancellationToken ct = default)
+    public Task ConnectAsync(CancellationToken ct = default) => ConnectAsync(null, ct);
+
+    /// <param name="source">Откуда нажали «Подключить» (home, tray, hotkey, autostart…) — для журнала разработчика.</param>
+    /// <param name="ct">Отмена.</param>
+    public async Task ConnectAsync(string? source, CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
+        var started = _now();
         try
         {
             if (Status.State == ConnectionState.Connected)
                 return;
             SetStatus(new ConnectionStatus(ConnectionState.Connecting));
             await AttachServiceAsync(ct).ConfigureAwait(false);
+            Rec(Ev.ConnectStart, [
+                ("src", source ?? "?"),
+                ("mode", State.Settings.Connection.Mode.ToString()),
+                ("effMode", State.Settings.Connection.Mode == CaptureMode.Tun && !TunAvailable ? CaptureMode.SystemProxy.ToString() : State.Settings.Connection.Mode.ToString()),
+                ("service", ServiceAvailable ? (TunAvailable ? "tun" : "no-tun") : ServiceStarting ? "starting" : "none"),
+                ("killSwitch", Flag(State.Settings.General.KillSwitch)),
+                ("route", State.Settings.Routing.Preset.ToString()),
+                .. ServerFields(State.ActiveProfile)]);
             if (State.Settings.Connection.Mode == CaptureMode.Tun && ServiceStarting)
             {
                 SetStatus(new ConnectionStatus(ConnectionState.Connecting, "Жду, пока запустится служба Тропы (так бывает сразу после входа в Windows)…"));
-                await WaitForServiceAsync(ServiceStartWait, ct).ConfigureAwait(false);
+                var waitFrom = _now();
+                var ok = await WaitForServiceAsync(ServiceStartWait, ct).ConfigureAwait(false);
+                Rec(Ev.ServiceWait, ("ms", Ms(_now() - waitFrom)), ("ok", Flag(ok)));
             }
 
             // Ядро для сервера ещё не определено — быстро проверяем: сначала Xray, потом sing-box.
@@ -725,6 +772,10 @@ public sealed partial class TropaEngine : IAsyncDisposable
             if (ForeignVpnWarning() is { } foreign)
                 note = note is null ? foreign : foreign + " " + note;
             SetStatus(new ConnectionStatus(ConnectionState.Connected, note, _now()));
+            Rec(Ev.Connected, ("ms", Ms(_now() - started)), ("viaService", Flag(_runningViaService)), ("xray", Flag(_lastPlanNeedsXray)),
+                ("note", note is null ? null : NetLogClassifier.Anonymize(note)));
+            if (note is not null)
+                RecordEnvironment("connected-with-note");
             RefreshActiveSubscriptionSoon();
         }
         catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException or ServiceException or TimeoutException)
@@ -735,6 +786,10 @@ public sealed partial class TropaEngine : IAsyncDisposable
             _servicePending = false;
             await StopCoreAsync(sendStop: !State.Settings.General.KillSwitch).ConfigureAwait(false);
             SetStatus(new ConnectionStatus(ConnectionState.Error, Scrubber.Scrub(ex.Message)));
+            RecUrgent(Ev.ConnectFailed, ("ms", Ms(_now() - started)), ("type", ex.GetType().Name), ("msg", NetLogClassifier.Anonymize(Scrubber.Scrub(ex.Message))),
+                ("inner", ex.InnerException is { } inner ? NetLogClassifier.Anonymize(Scrubber.Scrub(inner.Message)) : null));
+            // Подключение не удалось — что вокруг: чужой VPN, прокси Windows, адаптеры.
+            RecordEnvironment("connect-failed");
         }
         finally
         {
@@ -785,6 +840,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         var check = await new UpdateClient(http, Updates).CheckAsync(CurrentLocations, AppVersion,
             State.Settings.Cores.LastManifestSequence, _now(), ct).ConfigureAwait(false);
         UpdateSettings(s => s with { Cores = s.Cores with { LastManifestSequence = check.Manifest.Manifest.Sequence, LastUpdateCheck = _now() } });
+        Rec(Ev.UpdateCheck, ("sequence", check.Manifest.Manifest.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         return check;
     }
 
@@ -850,7 +906,9 @@ public sealed partial class TropaEngine : IAsyncDisposable
     public async Task<string> DownloadAppUpdateAsync(AppRelease app, CancellationToken ct = default)
     {
         using var http = UpdateHttp();
-        return await new UpdateClient(http, Updates).DownloadInstallerAsync(app, Path.Combine(_paths.Local, "update-download"), ct).ConfigureAwait(false);
+        var path = await new UpdateClient(http, Updates).DownloadInstallerAsync(app, Path.Combine(_paths.Local, "update-download"), ct).ConfigureAwait(false);
+        Rec(Ev.AppUpdateDownloaded, ("version", app.Version.ToString()));
+        return path;
     }
 
     // ---------------- Переподключение после сна и смены сети ----------------
@@ -883,12 +941,19 @@ public sealed partial class TropaEngine : IAsyncDisposable
             var signature = NetworkSignature();
             var changed = signature != _networkSignature;
             _networkSignature = signature;
+            if (slept)
+                Rec(Ev.WokeUp, ("connected", Flag(Status.State == ConnectionState.Connected)));
+            if (changed)
+            {
+                Rec(Ev.NetworkChanged, ("connected", Flag(Status.State == ConnectionState.Connected)));
+                RecordEnvironment("network-changed");
+            }
             if (!(slept || changed) || !State.Settings.General.Reconnect || Status.State != ConnectionState.Connected)
                 return;
             // Сеть после пробуждения поднимается не сразу.
             await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
             Log?.Invoke(this, slept ? "Компьютер проснулся — переподключаюсь." : "Сеть сменилась — переподключаюсь.");
-            await ApplyIfConnectedAsync().ConfigureAwait(false);
+            await ReconnectAsync(slept ? "wake" : "network", CancellationToken.None).ConfigureAwait(false);
             _networkSignature = NetworkSignature();
         }
         catch (Exception ex) when (ex is System.Net.NetworkInformation.NetworkInformationException or InvalidOperationException or ObjectDisposedException)
@@ -997,8 +1062,15 @@ public sealed partial class TropaEngine : IAsyncDisposable
     };
 
     /// <summary>Десять шагов диагностики; текущее подключение не трогается.</summary>
-    public Task<IReadOnlyList<StepResult>> RunDiagnosticsAsync(IProgress<StepResult>? progress, CancellationToken ct = default) =>
-        DiagnosticsRunner.RunAsync(DiagnosticsInputNow(), progress, ct);
+    public async Task<IReadOnlyList<StepResult>> RunDiagnosticsAsync(IProgress<StepResult>? progress, CancellationToken ct = default)
+    {
+        var steps = await DiagnosticsRunner.RunAsync(DiagnosticsInputNow(), progress, ct).ConfigureAwait(false);
+        // Ключ и итог шага, а для неудачных — обезличенные подробности.
+        Rec(Ev.Diagnostics, steps.ToDictionary(st => st.Key,
+            st => st.Status.ToString() + (st.Status.ToString() is "Ok" or "Skipped" || st.Details is null ? "" : " — " + NetLogClassifier.Anonymize(st.Details)),
+            StringComparer.Ordinal));
+        return steps;
+    }
 
     /// <summary>Инструмент «Проверка домена»: ответ DNS провайдера и через туннель.</summary>
     public Task<DomainCheck> CheckDomainAsync(string domain, CancellationToken ct = default) =>
@@ -1010,6 +1082,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         await AttachServiceAsync(ct).ConfigureAwait(false);
         if (_service is { IsConnected: true } service)
             await service.SendAsync(new Ipc.StopRequest(), ct).ConfigureAwait(false);
+        Rec(Ev.BlockingReleased);
         Blocking = false;
         ServiceChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -1020,6 +1093,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
     /// </summary>
     public async Task EmergencyRollbackAsync()
     {
+        RecUrgent(Ev.EmergencyRollback, ("state", Status.State.ToString()), ("blocking", Flag(Blocking)));
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -1049,11 +1123,13 @@ public sealed partial class TropaEngine : IAsyncDisposable
     }
 
 
-    public async Task DisconnectAsync()
+    public async Task DisconnectAsync(string? source = null)
     {
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
+            Rec(Ev.Disconnect, ("src", source ?? "?"), ("state", Status.State.ToString()),
+                ("connectedMin", Status.Since is { } since ? ((long)(_now() - since).TotalMinutes).ToString(System.Globalization.CultureInfo.InvariantCulture) : null));
             SetStatus(new ConnectionStatus(ConnectionState.Disconnecting));
             await StopCoreAsync().ConfigureAwait(false);
             SetStatus(new ConnectionStatus(ConnectionState.Disconnected));
@@ -1068,11 +1144,12 @@ public sealed partial class TropaEngine : IAsyncDisposable
     public async Task ApplyIfConnectedAsync(CancellationToken ct = default)
     {
         if (Status.State == ConnectionState.Connected)
-            await ReconnectAsync(ct).ConfigureAwait(false);
+            await ReconnectAsync("settings", ct).ConfigureAwait(false);
     }
 
-    private async Task ReconnectAsync(CancellationToken ct)
+    private async Task ReconnectAsync(string reason, CancellationToken ct)
     {
+        Rec(Ev.Reconnect, ("reason", reason));
         // Через службу перезапуск — одной командой Start: служба сама остановит старое ядро
         // и не снимет блокировку kill switch между остановкой и запуском.
         await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -1089,7 +1166,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
             _gate.Release();
         }
 
-        await ConnectAsync(ct).ConfigureAwait(false);
+        await ConnectAsync("reconnect:" + reason, ct).ConfigureAwait(false);
     }
 
     private async Task StartCoreAsync(CancellationToken ct)
@@ -1118,7 +1195,10 @@ public sealed partial class TropaEngine : IAsyncDisposable
         // Прокси Windows, оставшийся от прошлого режима «Только браузеры», уводит браузеры и Discord во вход
         // с паролем — они не открывают ничего. В режиме «Только браузеры» его к тому же записали бы как исходный.
         if (!_systemProxyApplied && _systemProxy.DisableStaleOwn([_mixedPort, effective.Connection.SocksPort]) is { } stale)
+        {
             Log?.Invoke(this, $"Выключен старый системный прокси Тропы ({stale}): он мешал браузерам и Discord.");
+            Rec(Ev.StaleProxyDisabled, ("server", NetLogClassifier.Anonymize(stale)));
+        }
 
         // Через службу наборы правил читает она — из своего защищённого каталога.
         var service = ServiceAvailable ? _service : null;
@@ -1135,6 +1215,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         // Гибрид (docs/05-config-generation.md, §1): серверы с XHTTP и те, кому выбрано ядро Xray.
         var allProfiles = State.Profiles.Select(p => p.Profile).ToList();
         var plan = CorePlan.Make(settings, UsedProfiles(active, allProfiles, effective), CoreFor);
+        _lastPlanNeedsXray = plan.NeedsXray;
         string? xrayConfig = null;
         var xrayPorts = new Dictionary<Guid, int>();
         LocalAuth? xrayAuth = null;
@@ -1272,6 +1353,9 @@ public sealed partial class TropaEngine : IAsyncDisposable
                 if (!results.TryGetValue(activeId, out var r) || !ServerHealth.ShouldExclude(r, _now()))
                     continue;
 
+                RecUrgent(Ev.ServerUnhealthy, [("health", ServerHealth.Classify(r).ToString()), ("delayMs", r.DelayMs?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("speed", r.SpeedMbps?.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)), ("frozen", Flag(r.Frozen)),
+                    ("error", r.Error is { } e ? NetLogClassifier.Template(e) : null), .. ServerFields(active)]);
                 SetStatus(Status with
                 {
                     Message = $"Сервер «{active.Name}»: {ServerHealth.Title(ServerHealth.Classify(r)).ToLowerInvariant()}. " + ServerHealth.Explain(r)
@@ -1329,6 +1413,8 @@ public sealed partial class TropaEngine : IAsyncDisposable
     {
         if (ExitRegion == region)
             return;
+        if (region?.CountryCode != ExitRegion?.CountryCode)
+            Rec(Ev.ExitRegion, ("country", region?.CountryCode ?? "нет"));
         ExitRegion = region;
         ExitRegionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -1363,8 +1449,10 @@ public sealed partial class TropaEngine : IAsyncDisposable
             await _gate.WaitAsync().ConfigureAwait(false);
             try
             {
+                var which = ReferenceEquals(sender, _xray) ? "xray" : "sing-box";
                 await StopCoreAsync().ConfigureAwait(false);
                 SetStatus(new ConnectionStatus(ConnectionState.Error, $"Ядро неожиданно остановилось (код {exitCode}). Подробности — в журнале."));
+                RecUrgent(Ev.CoreExited, ("core", which), ("code", Num(exitCode)));
             }
             finally
             {
@@ -1423,6 +1511,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
     {
         if (Blocking != status.Blocking)
         {
+            Rec(Ev.BlockingChanged, ("blocking", Flag(status.Blocking)));
             Blocking = status.Blocking;
             ServiceChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -1438,6 +1527,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
                     _runningViaService = false;
                     await StopCoreAsync(sendStop: false).ConfigureAwait(false);
                     SetStatus(new ConnectionStatus(ConnectionState.Disconnected, status.Message));
+                    RecUrgent(Ev.ServiceStoppedOutside, ("msg", NetLogClassifier.Anonymize(status.Message)));
                 }
                 finally
                 {
@@ -1457,6 +1547,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
                 _runningViaService = false; // служба уже остановила ядро
                 await StopCoreAsync().ConfigureAwait(false);
                 SetStatus(new ConnectionStatus(ConnectionState.Error, status.Message ?? "Служба остановила подключение из-за сбоя ядра."));
+                RecUrgent(Ev.ServiceCoreFailed, ("msg", status.Message is { } m ? NetLogClassifier.Anonymize(m) : null));
             }
             finally
             {
@@ -1475,6 +1566,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
             {
                 var wasRunning = _runningViaService;
                 _runningViaService = false;
+                RecUrgent(Ev.ServiceLost, ("wasRunning", Flag(wasRunning)));
                 if (_service is { } old)
                 {
                     _service = null;
@@ -1533,6 +1625,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
     {
         if (_watchTimer is not null)
             await _watchTimer.DisposeAsync().ConfigureAwait(false);
+        await StopTelemetryAsync().ConfigureAwait(false);
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {

@@ -293,9 +293,9 @@ internal sealed partial class HomeViewModel : ObservableObject
     private async Task ToggleAsync()
     {
         if (_engine.Status.State is ConnectionState.Connected)
-            await _engine.DisconnectAsync();
+            await _engine.DisconnectAsync("home");
         else if (_engine.Status.State is ConnectionState.Disconnected or ConnectionState.Error)
-            await _engine.ConnectAsync();
+            await _engine.ConnectAsync("home");
     }
 
     [RelayCommand]

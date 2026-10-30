@@ -35,6 +35,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
             Dpi(),
             CoresSection(),
             Friends(),
+            TelemetrySection(),
             Expert(),
         ];
         foreach (var row in Sections.SelectMany(s => s.Rows))
@@ -47,6 +48,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(Load);
         engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(Load);
         engine.AdminPublishStatusChanged += (_, _) => Dispatcher.UIThread.Post(Load);
+        if (engine.Telemetry is { } telemetry)
+            telemetry.StatusChanged += (_, _) => Dispatcher.UIThread.Post(Load);
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() =>
         {
             if (s.State != ConnectionState.Connected)
@@ -311,6 +314,38 @@ internal sealed partial class SettingsViewModel : ObservableObject
             },
             TropaEngine.ValidateAdminKey, placeholder: "Ключ с сервера публикации", hint: "Ключ нужен серверу публикации, друзьям — нет. После сохранения виден только маской."),
     ]);
+
+    private SettingsSection TelemetrySection() => new("telemetry", "Журнал для разработчика",
+        "Помогает разработчику находить причины обрывов и ошибок подключения. Без ключей, адресов серверов и сайтов.",
+    [
+        new ToggleRow("Отправлять журнал работы", "telemetry", s => !s.Telemetry.Off, (s, v) => s with { Telemetry = s.Telemetry with { Off = !v } },
+            hint: "Настройки, нажатые кнопки, подключения, сбои и сетевые ошибки ядер по видам. Выключите — неотправленное сотрётся."),
+        new TextRow("Ваше имя для разработчика", "telemetry", s => s.Telemetry.Name,
+            (s, v) => s with { Telemetry = s.Telemetry with { Name = Core.Security.NameSanitizer.Sanitize(v, "") } },
+            v => v.Trim().Length <= 40 ? null : "Не длиннее 40 символов.", placeholder: "Необязательно — например, Вася"),
+        new LabelRow("Состояние", "telemetry", TelemetryState),
+        new ActionRow("Отправка", "telemetry", null,
+            ("Отправить сейчас", new AsyncRelayCommand(async () =>
+            {
+                if (_engine.Telemetry is not { Active: true } t)
+                {
+                    Report("Журнал выключен.", error: true);
+                    return;
+                }
+
+                var ok = await Task.Run(() => t.FlushAsync());
+                Report(ok ? "Журнал отправлен." : t.LastResult ?? "Не удалось отправить.", error: !ok);
+            }))),
+    ]);
+
+    private string TelemetryState()
+    {
+        if (!_engine.TelemetryConfigured || _engine.Telemetry is not { } t)
+            return "В этой сборке сервер журнала не задан — ничего не отправляется.";
+        if (!t.Active)
+            return "Выключено.";
+        return $"Ваш номер: {t.InstallId[..8]}. Ждут отправки: {t.Pending}. {t.LastResult ?? "Ещё не отправляли."}";
+    }
 
     private void Copy(string? text, string done)
     {

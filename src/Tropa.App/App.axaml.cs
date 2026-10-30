@@ -68,6 +68,15 @@ internal sealed partial class App : Application
             _hotkey = new Services.GlobalHotkey(_window, () => Dispatcher.UIThread.Post(() => _ = ToggleAsync()));
             _hotkey.Register(_engine.State.Settings.General.Hotkey);
             _engine.StartNetworkWatch();
+            // Журнал для разработчика (ADR-050): необработанные ошибки тоже попадают в него.
+            _engine.StartTelemetry(AfterUpdate ? "after-update" : FromAutostart ? "autostart" : "manual");
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                if (e.ExceptionObject is Exception ex)
+                    _engine?.RecordCrash(ex, "domain");
+            };
+            TaskScheduler.UnobservedTaskException += (_, e) => _engine?.RecordCrash(e.Exception, "task");
+            Dispatcher.UIThread.UnhandledException += (_, e) => _engine?.RecordCrash(e.Exception, "ui");
             // Автообновление подписок (subUpdate): раз в минуту смотрим, какие пора обновить — у каждой свой
             // интервал (подписка администратора — раз в 5 минут, ADR-048). Сама проверка ничего не скачивает.
             _subscriptionTimer = new DispatcherTimer(TimeSpan.FromMinutes(1), DispatcherPriority.Background, async (_, _) =>
@@ -112,9 +121,9 @@ internal sealed partial class App : Application
         _toggleItem.Click += async (_, _) =>
         {
             if (_engine!.Status.State == ConnectionState.Connected)
-                await _engine.DisconnectAsync();
+                await _engine.DisconnectAsync("tray");
             else
-                await _engine.ConnectAsync();
+                await _engine.ConnectAsync("tray");
         };
         var open = new NativeMenuItem("Открыть Тропу");
         open.Click += (_, _) => ShowWindow();
@@ -183,7 +192,7 @@ internal sealed partial class App : Application
         // Служба стартует вместе с Windows, но может отстать от автозагрузки: ждём её, иначе
         // «Весь компьютер» молча стал бы «Только браузеры».
         await engine.WaitForServiceAsync(TropaEngine.ServiceStartWait);
-        await engine.ConnectAsync();
+        await engine.ConnectAsync(App.ReconnectAfterUpdate ? "after-update" : "autostart");
     }
 
     private async Task ToggleAsync()
@@ -191,9 +200,9 @@ internal sealed partial class App : Application
         if (_engine is not { } engine)
             return;
         if (engine.Status.State == ConnectionState.Connected)
-            await engine.DisconnectAsync();
+            await engine.DisconnectAsync("hotkey");
         else if (engine.Status.State is ConnectionState.Disconnected or ConnectionState.Error)
-            await engine.ConnectAsync();
+            await engine.ConnectAsync("hotkey");
     }
 
     private void ShowWindow()

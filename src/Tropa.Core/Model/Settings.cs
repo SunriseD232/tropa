@@ -182,6 +182,25 @@ public sealed record AppSettings
     public AdminPublishSettings Admin { get => _admin; init => _admin = value ?? new(); }
 
     private readonly AdminPublishSettings _admin = new();
+
+    /// <summary>Журнал для разработчика (ADR-050). null из старого settings.json — значения по умолчанию.</summary>
+    public TelemetrySettings Telemetry { get => _telemetry; init => _telemetry = value ?? new(); }
+
+    private readonly TelemetrySettings _telemetry = new();
+}
+
+/// <summary>
+/// Журнал работы для разработчика (ADR-050): что происходит в Тропе уходит на сервер владельца сборки.
+/// Флаг «наоборот»: отсутствующее свойство читается как false, то есть «отправлять».
+/// </summary>
+public sealed record TelemetrySettings
+{
+    public bool Off { get; init; }
+
+    /// <summary>Имя, по которому разработчик узнает пользователя в журнале. Необязательно.</summary>
+    public string Name { get => _name; init => _name = value ?? ""; }
+
+    private readonly string _name = "";
 }
 
 /// <summary>
