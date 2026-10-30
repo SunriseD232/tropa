@@ -35,11 +35,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Warning = engine.StartupWarning;
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => FooterStatus = s.State == ConnectionState.Connected ? "Подключено" : "Отключено");
         IsV2rayLayout = engine.State.Settings.General.Layout == WindowLayout.V2rayN;
-        engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(() =>
-        {
-            IsV2rayLayout = _engine.State.Settings.General.Layout == WindowLayout.V2rayN;
-            OnPropertyChanged(nameof(PortText));
-        });
+        engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(() => IsV2rayLayout = _engine.State.Settings.General.Layout == WindowLayout.V2rayN);
         // Журнал внизу вида «как в v2rayN»: строки уже без секретов (RecentLog), обновление не чаще раза в секунду.
         _logTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => FlushLog());
         engine.Log += (_, _) => _logDirty = true;
@@ -66,10 +62,6 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         SettingsViewModel => "Параметры",
         _ => "",
     };
-
-    public string PortText => _engine.State.Settings.Connection.RandomPorts
-        ? "Локальный порт: случайный"
-        : $"SOCKS/HTTP: 127.0.0.1:{_engine.State.Settings.Connection.SocksPort}";
 
     [ObservableProperty]
     public partial string? LogFilter { get; set; }

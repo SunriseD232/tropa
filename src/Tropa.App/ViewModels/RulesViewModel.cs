@@ -359,7 +359,16 @@ internal sealed partial class RulesViewModel : ObservableObject
 
     private void Remove(Guid id) => Update(r => r with { Rules = r.Rules.Where(x => x.Id != id).ToList() });
 
-    partial void OnPresetIndexChanged(int value) => Update(r => r with { Preset = (RoutePreset)Math.Clamp(value, 0, 2) });
+    partial void OnPresetIndexChanged(int value)
+    {
+        var preset = (RoutePreset)Math.Clamp(value, 0, 2);
+        if (_loading || _engine.State.Settings.Routing.Preset == preset)
+            return;
+        Update(r => r with { Preset = preset });
+        // Основа маршрута применяется сразу, как на главной; «Применить сейчас» — для правил и списков.
+        NeedsApply = false;
+        _ = _engine.ApplyIfConnectedAsync();
+    }
 
     partial void OnBlockQuicChanged(bool value) => Update(r => r with { BlockQuic = value });
 

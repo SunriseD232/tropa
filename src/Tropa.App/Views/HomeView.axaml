@@ -115,25 +115,39 @@
         <!-- Режим и маршрут -->
         <Border Classes="card">
           <StackPanel Spacing="10">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Classes="lbl" Text="ЧТО ПУСКАТЬ ЧЕРЕЗ ТРОПУ" VerticalAlignment="Center" />
-              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="mode" />
+            <!-- «TUN главный» (ADR-056): TUN включён — Тропа работает для всего компьютера -->
+            <DockPanel>
+              <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding TunToggle}" IsEnabled="{Binding !IsBusy}" OnContent="" OffContent=""
+                            AutomationProperties.Name="TUN — весь компьютер" />
+              <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="tunSwitch" />
+              <StackPanel>
+                <TextBlock Text="TUN — весь компьютер" FontSize="15" TextWrapping="Wrap" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="Включено — Тропа работает для всех программ: игры, Discord, UDP. Выключено — Тропа выключена (или только браузеры, см. «Системный прокси»)." />
+              </StackPanel>
+            </DockPanel>
+            <TextBlock Classes="muted" Text="{Binding ModeNote}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" IsVisible="{Binding !TunAvailable}" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+              <TextBlock Classes="lbl" Text="МАРШРУТ" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="route" />
             </StackPanel>
-            <UniformGrid Columns="2">
-              <RadioButton GroupName="mode" IsChecked="{Binding ModeTun}" Command="{Binding SetModeCommand}" CommandParameter="tun" Margin="0,0,8,0">
-                <StackPanel>
-                  <TextBlock Text="Весь компьютер" TextWrapping="Wrap" />
-                  <TextBlock Classes="muted" Text="TUN · игры, Discord, UDP" />
-                </StackPanel>
-              </RadioButton>
-              <RadioButton GroupName="mode" IsChecked="{Binding !ModeTun}" Command="{Binding SetModeCommand}" CommandParameter="proxy">
-                <StackPanel>
-                  <TextBlock Text="Только браузеры" TextWrapping="Wrap" />
-                  <TextBlock Classes="muted" Text="системный прокси" />
-                </StackPanel>
-              </RadioButton>
-            </UniformGrid>
-            <TextBlock Classes="muted" Text="{Binding ModeNote}" Foreground="{DynamicResource WarnFg}" IsVisible="{Binding !TunAvailable}" />
+            <ComboBox SelectedIndex="{Binding RouteIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Маршрут">
+              <ComboBoxItem Content="Всё, кроме российского" />
+              <ComboBoxItem Content="Только заблокированное (рекомендуется)" />
+              <ComboBoxItem Content="Всё через прокси" />
+            </ComboBox>
+            <TextBlock Classes="muted" Text="{Binding RouteDescription}" TextWrapping="Wrap" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+              <TextBlock Classes="lbl" Text="СИСТЕМНЫЙ ПРОКСИ" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="sysProxyMode" />
+            </StackPanel>
+            <ComboBox SelectedIndex="{Binding ProxyIndex}" HorizontalAlignment="Stretch" IsEnabled="{Binding !IsBusy}" AutomationProperties.Name="Системный прокси">
+              <ComboBoxItem Content="Установить системный прокси" />
+              <ComboBoxItem Content="Очистить системный прокси" />
+              <ComboBoxItem Content="Не менять системный прокси" />
+            </ComboBox>
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="Действует, когда TUN выключен. «Установить» — Тропа работает для браузеров через прокси Windows." />
 
             <DockPanel Margin="0,8,0,0">
               <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding KillSwitch}" IsEnabled="{Binding KillSwitchEnabled}" OnContent="" OffContent="" />
@@ -143,17 +157,6 @@
                 <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding KillSwitchReason, TargetNullValue='Если туннель оборвётся, интернет не пойдёт напрямую'}" />
               </StackPanel>
             </DockPanel>
-
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
-              <TextBlock Classes="lbl" Text="МАРШРУТ" VerticalAlignment="Center" />
-              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="route" />
-            </StackPanel>
-            <ComboBox SelectedIndex="{Binding RouteIndex}" HorizontalAlignment="Stretch">
-              <ComboBoxItem Content="Всё, кроме российского" />
-              <ComboBoxItem Content="Только заблокированное (рекомендуется)" />
-              <ComboBoxItem Content="Всё через прокси" />
-            </ComboBox>
-            <TextBlock Classes="muted" Text="{Binding RouteDescription}" />
           </StackPanel>
         </Border>
       </StackPanel>

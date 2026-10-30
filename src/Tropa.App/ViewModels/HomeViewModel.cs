@@ -227,20 +227,119 @@ internal sealed partial class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(TunToggle));
     }
 
-    /// <summary>Переключатель «TUN» в строке состояния вида «как в v2rayN»: то же, что выбор режима на главной.</summary>
+    // ---------------- «TUN главный» (ADR-056) ----------------
+
+    /// <summary>
+    /// Переключатель TUN (оба вида окна): включён — Тропа работает для всего компьютера; выключен — Тропа
+    /// работает только если в «Системном прокси» выбрано «Установить» (для браузеров), иначе выключена.
+    /// </summary>
     public bool TunToggle
     {
-        get => ModeTun;
+        get => ModeTun && _engine.Status.State is ConnectionState.Connected or ConnectionState.Connecting;
         set
         {
-            if (value != ModeTun)
-                SetMode(value ? "tun" : "proxy");
+            if (value != TunToggle)
+                _ = SwitchTunAsync(value);
         }
     }
 
-    /// <summary>Подпись кнопки подключения в строке состояния: что произойдёт по нажатию.</summary>
-    [ObservableProperty]
-    public partial string ActionText { get; set; } = "Подключить";
+    private async Task SwitchTunAsync(bool on)
+    {
+        try
+        {
+            if (on)
+            {
+                _engine.UpdateSettings(s => s with { Connection = s.Connection with { Mode = CaptureMode.Tun } });
+                await ConnectOrApplyAsync("tun");
+            }
+            else if (_engine.State.Settings.Connection.SystemProxy == SystemProxyChoice.Set)
+            {
+                // TUN выключен, но выбран «Установить системный прокси» — Тропа остаётся для браузеров.
+                _engine.UpdateSettings(s => s with { Connection = s.Connection with { Mode = CaptureMode.SystemProxy } });
+                await ConnectOrApplyAsync("sysproxy");
+            }
+            else
+            {
+                await _engine.DisconnectAsync("tun");
+                ClearIfAsked();
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Infrastructure.Service.ServiceException or TimeoutException)
+        {
+            Message = _engine.Scrubber.Scrub(ex.Message);
+        }
+        finally
+        {
+            OnPropertyChanged(nameof(TunToggle));
+        }
+    }
+
+    private async Task ConnectOrApplyAsync(string source)
+    {
+        if (_engine.Status.State == ConnectionState.Connected)
+            await _engine.ApplyIfConnectedAsync();
+        else if (_engine.Status.State is ConnectionState.Disconnected or ConnectionState.Error)
+            await _engine.ConnectAsync(source);
+    }
+
+    /// <summary>«Системный прокси»: 0 — Установить, 1 — Очистить, 2 — Не менять (как в v2rayN).</summary>
+    public int ProxyIndex
+    {
+        get => _engine.State.Settings.Connection.Mode == CaptureMode.SystemProxy ? 0 : (int)_engine.State.Settings.Connection.SystemProxy;
+        set
+        {
+            if (value is < 0 or > 2 || value == ProxyIndex)
+                return;
+            _ = SwitchProxyAsync((SystemProxyChoice)value);
+        }
+    }
+
+    private async Task SwitchProxyAsync(SystemProxyChoice choice)
+    {
+        try
+        {
+            var tunRunning = TunToggle;
+            _engine.UpdateSettings(s => s with
+            {
+                Connection = s.Connection with
+                {
+                    SystemProxy = choice,
+                    // Пока работает TUN, выбор нужен на потом — режим не меняем.
+                    Mode = tunRunning ? s.Connection.Mode
+                        : choice == SystemProxyChoice.Set ? CaptureMode.SystemProxy
+                        : s.Connection.Mode == CaptureMode.SystemProxy ? CaptureMode.Tun : s.Connection.Mode,
+                },
+            });
+            if (tunRunning)
+                return;
+            if (choice == SystemProxyChoice.Set)
+            {
+                await ConnectOrApplyAsync("sysproxy");
+                return;
+            }
+
+            // «Очистить» и «Не менять» при выключенном TUN — Тропа не работает; прокси, который ставила она, вернётся.
+            if (_engine.Status.State is ConnectionState.Connected or ConnectionState.Connecting)
+                await _engine.DisconnectAsync("sysproxy");
+            ClearIfAsked();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Infrastructure.Service.ServiceException or TimeoutException)
+        {
+            Message = _engine.Scrubber.Scrub(ex.Message);
+        }
+        finally
+        {
+            OnPropertyChanged(nameof(ProxyIndex));
+            OnPropertyChanged(nameof(TunToggle));
+        }
+    }
+
+    private void ClearIfAsked()
+    {
+        if (_engine.State.Settings.Connection.SystemProxy == SystemProxyChoice.Clear && _engine.ClearOwnSystemProxy() is { } done)
+            Message = done;
+    }
+
 
     private void Refresh()
     {
@@ -264,6 +363,8 @@ internal sealed partial class HomeViewModel : ObservableObject
         UpdateFlag();
 
         ModeTun = s.Settings.Connection.Mode == CaptureMode.Tun;
+        OnPropertyChanged(nameof(ProxyIndex));
+        OnPropertyChanged(nameof(TunToggle));
         FillServers();
         KillSwitch = s.Settings.General.KillSwitch;
         OnPropertyChanged(nameof(KillSwitchReason));
@@ -297,8 +398,23 @@ internal sealed partial class HomeViewModel : ObservableObject
     {
         var preset = (RoutePreset)Math.Clamp(value, 0, 2);
         RouteDescription = RouteText(preset);
-        if (_engine.State.Settings.Routing.Preset != preset)
-            _engine.UpdateSettings(s => s with { Routing = s.Routing with { Preset = preset } });
+        if (_engine.State.Settings.Routing.Preset == preset)
+            return;
+        _engine.UpdateSettings(s => s with { Routing = s.Routing with { Preset = preset } });
+        // Маршрут меняется сразу: при подключении — переподключение с новыми правилами, без «Применить».
+        _ = ApplyNowAsync();
+    }
+
+    private async Task ApplyNowAsync()
+    {
+        try
+        {
+            await _engine.ApplyIfConnectedAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Infrastructure.Service.ServiceException or TimeoutException)
+        {
+            Message = _engine.Scrubber.Scrub(ex.Message);
+        }
     }
 
     [RelayCommand]
@@ -322,20 +438,13 @@ internal sealed partial class HomeViewModel : ObservableObject
 
     private void OnStatus(ConnectionStatus s)
     {
+        OnPropertyChanged(nameof(TunToggle));
         IsConnected = s.State == ConnectionState.Connected;
         IsBusy = s.State is ConnectionState.Connecting or ConnectionState.Disconnecting;
         IsError = s.State == ConnectionState.Error;
         Message = s.Message;
         OnExitRegion();
         OnPropertyChanged(nameof(Blocking));
-        ActionText = s.State switch
-        {
-            ConnectionState.Connected => "Отключить",
-            ConnectionState.Connecting => "Подключение…",
-            ConnectionState.Disconnecting => "Отключение…",
-            ConnectionState.Error => "Повторить",
-            _ => "Подключить",
-        };
         StateText = s.State switch
         {
             ConnectionState.Connected => "Подключено",

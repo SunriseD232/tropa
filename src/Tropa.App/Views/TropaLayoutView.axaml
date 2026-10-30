@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Tropa.App.ViewModels"
+             xmlns:svc="using:Tropa.App.Services"
              x:Class="Tropa.App.Views.TropaLayoutView"
              x:DataType="vm:MainWindowViewModel">
   <!-- Вид «Тропа»: боковое меню и экраны -->
@@ -33,7 +34,10 @@
       <Border DockPanel.Dock="Top" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}"
               Background="{DynamicResource WarnBg}" Padding="16,10" Margin="36,20,36,0" CornerRadius="12">
         <DockPanel>
-          <Button DockPanel.Dock="Right" Content="Понятно" Command="{Binding DismissWarningCommand}" />
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+            <Button Content="Перезапустить от имени администратора" Command="{Binding RestartElevatedCommand}" IsVisible="{x:Static svc:Elevation.CanElevate}" />
+            <Button Content="Понятно" Command="{Binding DismissWarningCommand}" />
+          </StackPanel>
           <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
         </DockPanel>
       </Border>

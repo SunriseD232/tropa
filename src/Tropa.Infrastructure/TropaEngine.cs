@@ -1141,6 +1141,26 @@ public sealed partial class TropaEngine : IAsyncDisposable
     }
 
     /// <summary>Применяет изменённые настройки и правила: если подключено — переподключается.</summary>
+    /// <summary>
+    /// «Очистить системный прокси» (ADR-056): возвращает прокси Windows, который поставила Тропа и не успела
+    /// вернуть (сбой), или выключает оставшийся прокси на порт Тропы. Чужой прокси (другой программы) не трогает.
+    /// Пока Тропа сама работает через прокси Windows, ничего не делает — его вернёт отключение.
+    /// Возвращает, что сделано, или null — снимать было нечего.
+    /// </summary>
+    public string? ClearOwnSystemProxy()
+    {
+        if (_systemProxyApplied)
+            return null;
+        if (_systemProxy.IsAppliedByUs)
+        {
+            _systemProxy.Restore();
+            return "Возвращены настройки прокси Windows, которые были до Тропы.";
+        }
+
+        var ports = new[] { State.Settings.Connection.SocksPort, _mixedPort }.Where(p => p > 0);
+        return _systemProxy.DisableStaleOwn(ports) is { } stale ? $"Выключен оставшийся прокси Тропы ({stale})." : null;
+    }
+
     public async Task ApplyIfConnectedAsync(CancellationToken ct = default)
     {
         if (Status.State == ConnectionState.Connected)

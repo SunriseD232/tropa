@@ -109,8 +109,9 @@ public sealed partial class ServiceClient : IAsyncDisposable
         catch (Exception ex) when (ex is Win32Exception or ArgumentException or InvalidOperationException)
         {
             // Процесс службы под SYSTEM: пользователь может не иметь права читать его модули.
-            // Тогда сверяем путь через QueryFullProcessImageName, которому достаточно ограниченного доступа.
-            return QueryImagePath(pid);
+            // Тогда сверяем путь через QueryFullProcessImageName, которому достаточно ограниченного доступа,
+            // а если и его Windows не даёт (обычный пользователь, ошибка 5) — через диспетчер служб.
+            return QueryImagePath(pid) ?? ServiceIdentity.PathIfServiceProcess(IpcProtocol.ServiceName, pid);
         }
     }
 

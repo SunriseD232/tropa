@@ -155,25 +155,32 @@
           </TextBlock>
           <TextBlock VerticalAlignment="Center" Text="{Binding Home.ExitRegion}" ToolTip.Tip="{Binding Home.ExitRegionTip}"
                      IsVisible="{Binding Home.ExitRegion, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          <Button Classes="primary" Content="{Binding Home.ActionText}" Command="{Binding Home.ToggleCommand}" IsEnabled="{Binding !Home.IsBusy}"
-                  MinWidth="110" HorizontalContentAlignment="Center" ToolTip.Tip="Подключить или отключить Тропу" />
         </StackPanel>
         <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Classes="muted mono" Text="{Binding PortText}" VerticalAlignment="Center" />
+          <!-- «TUN главный» (ADR-056): TUN включает и выключает Тропу, отдельной кнопки «Подключить» нет -->
+          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+            <ToggleSwitch IsChecked="{Binding Home.TunToggle}" IsEnabled="{Binding !Home.IsBusy}" OnContent="" OffContent="" MinWidth="0" VerticalAlignment="Center"
+                          ToolTip.Tip="Включено — Тропа работает для всего компьютера (TUN). Выключено — Тропа выключена или работает только для браузеров (см. «Системный прокси»)."
+                          AutomationProperties.Name="Включить TUN" />
+            <TextBlock Text="Включить TUN" VerticalAlignment="Center" />
+            <Button Classes="info" Width="22" Height="22" MinHeight="22" Padding="0" FontSize="11" VerticalAlignment="Center" Command="{Binding Home.ShowInfoCommand}" CommandParameter="tunSwitch" />
             <Border Classes="sep" />
-            <ToggleSwitch IsChecked="{Binding Home.TunToggle}" OnContent="" OffContent="" MinWidth="0" VerticalAlignment="Center"
-                          ToolTip.Tip="Включено — весь компьютер через виртуальную сетевую карту (TUN). Выключено — только браузеры через прокси Windows."
-                          AutomationProperties.Name="Весь компьютер (TUN)" />
-            <TextBlock Text="Весь компьютер (TUN)" VerticalAlignment="Center" />
-            <Border Classes="sep" />
-            <TextBlock Text="Маршрут" Classes="muted" VerticalAlignment="Center" Margin="0,0,8,0" />
-            <ComboBox SelectedIndex="{Binding Home.RouteIndex}" Width="230" VerticalAlignment="Center" ToolTip.Tip="{Binding Home.RouteDescription}"
+            <TextBlock Text="Маршрут" Classes="muted" VerticalAlignment="Center" />
+            <ComboBox SelectedIndex="{Binding Home.RouteIndex}" Width="220" VerticalAlignment="Center" ToolTip.Tip="{Binding Home.RouteDescription}"
                       AutomationProperties.Name="Маршрут">
               <ComboBoxItem Content="Всё, кроме российского" />
               <ComboBoxItem Content="Только заблокированное (рекомендуется)" />
               <ComboBoxItem Content="Всё через прокси" />
             </ComboBox>
+            <Button Classes="info" Width="22" Height="22" MinHeight="22" Padding="0" FontSize="11" VerticalAlignment="Center" Command="{Binding Home.ShowInfoCommand}" CommandParameter="route" />
+            <Border Classes="sep" />
+            <ComboBox SelectedIndex="{Binding Home.ProxyIndex}" IsEnabled="{Binding !Home.IsBusy}" Width="230" VerticalAlignment="Center"
+                      ToolTip.Tip="Системный прокси — действует, когда TUN выключен" AutomationProperties.Name="Системный прокси">
+              <ComboBoxItem Content="Установить системный прокси" />
+              <ComboBoxItem Content="Очистить системный прокси" />
+              <ComboBoxItem Content="Не менять системный прокси" />
+            </ComboBox>
+            <Button Classes="info" Width="22" Height="22" MinHeight="22" Padding="0" FontSize="11" VerticalAlignment="Center" Command="{Binding Home.ShowInfoCommand}" CommandParameter="sysProxyMode" />
             <Border Classes="sep" />
           </StackPanel>
           <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" ToolTip.Tip="{Binding Home.ServerDetails}">
@@ -187,7 +194,10 @@
     <Border DockPanel.Dock="Top" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" Classes="v2bar"
             Background="{DynamicResource WarnBg}" Padding="10,6">
       <DockPanel>
-        <Button DockPanel.Dock="Right" Content="Понятно" Command="{Binding DismissWarningCommand}" />
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+          <Button Content="Перезапустить от имени администратора" Command="{Binding RestartElevatedCommand}" IsVisible="{x:Static svc:Elevation.CanElevate}" />
+          <Button Content="Понятно" Command="{Binding DismissWarningCommand}" />
+        </StackPanel>
         <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
       </DockPanel>
     </Border>

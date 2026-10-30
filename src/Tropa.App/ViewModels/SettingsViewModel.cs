@@ -221,7 +221,19 @@ internal sealed partial class SettingsViewModel : ObservableObject
     private SettingsSection Connection() => new("connection", "Подключение", null,
     [
         new ChoiceRow("Что пускать через Тропу", "mode", Opts("Весь компьютер (TUN)", "Только браузеры (прокси Windows)", "Только порты (без изменений в системе)"),
-            s => (int)s.Connection.Mode, (s, i) => s with { Connection = s.Connection with { Mode = (CaptureMode)i } }),
+            s => (int)s.Connection.Mode, (s, i) => s with
+            {
+                // «Только браузеры» — это и есть «Установить системный прокси» (ADR-056).
+                Connection = s.Connection with
+                {
+                    Mode = (CaptureMode)i,
+                    SystemProxy = (CaptureMode)i == CaptureMode.SystemProxy ? SystemProxyChoice.Set : s.Connection.SystemProxy,
+                },
+            }),
+        new ChoiceRow("Системный прокси (когда TUN выключен)", "sysProxyMode",
+            Opts("Установить системный прокси", "Очистить системный прокси", "Не менять системный прокси"),
+            s => (int)s.Connection.SystemProxy, (s, i) => s with { Connection = s.Connection with { SystemProxy = (SystemProxyChoice)i } },
+            hint: "Как в v2rayN. Здесь только сохраняется выбор; на главной и в строке состояния он применяется сразу."),
         new ChoiceRow("Сетевой стек TUN", "tunStack", Opts("Смешанный (рекомендуется)", "gVisor", "Системный"),
             s => (int)s.Connection.TunStack, (s, i) => s with { Connection = s.Connection with { TunStack = (TunStackKind)i } }),
         TextRow.Number("MTU", "mtu", s => s.Connection.Mtu, (s, v) => s with { Connection = s.Connection with { Mtu = v } }, V.Mtu),

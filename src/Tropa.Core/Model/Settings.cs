@@ -6,6 +6,14 @@ public enum CaptureMode { Tun, SystemProxy, PortsOnly }
 
 public enum TunStackKind { Mixed, Gvisor, System }
 
+/// <summary>
+/// «Системный прокси», как в v2rayN (ADR-056): что делать с прокси Windows, когда TUN выключен.
+/// Set — Тропа работает для браузеров через прокси Windows; Clear — снять прокси Тропы (в том числе
+/// оставшийся после сбоя) и не работать; Keep — прокси Windows не трогать. Первое значение — Set:
+/// в старом settings.json поля нет, а «Только браузеры» раньше и значило «ставить прокси».
+/// </summary>
+public enum SystemProxyChoice { Set, Clear, Keep }
+
 public enum CoreChoice { Auto, SingBox, Xray }
 
 public enum UserAgentMode { Tropa, V2rayN, SingBox, Custom }
@@ -56,6 +64,9 @@ public sealed record GeneralSettings
 public sealed record ConnectionSettings
 {
     public CaptureMode Mode { get; init; } = CaptureMode.Tun;
+
+    /// <summary>Системный прокси при выключенном TUN (ADR-056).</summary>
+    public SystemProxyChoice SystemProxy { get; init; }
     public TunStackKind TunStack { get; init; } = TunStackKind.Mixed;
     public int Mtu { get; init; } = 9000;
     public bool StrictRoute { get; init; } = true;
