@@ -670,7 +670,9 @@ public sealed partial class TropaEngine : IAsyncDisposable
                 ? sp with
                 {
                     LastTest = MergeResult(sp.LastTest, r, kinds),
-                    DetectedCore = detected.TryGetValue(sp.Profile.Id, out var d) ? d : sp.DetectedCore,
+                    // Сервер не ответил ни на одном ядре — это сбой сервера, а не неверное ядро: прежнее
+                    // не забываем, иначе каждое подключение снова ждёт определения ядра до таймаута.
+                    DetectedCore = detected.TryGetValue(sp.Profile.Id, out var d) ? d ?? sp.DetectedCore : sp.DetectedCore,
                 }
                 : sp).ToList(),
         });

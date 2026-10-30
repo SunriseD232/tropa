@@ -51,7 +51,8 @@ public static class AdminPublisher
             AllowAutoRedirect = false,
             ConnectTimeout = TimeSpan.FromSeconds(10),
             UseProxy = proxy is not null,
-            Proxy = proxy is null ? null : new WebProxy($"http://127.0.0.1:{proxy.Port}")
+            // SOCKS5, не HTTP: по HTTP .NET шлёт пароль только после 407, а sing-box на 407 закрывает соединение.
+            Proxy = proxy is null ? null : new WebProxy($"socks5://127.0.0.1:{proxy.Port}")
             {
                 Credentials = proxy.Username is null ? null : new NetworkCredential(proxy.Username, proxy.Password),
             },
