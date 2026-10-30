@@ -71,7 +71,8 @@ public static partial class NetLogClassifier
     public static ClassifiedLine? Classify(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
-        if (!LevelRx().IsMatch(line))
+        // Журнал соединений Xray («from … accepted … [in -> out]») — это посещения, а не ошибки.
+        if (!LevelRx().IsMatch(line) || BenignRx().IsMatch(line) || XrayAccessRx().IsMatch(line))
             return null;
         var source = Source(line) ?? "tropa";
         var template = Template(line);
@@ -84,7 +85,11 @@ public static partial class NetLogClassifier
         return new ClassifiedLine(OtherError, template, source);
     }
 
-    private static string? Source(string line) => XrayRx().IsMatch(line) ? "xray" : SingBoxRx().IsMatch(line) ? "sing-box" : null;
+    // У Xray каждая строка начинается с «2026/10/30 03:14:12», даже строки журнала соединений без уровня.
+    private static string? Source(string line) =>
+        XrayRx().IsMatch(line) || XrayTimeRx().IsMatch(line) || XrayAccessRx().IsMatch(line) ? "xray"
+        : SingBoxRx().IsMatch(line) ? "sing-box"
+        : null;
 
     /// <summary>
     /// Обезличенный шаблон: без времени, адресов, доменов, портов, чисел и идентификаторов соединений.
@@ -126,6 +131,16 @@ public static partial class NetLogClassifier
 
     [GeneratedRegex(@"\b(ERROR|FATAL|WARN(ING)?|PANIC)\b|\[(Warning|Error)\]|\bfailed\b", RegexOptions.IgnoreCase)]
     private static partial Regex LevelRx();
+
+    [GeneratedRegex(@"^\s*\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}")]
+    private static partial Regex XrayTimeRx();
+
+    [GeneratedRegex(@"\bfrom (tcp|udp):\S+ (accepted|rejected) ", RegexOptions.IgnoreCase)]
+    private static partial Regex XrayAccessRx();
+
+    // Xray пишет запуск с уровнем Warning — это не ошибка.
+    [GeneratedRegex(@"core: Xray \S+ started|\bsing-box started\b", RegexOptions.IgnoreCase)]
+    private static partial Regex BenignRx();
 
     // Классы
     [GeneratedRegex(@"\b(FATAL|PANIC)\b|start service|failed to start|failed to load config|decode config|parse config", RegexOptions.IgnoreCase)]

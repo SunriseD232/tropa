@@ -116,6 +116,13 @@ public sealed class TelemetryTests
         Assert.Null(NetLogClassifier.Classify("INFO [1 0ms] inbound/mixed[mixed-in]: inbound connection to www.youtube.com:443"));
         Assert.True(NetLogClassifier.IsCoreLine("INFO [1 0ms] inbound/mixed[mixed-in]: inbound connection to www.youtube.com:443"));
         Assert.False(NetLogClassifier.IsCoreLine("Сеть сменилась — переподключаюсь."));
+
+        // Журнал соединений Xray — посещения пользователя: строка ядра, но не ошибка (найдено на живом журнале 0.1.17).
+        const string access = "2026/10/30 03:14:12.939276 from tcp:127.0.0.1:51234 accepted tcp:www.youtube.com:443 [in-srv-296acbc7 -> srv-296acbc7]";
+        Assert.True(NetLogClassifier.IsCoreLine(access));
+        Assert.Null(NetLogClassifier.Classify(access));
+        Assert.Null(NetLogClassifier.Classify("2026/10/30 03:14:12.939276 from tcp:127.0.0.1:51234 accepted tcp:failed-site.example:443 [in -> out]"));
+        Assert.Null(NetLogClassifier.Classify("2026/10/30 03:14:37.120000 [Warning] core: Xray 26.9.30 started"));
     }
 
     [Fact]

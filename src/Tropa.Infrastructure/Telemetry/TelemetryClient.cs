@@ -263,7 +263,11 @@ public sealed class TelemetryClient : IAsyncDisposable
     {
         var error = await PostAsync(body, null, ct).ConfigureAwait(false);
         if (error is not null && Proxy?.Invoke() is { } proxy)
-            error = await PostAsync(body, proxy, ct).ConfigureAwait(false);
+        {
+            var viaProxy = await PostAsync(body, proxy, ct).ConfigureAwait(false);
+            error = viaProxy is null ? null : $"напрямую — {error} Через подключение — {viaProxy}";
+        }
+
         return error;
     }
 
@@ -293,9 +297,19 @@ public sealed class TelemetryClient : IAsyncDisposable
             var code = (int)response.StatusCode;
             return code is >= 200 and < 300 ? null : $"сервер ответил кодом {code}.";
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
-            return "нет связи с сервером журнала.";
+            // Вид ошибки (DNS, соединение, TLS) и текст сокета — по ним видно, где обрывается путь до сервера.
+            var detail = ex.HttpRequestError switch
+            {
+                HttpRequestError.NameResolutionError => "не найден адрес сервера (DNS)",
+                HttpRequestError.ConnectionError => "не удалось соединиться",
+                HttpRequestError.SecureConnectionError => "ошибка TLS",
+                HttpRequestError.ProxyTunnelError => "локальный вход Тропы не пропустил",
+                _ => ex.HttpRequestError.ToString(),
+            };
+            var inner = ex.InnerException?.Message is { Length: > 0 } m ? $" ({m.TrimEnd('.')})" : "";
+            return $"нет связи с сервером журнала: {detail}{inner}.";
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
