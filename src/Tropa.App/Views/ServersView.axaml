@@ -94,6 +94,18 @@
       </WrapPanel>
     </StackPanel>
 
+    <!-- Фильтры: название, протокол, скорость, страна выхода -->
+    <WrapPanel>
+      <TextBox Text="{Binding Filter}" Width="220" Margin="0,0,8,8" PlaceholderText="Название или адрес" AutomationProperties.Name="Фильтр по названию" />
+      <ComboBox ItemsSource="{x:Static vm:ServersViewModel.ProtocolOptions}" SelectedIndex="{Binding FilterProtocolIndex}" MinWidth="150" Margin="0,0,8,8"
+                AutomationProperties.Name="Фильтр по протоколу" />
+      <ComboBox ItemsSource="{x:Static vm:ServersViewModel.SpeedOptions}" SelectedIndex="{Binding FilterSpeedIndex}" MinWidth="170" Margin="0,0,8,8"
+                AutomationProperties.Name="Фильтр по скорости" ToolTip.Tip="По последней проверке сервера" />
+      <ComboBox ItemsSource="{Binding CountryOptions}" SelectedItem="{Binding FilterCountry}" MinWidth="170" Margin="0,0,8,8"
+                AutomationProperties.Name="Фильтр по стране выхода" ToolTip.Tip="Страна выхода по последней проверке" />
+      <Button Content="Сбросить фильтры" Command="{Binding ClearFiltersCommand}" IsVisible="{Binding HasFilters}" Margin="0,0,8,8" />
+    </WrapPanel>
+
     <!-- Подписка от администратора (ADR-048): доверять ли ему выбор сервера и правила -->
     <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="14,12" IsVisible="{Binding CurrentTabInfo.HasAdmin, FallbackValue=False}">
       <DockPanel>
@@ -155,7 +167,7 @@
               <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="status" />
             </StackPanel>
           </Grid>
-          <TextBlock Classes="muted" Margin="12,4,12,12" Text="Здесь пусто: все серверы этой вкладки удалены." IsVisible="{Binding !Items.Count}" />
+          <TextBlock Classes="muted" Margin="12,4,12,12" Text="Здесь пусто: серверов на этой вкладке нет или их скрыли фильтры." IsVisible="{Binding !Items.Count}" />
           <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Background="Transparent" DoubleTapped="OnDoubleTapped"
                    SelectionMode="Multiple" SelectionChanged="OnSelectionChanged">
             <ListBox.KeyBindings>

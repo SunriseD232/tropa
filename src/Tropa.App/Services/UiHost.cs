@@ -16,7 +16,10 @@ internal static class UiHost
     /// <summary>Через сколько стирать из буфера скопированный секрет, если он там ещё лежит.</summary>
     public static readonly TimeSpan SecretClipboardLifetime = TimeSpan.FromSeconds(60);
 
-    private static Window? MainWindow => (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+    // Окно Тропы не регистрируется как MainWindow жизненного цикла (оно живёт само, прячется в трей),
+    // поэтому берём его у App: иначе буфер обмена и диалоги не находили окна и молча не работали.
+    private static Window? MainWindow => App.MainWindowInstance
+        ?? (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
 
     /// <summary>Кладёт секрет (ссылку сервера) в буфер и через 60 с стирает, если пользователь не скопировал ничего другого.</summary>
     public static async Task<bool> CopySecretAsync(string text)
@@ -87,11 +90,12 @@ internal static class UiHost
     {
         var window = MainWindow;
         var state = window?.WindowState;
+        // Сворачиваем окно, чтобы оно не закрывало QR-код, и разворачиваем обратно после снимка.
         if (window is not null)
             window.WindowState = WindowState.Minimized;
         try
         {
-            // Даём Windows дорисовать то, что было под окном.
+            // Даём Windows доиграть анимацию и дорисовать то, что было под окном.
             await Task.Delay(800);
             return await Task.Run(ScreenCapture.CaptureVirtualScreen);
         }
@@ -99,7 +103,7 @@ internal static class UiHost
         {
             if (window is not null)
             {
-                window.WindowState = state ?? WindowState.Normal;
+                window.WindowState = state is null or WindowState.Minimized ? WindowState.Normal : state.Value;
                 window.Activate();
             }
         }

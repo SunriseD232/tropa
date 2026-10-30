@@ -208,7 +208,6 @@
         <DockPanel DockPanel.Dock="Top" Classes="v2bar" Margin="8,6,8,2">
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
             <ProgressBar IsIndeterminate="True" Width="60" MinWidth="0" IsVisible="{Binding Servers.IsBusy}" VerticalAlignment="Center" />
-            <TextBox Text="{Binding Servers.Filter}" Width="200" PlaceholderText="Поиск: имя, адрес, страна" AutomationProperties.Name="Поиск по серверам" />
             <Button Content="Проверить все" Command="{Binding Servers.TestAllCommand}" IsEnabled="{Binding Servers.NotBusy}" ToolTip.Tip="Пинг, задержка, скорость и UDP (Ctrl+E)" />
             <Button Content="Обновить подписки" Command="{Binding Servers.UpdateSubscriptionsCommand}" IsEnabled="{Binding Servers.NotBusy}" />
           </StackPanel>
@@ -224,6 +223,20 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </DockPanel>
+
+        <!-- Фильтры: название, протокол, скорость, страна выхода -->
+        <Border DockPanel.Dock="Top" Classes="v2bar" Margin="8,2,8,0">
+          <WrapPanel>
+            <TextBox Text="{Binding Servers.Filter}" Width="220" Margin="0,0,8,8" PlaceholderText="Название или адрес" AutomationProperties.Name="Фильтр по названию" />
+            <ComboBox ItemsSource="{x:Static vm:ServersViewModel.ProtocolOptions}" SelectedIndex="{Binding Servers.FilterProtocolIndex}" MinWidth="150" Margin="0,0,8,8"
+                      AutomationProperties.Name="Фильтр по протоколу" />
+            <ComboBox ItemsSource="{x:Static vm:ServersViewModel.SpeedOptions}" SelectedIndex="{Binding Servers.FilterSpeedIndex}" MinWidth="170" Margin="0,0,8,8"
+                      AutomationProperties.Name="Фильтр по скорости" ToolTip.Tip="По последней проверке сервера" />
+            <ComboBox ItemsSource="{Binding Servers.CountryOptions}" SelectedItem="{Binding Servers.FilterCountry}" MinWidth="170" Margin="0,0,8,8"
+                      AutomationProperties.Name="Фильтр по стране выхода" ToolTip.Tip="Страна выхода по последней проверке" />
+            <Button Content="Сбросить фильтры" Command="{Binding Servers.ClearFiltersCommand}" IsVisible="{Binding Servers.HasFilters}" Margin="0,0,8,8" />
+          </WrapPanel>
+        </Border>
 
         <!-- Сообщения экрана серверов -->
         <StackPanel DockPanel.Dock="Top" Classes="v2bar" Margin="8,0,8,4" Spacing="4">
@@ -260,7 +273,7 @@
           <Panel>
             <TextBlock Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="20"
                        IsVisible="{Binding !Servers.Items.Count}"
-                       Text="Серверов нет. Скопируйте ссылку подписки и нажмите Ctrl+V или выберите «Серверы → Добавить подписку или ссылки…». Если идёт поиск — очистите поле поиска." />
+                       Text="Серверов нет. Скопируйте ссылку подписки и нажмите Ctrl+V или выберите «Серверы → Добавить подписку или ссылки…». Если включены фильтры — нажмите «Сбросить фильтры»." />
             <ScrollViewer x:Name="TableScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" SizeChanged="OnTableScrollSizeChanged"
                           IsVisible="{Binding Servers.Items.Count}">
               <Grid x:Name="Table" RowDefinitions="Auto,*" MinWidth="960" HorizontalAlignment="Left">

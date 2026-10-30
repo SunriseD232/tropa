@@ -32,6 +32,9 @@ internal sealed partial class App : Application
 
     private static App? Instance => Current as App;
 
+    /// <summary>Окно Тропы (для буфера обмена, диалогов файлов и сворачивания при поиске QR).</summary>
+    public static Window? MainWindowInstance => Instance?._window;
+
     private Services.GlobalHotkey? _hotkey;
     private DispatcherTimer? _subscriptionTimer;
 

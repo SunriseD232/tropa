@@ -74,6 +74,14 @@ internal sealed class SortMarks : ObservableObject
     }
 }
 
+/// <summary>Пункт фильтра стран: Code = null — «Все страны».</summary>
+internal sealed record CountryOption(string? Code, string Title)
+{
+    public static CountryOption Any { get; } = new(null, "Все страны");
+
+    public override string ToString() => Title;
+}
+
 internal static class CoreTexts
 {
     public static string Name(CoreChoice c) => c switch { CoreChoice.Xray => "Xray", CoreChoice.SingBox => "sing-box", _ => "авто" };
@@ -256,6 +264,7 @@ internal sealed partial class ServersViewModel : ObservableObject
         var s = _engine.State;
         var selectedTab = CurrentTab;
         var visible = s.Profiles.Where(p => !p.Hidden).ToList();
+        FillCountries(visible);
         Tabs.Clear();
         Tabs.Add(new GroupTab($"Все · {visible.Count}", null, false) { HiddenCount = s.Profiles.Count(p => p.Hidden) });
         foreach (var sub in s.Subscriptions)
@@ -320,7 +329,7 @@ internal sealed partial class ServersViewModel : ObservableObject
 
             if (item.IsActive && string.IsNullOrEmpty(item.Status))
                 (item.Status, item.StatusKind) = ("Выбран", "ok");
-            if (Matches(item, Filter))
+            if (Matches(item, Filter) && PassesFilters(item))
                 rows.Add(item);
         }
 
@@ -334,7 +343,94 @@ internal sealed partial class ServersViewModel : ObservableObject
     [ObservableProperty]
     public partial string? Filter { get; set; }
 
-    partial void OnFilterChanged(string? value) => RebuildItems();
+    partial void OnFilterChanged(string? value) => FiltersChanged();
+
+    // ---------------- Фильтры (оба вида окна): протокол, скорость, страна выхода, название ----------------
+
+    /// <summary>Варианты фильтра протокола: «Все протоколы» и протоколы, которые есть у Тропы.</summary>
+    public static IReadOnlyList<string> ProtocolOptions { get; } = ["Все протоколы", "VLESS", "VMess", "Trojan", "Shadowsocks", "Hysteria2"];
+
+    /// <summary>Варианты фильтра скорости по последней проверке.</summary>
+    public static IReadOnlyList<string> SpeedOptions { get; } = ["Любая скорость", "от 5 Мбит/с", "от 20 Мбит/с", "от 50 Мбит/с", "от 100 Мбит/с", "Проверенные и рабочие"];
+
+    private static readonly double[] SpeedThresholds = [0, 5, 20, 50, 100];
+
+    [ObservableProperty]
+    public partial int FilterProtocolIndex { get; set; }
+
+    partial void OnFilterProtocolIndexChanged(int value) => FiltersChanged();
+
+    [ObservableProperty]
+    public partial int FilterSpeedIndex { get; set; }
+
+    partial void OnFilterSpeedIndexChanged(int value) => FiltersChanged();
+
+    /// <summary>Страны выхода, которые есть среди серверов (по последней проверке), и «Все страны».</summary>
+    public ObservableCollection<CountryOption> CountryOptions { get; } = [CountryOption.Any];
+
+    [ObservableProperty]
+    public partial CountryOption? FilterCountry { get; set; } = CountryOption.Any;
+
+    partial void OnFilterCountryChanged(CountryOption? value)
+    {
+        if (!_fillingCountries)
+            FiltersChanged();
+    }
+
+    private bool _fillingCountries;
+
+    public bool HasFilters => !string.IsNullOrWhiteSpace(Filter) || FilterProtocolIndex > 0 || FilterSpeedIndex > 0 || FilterCountry is { Code: not null };
+
+    private void FiltersChanged()
+    {
+        OnPropertyChanged(nameof(HasFilters));
+        RebuildItems();
+    }
+
+    [RelayCommand]
+    private void ClearFilters()
+    {
+        Filter = null;
+        FilterProtocolIndex = 0;
+        FilterSpeedIndex = 0;
+        FilterCountry = CountryOption.Any;
+        FiltersChanged();
+    }
+
+    private bool PassesFilters(ServerItemViewModel item)
+    {
+        if (FilterProtocolIndex > 0 && !string.Equals(item.Protocol, ProtocolOptions[FilterProtocolIndex], StringComparison.Ordinal))
+            return false;
+        if (FilterCountry is { Code: { } code } && !string.Equals(item.Country, code, StringComparison.OrdinalIgnoreCase))
+            return false;
+        return FilterSpeedIndex switch
+        {
+            0 => true,
+            5 => item.StatusKind is "ok" or "warn",
+            var i => item.SpeedMbps is { } sp && sp >= SpeedThresholds[i],
+        };
+    }
+
+    /// <summary>Список стран для фильтра — из последних проверок; выбранная страна сохраняется.</summary>
+    private void FillCountries(IEnumerable<StoredProfile> visible)
+    {
+        var codes = visible.Select(p => p.LastTest?.ExitCountry).OfType<string>()
+            .Select(c => c.ToUpperInvariant()).Distinct().Order(StringComparer.Ordinal).ToList();
+        var keep = FilterCountry;
+        _fillingCountries = true;
+        try
+        {
+            CountryOptions.Clear();
+            CountryOptions.Add(CountryOption.Any);
+            foreach (var code in codes)
+                CountryOptions.Add(new CountryOption(code, $"{code} — {new Tropa.Core.Diagnostics.ExitRegion(code, DateTimeOffset.Now).Name}"));
+            FilterCountry = CountryOptions.FirstOrDefault(o => o.Code == keep?.Code) ?? CountryOption.Any;
+        }
+        finally
+        {
+            _fillingCountries = false;
+        }
+    }
 
     /// <summary>Колонка сортировки показа (type, name, address, port, network, tls, sub, delay, speed, country, status); null — свой порядок.</summary>
     [ObservableProperty]
@@ -360,15 +456,12 @@ internal sealed partial class ServersViewModel : ObservableObject
         RebuildItems();
     }
 
-    /// <summary>Вид «Тропа» без поиска и сортировки: показ возвращается к своему порядку и всем серверам вкладки.</summary>
+    /// <summary>Вид «Тропа» без сортировки по колонкам: показ возвращается к своему порядку (фильтры есть в обоих видах).</summary>
     public void ResetView()
     {
         (SortColumn, SortDescending) = (null, false);
         Marks.Set(null, false);
-        if (Filter is null)
-            RebuildItems();
-        else
-            Filter = null;
+        RebuildItems();
     }
 
     private static bool Matches(ServerItemViewModel item, string? filter)
@@ -503,8 +596,8 @@ internal sealed partial class ServersViewModel : ObservableObject
     {
         var own = _engine.State.Profiles.Count(p => ids.Contains(p.Profile.Id) && p.Profile.SubscriptionId is null);
         return own == 0
-            ? "Серверы подписок только скрываются — вернуть: «Вернуть удалённые»."
-            : $"Ваши серверы ({own}) удалятся насовсем, серверы подписок только скроются.";
+            ? "Серверы подписок только скрыты — вернуть: «Вернуть удалённые»."
+            : $"Ваши серверы ({own}) удалены насовсем, серверы подписок только скрыты — вернуть: «Вернуть удалённые».";
     }
 
     private void RemoveMany(IReadOnlyCollection<Guid> ids, string done)
@@ -521,8 +614,7 @@ internal sealed partial class ServersViewModel : ObservableObject
         if (targets.Count > 1)
         {
             var ids = targets.Select(t => t.Id).ToList();
-            Ask($"Удалить выделенные серверы ({ids.Count})? {RemovalNote(ids)}", "Удалить",
-                () => RemoveMany(ids, $"Удалено серверов: {ids.Count}."));
+            RemoveMany(ids, $"Удалено серверов: {ids.Count}. {RemovalNote(ids)}");
             return;
         }
 
@@ -686,8 +778,7 @@ internal sealed partial class ServersViewModel : ObservableObject
             return;
         }
 
-        Ask($"Найдено дубликатов: {ids.Count} (совпадает всё, кроме названия). Из каждой группы останется выбранный или верхний. {RemovalNote(ids)}",
-            "Удалить дубликаты", () => RemoveMany(ids, $"Удалено дубликатов: {ids.Count}."));
+        RemoveMany(ids, $"Удалено дубликатов: {ids.Count} (совпадало всё, кроме названия; остался выбранный или верхний). {RemovalNote(ids)}");
     }
 
     [RelayCommand]
@@ -700,8 +791,7 @@ internal sealed partial class ServersViewModel : ObservableObject
             return;
         }
 
-        Ask($"Удалить серверы, не работавшие на последней проверке ({ids.Count})? Выбранный сейчас сервер остаётся. {RemovalNote(ids)}",
-            "Удалить нерабочие", () => RemoveMany(ids, $"Удалено нерабочих: {ids.Count}."));
+        RemoveMany(ids, $"Удалено нерабочих по последней проверке: {ids.Count} (выбранный сервер остался). {RemovalNote(ids)}");
     }
 
     // ---------------- Поделиться: ссылка, QR, полный конфиг ----------------
