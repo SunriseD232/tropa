@@ -318,14 +318,28 @@ internal sealed partial class ServersViewModel : ObservableObject
                 CoreLabel = CoreText(sp),
                 SubscriptionName = sp.Profile.SubscriptionId is { } subId ? subNames.GetValueOrDefault(subId, "") : "Мои",
             };
-            if (ProfileCompat.Issues(sp.Profile) is { Count: > 0 } issues)
+            var issues = ProfileCompat.Issues(sp.Profile);
+            if (issues.Count > 0)
                 (item.Status, item.StatusKind, item.Explanation) = ("Несовместимые параметры", "bad", issues[0]);
-            else if (sp.Profile.Security.AllowInsecure)
-                (item.Status, item.StatusKind, item.Explanation) = ("Без проверки сертификата", "bad", "У сервера отключена проверка сертификата: трафик может прочитать посредник.");
             else if (item.Removed)
                 (item.Status, item.StatusKind) = ("Удалён провайдером", "warn");
             else
                 item.Apply(sp.LastTest);
+
+            // Без проверки сертификата — предупреждение рядом с результатом теста, а не вместо него:
+            // иначе у рабочего сервера не видно ни задержки, ни скорости.
+            if (sp.Profile.Security.AllowInsecure && issues.Count == 0 && s.Settings.Dpi.AllowInsecureWarn)
+            {
+                const string insecure = "У сервера отключена проверка сертификата: трафик может прочитать посредник.";
+                if (sp.LastTest is null || item.Removed)
+                    (item.Status, item.StatusKind, item.Explanation) = ("Без проверки сертификата", "bad", insecure);
+                else
+                {
+                    item.Explanation = insecure + " " + item.Explanation;
+                    if (item.StatusKind == "ok")
+                        item.StatusKind = "warn";
+                }
+            }
 
             if (item.IsActive && string.IsNullOrEmpty(item.Status))
                 (item.Status, item.StatusKind) = ("Выбран", "ok");
