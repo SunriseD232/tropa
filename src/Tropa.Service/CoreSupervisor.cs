@@ -233,8 +233,20 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
             _xray.Exited += OnCoreExited;
         }
 
-        _core = await CoreProcess.StartSingBoxAsync(Locations, request.SingBoxConfig, request.ReadinessPort,
-            options.RunDirectory, _scrubber, onLog, ct).ConfigureAwait(false);
+        var tun = request.Mode == CaptureModeDto.Tun;
+        try
+        {
+            _core = await CoreProcess.StartSingBoxAsync(Locations, request.SingBoxConfig, request.ReadinessPort,
+                options.RunDirectory, _scrubber, onLog, ct, tun ? CoreProcess.TunStartTimeout : null).ConfigureAwait(false);
+        }
+        catch (CoreStartException ex) when (tun)
+        {
+            // В журнал разработчика: застряло ли ядро на создании адаптера или уже после него.
+            var adapter = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Any(n => n.Name.Equals(Tropa.Core.Diagnostics.Diagnosis.OwnTunName, StringComparison.OrdinalIgnoreCase));
+            throw new CoreStartException(ex.Message + (adapter ? " Адаптер туннеля создан." : " Адаптер туннеля не появился."));
+        }
+
         _core.Exited += OnCoreExited;
 
         // После каждого запуска у TUN может быть новый интерфейс: разрешаем трафик именно через него.

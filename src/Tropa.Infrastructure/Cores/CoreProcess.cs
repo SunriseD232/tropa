@@ -53,6 +53,13 @@ public sealed class CoreProcess : IAsyncDisposable
 {
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(8);
 
+    /// <summary>
+    /// TUN: прежде чем открыть порт, sing-box создаёт адаптер Wintun и маршруты. На Windows 10 это
+    /// бывает дольше 8 с (журнал разработчика, 2026-10-30: ядро молчит, подключается со второго раза).
+    /// Вместе с Xray укладывается в 30 с ожидания ответа службы.
+    /// </summary>
+    public static readonly TimeSpan TunStartTimeout = TimeSpan.FromSeconds(20);
+
     private readonly Process _process;
     private readonly JobObject _job;
     private readonly SecretScrubber _scrubber;
@@ -79,9 +86,10 @@ public sealed class CoreProcess : IAsyncDisposable
     /// при уровне warn её нет.
     /// </summary>
     public static Task<CoreProcess> StartSingBoxAsync(
-        CoreLocations locations, string configJson, int readinessPort, string runDirectory, SecretScrubber scrubber, Action<string> log, CancellationToken ct) =>
+        CoreLocations locations, string configJson, int readinessPort, string runDirectory, SecretScrubber scrubber, Action<string> log, CancellationToken ct,
+        TimeSpan? startTimeout = null) =>
         StartAsync("sing-box", config => ["run", "-c", config, "-D", runDirectory, "--disable-color"],
-            locations, configJson, readinessPort, runDirectory, scrubber, log, ct);
+            locations, configJson, readinessPort, runDirectory, scrubber, log, ct, startTimeout);
 
     /// <summary>Xray (гибрид, docs/05-config-generation.md, §1). Те же гарантии: хэш, Job Object, удаление конфига.</summary>
     public static Task<CoreProcess> StartXrayAsync(
@@ -97,7 +105,8 @@ public sealed class CoreProcess : IAsyncDisposable
     }
 
     private static async Task<CoreProcess> StartAsync(string coreName, Func<string, string[]> arguments,
-        CoreLocations locations, string configJson, int readinessPort, string runDirectory, SecretScrubber scrubber, Action<string> log, CancellationToken ct)
+        CoreLocations locations, string configJson, int readinessPort, string runDirectory, SecretScrubber scrubber, Action<string> log, CancellationToken ct,
+        TimeSpan? startTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(locations);
         var entry = locations.Cores.Get(coreName);
@@ -138,7 +147,7 @@ public sealed class CoreProcess : IAsyncDisposable
                 process.BeginErrorReadLine();
             }
 
-            await core.WaitReadyAsync(coreName, readinessPort, ct).ConfigureAwait(false);
+            await core.WaitReadyAsync(coreName, readinessPort, startTimeout ?? StartTimeout, ct).ConfigureAwait(false);
             return core;
         }
         catch
@@ -170,9 +179,9 @@ public sealed class CoreProcess : IAsyncDisposable
 
     private void OnExited() => Exited?.Invoke(this, _process.ExitCode);
 
-    private async Task WaitReadyAsync(string coreName, int port, CancellationToken ct)
+    private async Task WaitReadyAsync(string coreName, int port, TimeSpan timeout, CancellationToken ct)
     {
-        var deadline = DateTime.UtcNow + StartTimeout;
+        var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
             if (_process.HasExited)
@@ -189,7 +198,9 @@ public sealed class CoreProcess : IAsyncDisposable
             }
         }
 
-        throw new CoreStartException($"Ядро {coreName} не запустилось за 8 секунд:\n" + Tail());
+        var tail = Tail();
+        throw new CoreStartException($"Ядро {coreName} не запустилось за {timeout.TotalSeconds:0} с: процесс работает, но локальный порт не открылся"
+            + (tail.Length == 0 ? " (ядро ничего не вывело)." : ":\n" + tail));
     }
 
     private string Tail()
