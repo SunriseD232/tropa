@@ -282,24 +282,24 @@
         "outbound": "direct"
       },
       {
-        "process_name": [
-          "VALORANT.exe"
+        "process_path_regex": [
+          "(?i)(^|[\\\\/])VALORANT\\.exe$"
         ],
         "network": "tcp",
         "action": "route",
         "outbound": "proxy"
       },
       {
-        "process_name": [
-          "VALORANT.exe"
+        "process_path_regex": [
+          "(?i)(^|[\\\\/])VALORANT\\.exe$"
         ],
         "network": "udp",
         "action": "route",
         "outbound": "direct"
       },
       {
-        "process_name": [
-          "qbittorrent.exe"
+        "process_path_regex": [
+          "(?i)(^|[\\\\/])qbittorrent\\.exe$"
         ],
         "action": "reject"
       },

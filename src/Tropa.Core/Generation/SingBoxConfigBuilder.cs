@@ -935,6 +935,28 @@ public static class SingBoxConfigBuilder
         yield return Route(ctx, MatchFields(ctx, rule.Match, "udp"), rule.Udp);
     }
 
+    /// <summary>
+    /// Имена и пути программ — без учёта регистра, как в Windows. process_name и process_path в sing-box
+    /// сравнивают строку точно: правило «discord» (→ «discord.exe») никогда не совпадало с «Discord.exe»
+    /// (журнал разработчика, 2026-10-30). Имя — последний элемент пути, путь — целиком.
+    /// </summary>
+    internal static List<string> ProcessRegexes(IReadOnlyList<string> names, IReadOnlyList<string> paths) =>
+        [.. names.Select(n => @"(?i)(^|[\\/])" + GoRegexEscape(n) + "$"), .. paths.Select(p => "(?i)^" + GoRegexEscape(p) + "$")];
+
+    /// <summary>RE2 (Go) не принимает «\ » и прочие экранирования не-знаков, поэтому не Regex.Escape.</summary>
+    private static string GoRegexEscape(string s)
+    {
+        var sb = new System.Text.StringBuilder(s.Length + 8);
+        foreach (var c in s)
+        {
+            if (@"\.+*?()|[]{}^$".Contains(c, StringComparison.Ordinal))
+                sb.Append('\\');
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
     private static JsonObject MatchFields(Context ctx, RuleMatch m, string? network)
     {
         // Группы sing-box: адрес назначения (домены, сети, наборы) — «ИЛИ» между собой, остальные — «И».
@@ -946,8 +968,7 @@ public static class SingBoxConfigBuilder
                 o[key] = StrArray(values);
         }
 
-        Put(rest, "process_name", m.Processes);
-        Put(rest, "process_path", m.ProcessPaths);
+        Put(rest, "process_path_regex", ProcessRegexes(m.Processes, m.ProcessPaths));
         Put(dest, "domain", m.Domains);
         Put(dest, "domain_suffix", m.DomainSuffixes);
         Put(dest, "domain_keyword", m.DomainKeywords);
@@ -975,7 +996,7 @@ public static class SingBoxConfigBuilder
         {
             // Обычное правило: все поля одним объектом, в привычном порядке.
             var o = new JsonObject();
-            foreach (var key in new[] { "process_name", "process_path", "domain", "domain_suffix", "domain_keyword", "domain_regex", "ip_cidr", "rule_set", "port", "port_range", "network" })
+            foreach (var key in new[] { "process_path_regex", "domain", "domain_suffix", "domain_keyword", "domain_regex", "ip_cidr", "rule_set", "port", "port_range", "network" })
             {
                 var from = dest.ContainsKey(key) ? dest : rest;
                 if (from[key] is { } value)
