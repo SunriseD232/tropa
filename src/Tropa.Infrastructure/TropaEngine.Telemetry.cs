@@ -4,6 +4,7 @@ using Tropa.Core.Diagnostics;
 using Tropa.Core.Model;
 using Tropa.Core.Telemetry;
 using Tropa.Infrastructure.Diagnostics;
+using Tropa.Infrastructure.Net;
 using Tropa.Infrastructure.Telemetry;
 
 namespace Tropa.Infrastructure;
@@ -104,6 +105,52 @@ public sealed partial class TropaEngine
         catch (Exception ex) when (ex is System.Net.NetworkInformation.NetworkInformationException or InvalidOperationException
             or System.ComponentModel.Win32Exception or UnauthorizedAccessException or IOException)
         {
+        }
+    }
+
+    /// <summary>
+    /// Раз в 5 с — соединения ядра, раз в минуту — сводка UDP (3.7), если по UDP шло заметно.
+    /// Только при включённом журнале: при выключенном соединения не опрашиваются вовсе.
+    /// </summary>
+    private async Task MeasureUdpAsync(ClashApi api, Protocol protocol, CancellationToken ct)
+    {
+        var window = TimeSpan.FromSeconds(5);
+        var meter = new UdpFlowMeter();
+        using (api)
+        {
+            try
+            {
+                var last = _now();
+                var minuteStart = last;
+                while (!ct.IsCancellationRequested)
+                {
+                    await Task.Delay(window, ct).ConfigureAwait(false);
+                    if (_telemetry is not { Active: true })
+                        continue;
+                    IReadOnlyList<CoreConnection> connections;
+                    try
+                    {
+                        connections = await api.ConnectionsAsync(ct).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is HttpRequestException or IOException or System.Text.Json.JsonException
+                        or TaskCanceledException && !ct.IsCancellationRequested)
+                    {
+                        continue; // статистика не критична
+                    }
+
+                    var now = _now();
+                    meter.Add(connections, now - last);
+                    last = now;
+                    if (now - minuteStart < TimeSpan.FromMinutes(1))
+                        continue;
+                    minuteStart = now;
+                    if (meter.Flush() is { } fields)
+                        Rec(Ev.UdpFlow, [.. fields, ("xray", Flag(_lastPlanNeedsXray)), ("proto", protocol.ToString())]);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
     }
 

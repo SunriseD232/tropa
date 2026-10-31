@@ -75,6 +75,7 @@ public static class Ev
     public const string ExitRegion = "3.4";
     public const string Adapters = "3.5";
     public const string WindowsProxy = "3.6";
+    public const string UdpFlow = "3.7";
 
     // 4 — настройки
     public const string SettingsSnapshot = "4.1";
@@ -132,6 +133,7 @@ public static class Ev
         (ExitRegion, "Страна выхода"),
         (Adapters, "Сетевые адаптеры"),
         (WindowsProxy, "Прокси Windows"),
+        (UdpFlow, "Поток UDP за минуту (звонки, видео)"),
         (SettingsSnapshot, "Все настройки"),
         (SettingsChanged, "Изменены настройки"),
         (ActiveServer, "Выбран сервер"),

@@ -49,6 +49,43 @@ public sealed class ClashApi(int port, string secret) : IDisposable
         }
     }
 
+    /// <summary>
+    /// Текущие соединения ядра (для сводки UDP, событие 3.7). Через сервер — всё, что ушло не в
+    /// «direct» и не отклонено. Адреса не читаем: в журнал идут только имя программы и счётчики.
+    /// </summary>
+    public async Task<IReadOnlyList<Tropa.Core.Telemetry.CoreConnection>> ConnectionsAsync(CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(4));
+        using var response = await _client.GetAsync("connections", timeout.Token).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token).ConfigureAwait(false);
+        var list = new List<Tropa.Core.Telemetry.CoreConnection>();
+        if (!doc.RootElement.TryGetProperty("connections", out var items) || items.ValueKind != JsonValueKind.Array)
+            return list;
+        foreach (var c in items.EnumerateArray())
+        {
+            if (c.ValueKind != JsonValueKind.Object || !c.TryGetProperty("metadata", out var m) || m.ValueKind != JsonValueKind.Object)
+                continue;
+            var chain = c.TryGetProperty("chains", out var chains) && chains.ValueKind == JsonValueKind.Array && chains.GetArrayLength() > 0
+                ? chains[0].GetString()
+                : null;
+            var process = m.TryGetProperty("processPath", out var path) && path.GetString() is { Length: > 0 } pp ? Path.GetFileName(pp) : null;
+            var port = m.TryGetProperty("destinationPort", out var dp) && int.TryParse(dp.GetString(), System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 0;
+            list.Add(new Tropa.Core.Telemetry.CoreConnection(
+                Id: c.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "",
+                Udp: m.TryGetProperty("network", out var net) && net.GetString() == "udp",
+                ViaServer: chain is not null and not ("direct" or "block" or "reject"),
+                Process: process,
+                DestinationPort: port,
+                Upload: c.TryGetProperty("upload", out var up) && up.TryGetInt64(out var u) ? u : 0,
+                Download: c.TryGetProperty("download", out var down) && down.TryGetInt64(out var d) ? d : 0));
+        }
+
+        return list;
+    }
+
     /// <summary>Переключает selector на выход <paramref name="outbound"/> без переподключения.</summary>
     public async Task SelectAsync(string selector, string outbound, CancellationToken ct)
     {

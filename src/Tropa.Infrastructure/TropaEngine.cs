@@ -1319,6 +1319,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         _trafficCts = new CancellationTokenSource();
         _ = PumpTrafficAsync(new ClashApi(clashPort, clashSecret), _trafficCts.Token);
         _ = MonitorAsync(active.Id, _trafficCts.Token);
+        _ = MeasureUdpAsync(new ClashApi(clashPort, clashSecret), active.Protocol, _trafficCts.Token);
         if (exitProbePort is { } probe)
             _ = WatchExitRegionAsync(probe, _trafficCts.Token);
     }
