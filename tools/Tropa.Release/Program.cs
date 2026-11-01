@@ -11,6 +11,9 @@ using Tropa.Core.Updates;
 //   tropa-release manifest --sequence N [--expires-days 90] [--app-version X --app-url URL --installer setup.exe] --out manifest.json
 //   tropa-release sign    --key <файл.pem> --in manifest.json     создаёт manifest.json.sig и сразу проверяет её
 //   tropa-release verify  --in manifest.json                       проверка подписи публичным ключом из tools/update.config.json
+//   tropa-release extra-core --core sing-box|xray --version X [--channel stable|preview]
+//                         дополнительная версия ядра для выбора пользователем (ADR-058): хэши с GitHub → tools/cores.extra.json
+//   tropa-release extra-core --core X --version Y --remove     убрать версию из tools/cores.extra.json
 
 namespace Tropa.Release;
 
@@ -27,10 +30,12 @@ internal static class Program
                 "manifest" => Manifest(options),
                 "sign" => Sign(Required(options, "key"), Required(options, "in")),
                 "verify" => Verify(Required(options, "in")),
+                "extra-core" => ExtraCore(options, args.Contains("--remove")),
                 _ => Usage(),
             };
         }
-        catch (Exception ex) when (ex is ArgumentException or IOException or CryptographicException or InvalidDataException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is ArgumentException or IOException or CryptographicException or InvalidDataException or UnauthorizedAccessException
+            or HttpRequestException or TaskCanceledException)
         {
             Console.Error.WriteLine("Ошибка: " + ex.Message);
             return 1;
@@ -39,7 +44,7 @@ internal static class Program
 
     private static int Usage()
     {
-        Console.Error.WriteLine("Команды: keygen, manifest, sign, verify. Подробности — в docs/10-release.md.");
+        Console.Error.WriteLine("Команды: keygen, manifest, sign, verify, extra-core. Подробности — в docs/10-release.md.");
         return 2;
     }
 
@@ -150,6 +155,10 @@ internal static class Program
             ["cores"] = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "tools", "cores.lock.json"))),
             ["geo"] = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "tools", "geo.lock.json"))),
         };
+        // Дополнительные версии ядер (ADR-058): пользователь выбирает их сам, по умолчанию не ставятся.
+        var extraPath = Path.Combine(root, "tools", "cores.extra.json");
+        if (File.Exists(extraPath) && JsonNode.Parse(File.ReadAllText(extraPath))?["cores"] is JsonArray { Count: > 0 } extra)
+            manifest["extraCores"] = extra.DeepClone();
         if (o.TryGetValue("app-version", out var version))
         {
             var installer = Required(o, "installer");
@@ -169,6 +178,53 @@ internal static class Program
         var output = Required(o, "out");
         File.WriteAllBytes(output, bytes);
         Console.WriteLine($"Манифест №{sequence} записан: {output}. Не забудьте bundledSequence = {sequence} в tools/update.config.json для этого выпуска.");
+        return 0;
+    }
+
+    /// <summary>
+    /// Дополнительная версия ядра: хэш архива из ответа GitHub (у Xray — ещё и .dgst), хэш exe — по скачанному архиву.
+    /// Перед добавлением владелец сам читает changelog и прогоняет тесты на этой версии.
+    /// </summary>
+    private static int ExtraCore(Dictionary<string, string> o, bool remove)
+    {
+        var root = RepoRoot();
+        var repo = Tropa.Core.Cores.CoreReleases.For(Required(o, "core"));
+        var version = Tropa.Core.Cores.CoreReleases.RequireVersion(Required(o, "version"));
+        var path = Path.Combine(root, "tools", "cores.extra.json");
+        var doc = File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path))!.AsObject() : new JsonObject { ["cores"] = new JsonArray() };
+        var list = doc["cores"]!.AsArray();
+        foreach (var old in list.Where(x => (string?)x?["name"] == repo.Core && (string?)x?["version"] == version).ToList())
+            list.Remove(old);
+        if (!remove)
+        {
+            var channel = o.GetValueOrDefault("channel") ?? (version.Contains('-', StringComparison.Ordinal) ? "preview" : "stable");
+            if (channel is not ("stable" or "preview"))
+                throw new ArgumentException("--channel: stable или preview.");
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("tropa-release");
+            http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+            var release = Tropa.Core.Cores.CoreReleases.ParseReleases(repo, http.GetByteArrayAsync(new Uri(repo.ApiTag(version))).GetAwaiter().GetResult())
+                .FirstOrDefault(r => r.Version == version && r.ArchiveSha256 is not null)
+                ?? throw new InvalidDataException($"В выпуске {repo.Core} {version} нет архива для Windows с хэшем.");
+            if (repo.HasDgst && Tropa.Core.Cores.CoreReleases.ParseDgst(http.GetStringAsync(new Uri(release.DgstUrl ?? throw new InvalidDataException("Нет .dgst."))).GetAwaiter().GetResult()) != release.ArchiveSha256)
+                throw new InvalidDataException("Хэш в .dgst не совпадает с GitHub.");
+            var zip = http.GetByteArrayAsync(new Uri(repo.DownloadUrl(version))).GetAwaiter().GetResult();
+            if (Convert.ToHexStringLower(SHA256.HashData(zip)) != release.ArchiveSha256)
+                throw new InvalidDataException("Архив не совпадает с хэшем GitHub.");
+            using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(zip));
+            var entry = archive.GetEntry(repo.ExeEntry(version)) ?? throw new InvalidDataException($"В архиве нет {repo.ExeEntry(version)}.");
+            using var exe = entry.Open();
+            var e = Tropa.Core.Cores.CoreReleases.Entry(repo, version, release.ArchiveSha256!, Convert.ToHexStringLower(SHA256.HashData(exe)));
+            list.Add(new JsonObject
+            {
+                ["name"] = e.Name, ["version"] = e.Version, ["source"] = e.Source, ["license"] = e.License, ["url"] = e.Url, ["archiveSha256"] = e.ArchiveSha256,
+                ["files"] = new JsonArray(new JsonObject { ["entry"] = e.Files[0].Entry, ["target"] = e.Files[0].Target, ["sha256"] = e.Files[0].Sha256 }),
+                ["channel"] = channel,
+            });
+        }
+
+        File.WriteAllText(path, doc.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }) + "\n", new UTF8Encoding(false));
+        Console.WriteLine(remove ? $"{repo.Core} {version} убран из {path}." : $"{repo.Core} {version} добавлен в {path}. Попадёт в следующий манифест.");
         return 0;
     }
 

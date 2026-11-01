@@ -38,6 +38,7 @@ public sealed record EnginePaths(string Roaming, string Local)
     public string JournalPath => Path.Combine(Local, "journal.json");
     public string LogDirectory => Path.Combine(Local, "logs");
     public string UpdatesDirectory => Path.Combine(Local, "updates");
+    public string CorePicksDirectory => Path.Combine(Local, "cores-picked");
 }
 
 /// <summary>
@@ -248,7 +249,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         var journal = new ChangeJournal(paths.JournalPath);
         var systemProxy = new SystemProxy(proxyStore ?? new RegistryProxySettingsStore(), journal);
         // Установленное обновление ядер (если есть и подпись верна) новее файлов программы.
-        var effectiveLocations = locations ?? new UpdateStore(paths.UpdatesDirectory, UpdateConfig.Embedded).Load(CoreLocations.Default());
+        var effectiveLocations = locations ?? new CorePickStore(paths.CorePicksDirectory).Apply(new UpdateStore(paths.UpdatesDirectory, UpdateConfig.Embedded).Load(CoreLocations.Default()));
         var engine = new TropaEngine(paths, store, loaded, systemProxy, effectiveLocations, now ?? (() => DateTimeOffset.Now),
             connectService ?? (_ => Task.FromResult<ServiceClient?>(null)),
             serviceInstalled ?? (connectService is null ? () => false : ServiceRegistered), telemetry ?? TelemetryConfig.Embedded);
@@ -370,6 +371,18 @@ public sealed partial class TropaEngine : IAsyncDisposable
     }
 
     /// <summary>Сдвигает подписку на одну позицию (delta = −1 — левее, +1 — правее).</summary>
+    /// <summary>
+    /// Имя подписки от пользователя. Пустое — вернуть автоматическое: адрес сервера подписки,
+    /// при следующем обновлении его заменит название от провайдера.
+    /// </summary>
+    public void RenameSubscription(Guid subscriptionId, string? name) =>
+        Update(s => s with
+        {
+            Subscriptions = [.. s.Subscriptions.Select(x => x.Id != subscriptionId ? x
+                : NameSanitizer.Sanitize(name, "") is { Length: > 0 } clean ? x with { Name = clean, NameByUser = true }
+                : x with { Name = new Uri(x.Url.Reveal()).Host, NameByUser = false })],
+        });
+
     public void MoveSubscription(Guid subscriptionId, int delta) =>
         Update(s =>
         {
@@ -462,6 +475,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         var sub = new Subscription
         {
             Name = string.IsNullOrWhiteSpace(name) ? new Uri(url).Host : NameSanitizer.Sanitize(name, new Uri(url).Host),
+            NameByUser = !string.IsNullOrWhiteSpace(name),
             Url = new Secret(url),
             UpdateHours = defaults.UpdateHours,
             UserAgent = defaults.SubUA,
@@ -524,7 +538,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
             Info = info,
             LastUpdated = _now(),
             LastError = parsed.Profiles.Count == 0 ? "В подписке не найдено серверов. Попробуйте «Представляться как v2rayN»." : null,
-            Name = sub.Name == new Uri(sub.Url.Reveal()).Host && (admin?.Channel.Title ?? info.Title) is { } title ? title : sub.Name,
+            Name = !sub.NameByUser && sub.Name == new Uri(sub.Url.Reveal()).Host && (admin?.Channel.Title ?? info.Title) is { } title ? title : sub.Name,
             UpdateHours = info.UpdateIntervalHours ?? sub.UpdateHours,
             Admin = admin?.Channel,
         };
@@ -875,7 +889,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
 
             // Свой каталог обновляем всегда: без службы (или если её удалят) работают эти файлы.
             if (m.Manifest.Sequence > _locations.Sequence)
-                _locations = new UpdateStore(_paths.UpdatesDirectory, Updates).Install(m.Bytes, m.Signature, work, _locations);
+                _locations = new CorePickStore(_paths.CorePicksDirectory).Apply(new UpdateStore(_paths.UpdatesDirectory, Updates).Install(m.Bytes, m.Signature, work, _locations));
             Log?.Invoke(this, "Обновление установлено: " + CoreVersions);
         }
         finally

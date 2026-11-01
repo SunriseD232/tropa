@@ -9,6 +9,10 @@ public sealed record Subscription
 {
     public Guid Id { get; init; } = Guid.NewGuid();
     public required string Name { get; init; }
+
+    /// <summary>Имя задал пользователь: обновление подписки не заменяет его названием от провайдера.</summary>
+    public bool NameByUser { get; init; }
+
     public required Secret Url { get; init; }
     public int UpdateHours { get; init; } = 12;
     public UserAgentMode UserAgent { get; init; } = UserAgentMode.Tropa;

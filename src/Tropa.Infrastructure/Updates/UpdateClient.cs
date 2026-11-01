@@ -50,7 +50,7 @@ public sealed class UpdateClient(HttpClient http, UpdateConfig config)
         if (m.Expires < now)
             throw new IntegrityException("Манифест обновлений просрочен. Возможно, кто-то подменяет ответ или выпуск давно не обновлялся.");
 
-        var newCores = m.Sequence > current.Sequence && m.Cores.Cores.Any(c => !SameCore(c, current.Cores));
+        var newCores = m.Sequence > current.Sequence && m.Cores.Cores.Any(c => !SameCore(c, current.ReleaseCores));
         var newGeo = m.Sequence > current.Sequence && m.Geo.Files.Any(f => current.Geo.Files.All(g => g.Sha256 != f.Sha256 || g.Name != f.Name));
         var newApp = m.App is { } app && app.Version > appVersion ? app : null;
         return new UpdateCheck(verified, newApp, newCores, newGeo);

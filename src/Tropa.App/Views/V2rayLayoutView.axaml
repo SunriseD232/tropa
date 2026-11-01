@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sec="using:Tropa.Core.Security"
              xmlns:vm="using:Tropa.App.ViewModels"
              xmlns:svc="using:Tropa.App.Services"
              x:Class="Tropa.App.Views.V2rayLayoutView"
@@ -119,6 +120,8 @@
             <MenuItem Header="Обновить открытую подписку" Command="{Binding Servers.UpdateCurrentSubscriptionCommand}"
                       IsEnabled="{Binding Servers.CurrentTabInfo.IsSubscription, FallbackValue=False}" />
             <MenuItem Header="Добавить подписку…" Command="{Binding Servers.AddCommand}" />
+            <MenuItem Header="Переименовать открытую подписку…" Command="{Binding Servers.AskRenameSubscriptionCommand}"
+                      IsEnabled="{Binding Servers.CurrentTabInfo.IsSubscription, FallbackValue=False}" />
             <Separator />
             <MenuItem Header="Вернуть удалённые серверы" Command="{Binding Servers.RestoreHiddenCommand}"
                       IsEnabled="{Binding Servers.CurrentTabInfo.HasHidden, FallbackValue=False}" />
@@ -129,6 +132,9 @@
             <MenuItem Header="Параметры…" Command="{Binding NavigateCommand}" CommandParameter="settings" />
             <MenuItem Header="Маршрутизация и правила…" Command="{Binding NavigateCommand}" CommandParameter="rules" />
             <MenuItem Header="Диагностика…" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" />
+            <Separator />
+            <MenuItem Header="Проверить обновления" Command="{Binding Home.Updates.CheckCommand}" />
+            <MenuItem Header="Версии ядер (обновление и откат)…" Command="{Binding NavigateCommand}" CommandParameter="settings:cores" />
             <Separator />
             <MenuItem Header="Вид окна «Тропа»" Command="{Binding SwitchLayoutCommand}" CommandParameter="tropa" />
             <Separator />
@@ -202,6 +208,32 @@
       </DockPanel>
     </Border>
 
+    <!-- Обновление: в этом виде нет главного экрана с карточкой «Версии и обновления» -->
+    <Border DockPanel.Dock="Top" DataContext="{Binding Home.Updates}" x:DataType="vm:UpdatesViewModel" IsVisible="{Binding ShowBanner}"
+            Classes="v2bar" Background="{DynamicResource InfoBg}" Padding="10,6">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Classes="primary" Content="Установить" Command="{Binding InstallAppCommand}"
+                  IsVisible="{Binding AppOffer, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <Button Classes="primary" Content="Обновить ядра" Command="{Binding InstallCoresCommand}"
+                  IsVisible="{Binding CoresOffer, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <Button Content="{Binding DismissLabel}" Command="{Binding DismissBannerCommand}" />
+        </StackPanel>
+        <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,12,0">
+          <TextBlock Text="{Binding AppOffer}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap"
+                     IsVisible="{Binding AppOffer, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <TextBlock Text="{Binding CoresOffer}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap"
+                     IsVisible="{Binding CoresOffer, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <TextBlock Text="{Binding Status}" Classes="muted" Classes.err="{Binding StatusIsError}" TextWrapping="Wrap"
+                     IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock.Styles>
+              <Style Selector="TextBlock.err"><Setter Property="Foreground" Value="{DynamicResource BadFg}" /></Style>
+            </TextBlock.Styles>
+          </TextBlock>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
     <Grid RowDefinitions="*,5,170">
       <!-- Таблица серверов -->
       <DockPanel Grid.Row="0" IsVisible="{Binding ShowsServerTable}">
@@ -240,6 +272,21 @@
 
         <!-- Сообщения экрана серверов -->
         <StackPanel DockPanel.Dock="Top" Classes="v2bar" Margin="8,0,8,4" Spacing="4">
+          <Border Background="{DynamicResource Card2}" CornerRadius="6" Padding="10,6" IsVisible="{Binding Servers.PendingSubscriptionName, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">
+                <Button Content="Отмена" Command="{Binding Servers.CancelRenameSubscriptionCommand}" />
+                <Button Classes="primary" Content="Сохранить" Command="{Binding Servers.ConfirmRenameSubscriptionCommand}" />
+              </StackPanel>
+              <TextBox Text="{Binding Servers.PendingSubscriptionName}" MaxLength="{x:Static sec:NameSanitizer.MaxLength}"
+                       PlaceholderText="Пусто — имя от провайдера" AutomationProperties.Name="Новое имя подписки">
+                <TextBox.KeyBindings>
+                  <KeyBinding Gesture="Enter" Command="{Binding Servers.ConfirmRenameSubscriptionCommand}" />
+                  <KeyBinding Gesture="Escape" Command="{Binding Servers.CancelRenameSubscriptionCommand}" />
+                </TextBox.KeyBindings>
+              </TextBox>
+            </DockPanel>
+          </Border>
           <Border Background="{DynamicResource BadBg}" CornerRadius="6" Padding="10,6" IsVisible="{Binding Servers.PendingSubscriptionDelete, Converter={x:Static ObjectConverters.IsNotNull}}">
             <DockPanel>
               <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">

@@ -17,6 +17,8 @@ public enum ServiceState { Idle, Starting, Running, Stopping, Failed }
 [JsonDerivedType(typeof(StatusRequest), "status")]
 [JsonDerivedType(typeof(RollbackAllRequest), "rollbackAll")]
 [JsonDerivedType(typeof(InstallUpdateRequest), "installUpdate")]
+[JsonDerivedType(typeof(InstallCoreRequest), "installCore")]
+[JsonDerivedType(typeof(SelectCoreRequest), "selectCore")]
 public abstract record Request
 {
     /// <summary>Номер запроса: ответ приходит с тем же номером.</summary>
@@ -58,6 +60,23 @@ public sealed record RollbackAllRequest : Request;
 /// </summary>
 public sealed record InstallUpdateRequest(string ManifestBase64, string SignatureBase64, string FilesDirectory) : Request;
 
+public enum CoreSourceDto { Manifest, GitHub }
+
+/// <summary>
+/// Установить и выбрать версию ядра (ADR-058). Manifest: в <paramref name="FilesDirectory"/> лежит exe,
+/// служба проверяет подпись манифеста и берёт хэш из него. GitHub: там лежит архив выпуска, служба сама
+/// спрашивает у api.github.com его хэш (только официальные репозитории ядер) и сама извлекает exe.
+/// Хэшам и путям от интерфейса служба не доверяет.
+/// </summary>
+public sealed record InstallCoreRequest(string Core, string Version, CoreSourceDto Source, string FilesDirectory,
+    string? ManifestBase64 = null, string? SignatureBase64 = null) : Request;
+
+/// <summary>Выбрать уже установленную версию ядра; Version = null — версия выпуска.</summary>
+public sealed record SelectCoreRequest(string Core, string? Version) : Request;
+
+/// <summary>Установленная по выбору пользователя версия ядра.</summary>
+public sealed record CorePickDto(string Core, string Version, CoreSourceDto Source, bool Preview, bool Selected, bool Previous);
+
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(Reply), "reply")]
 [JsonDerivedType(typeof(HelloReply), "helloReply")]
@@ -71,8 +90,10 @@ public record Reply(int Id, bool Ok, string? Error) : ServerMessage;
 /// <param name="XrayPath">Путь к xray.exe службы: интерфейс ставит правило, чтобы трафик Xray не зацикливался в TUN.</param>
 /// <param name="CoreVersions">Версии ядер, которые служба сейчас запускает.</param>
 /// <param name="UpdateSequence">Номер установленного манифеста обновлений (0 — файлы установщика).</param>
+/// <param name="ReleaseCoreVersions">Версии ядер выпуска — без выбранных пользователем.</param>
+/// <param name="CorePicks">Установленные по выбору пользователя версии ядер (ADR-058).</param>
 public sealed record HelloReply(int Id, int Protocol, string ServiceVersion, bool TunSupported, string RuleSetDirectory, string? XrayPath = null,
-    string? CoreVersions = null, long UpdateSequence = 0)
+    string? CoreVersions = null, long UpdateSequence = 0, string? ReleaseCoreVersions = null, IReadOnlyList<CorePickDto>? CorePicks = null)
     : Reply(Id, true, null);
 
 /// <param name="Blocking">Kill switch держит блокировку: ядро не работает, но интернет мимо туннеля закрыт.</param>

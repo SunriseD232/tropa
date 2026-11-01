@@ -149,6 +149,15 @@ public sealed record CoreSettings
     public string AppChannel { get; init; } = "stable";
     public bool AppCheck { get; init; } = true;
 
+    /// <summary>
+    /// Показывать при выборе версии ядра выпуски прямо с GitHub, которые владелец не проверял (ADR-058).
+    /// Хэш берётся у GitHub; по умолчанию выключено — только версии из подписанного манифеста.
+    /// </summary>
+    public bool GitHubCores { get; init; }
+
+    /// <summary>Показывать preview-версии ядер (beta, rc, pre-release).</summary>
+    public bool PreviewCores { get; init; }
+
     /// <summary>Самый новый номер манифеста обновлений, который Тропа уже видела (защита от отката).</summary>
     public long LastManifestSequence { get; init; }
 

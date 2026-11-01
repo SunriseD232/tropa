@@ -48,6 +48,17 @@ dotnet run --project tools/Tropa.Release -- keygen --out "$env:USERPROFILE\Tropa
 Срок действия манифеста — 90 дней (`--expires-days`). Просроченный манифест Тропа не принимает
 (защита от «заморозки»), поэтому раз в два-три месяца нужно выпускать манифест заново, даже без изменений.
 
+### Дополнительные версии ядер (ADR-058)
+
+Кроме версий выпуска, манифест может предлагать пользователю другие проверенные версии (новее, preview, прежние). После проверки (changelog, `dotnet test` на этой версии):
+
+```bash
+dotnet run --project tools/Tropa.Release -- extra-core --core sing-box --version 1.15.0-beta.3 --channel preview
+dotnet run --project tools/Tropa.Release -- extra-core --core xray --version 26.9.30 --remove
+```
+
+Команда берёт хэш архива из ответа GitHub (у Xray сверяет с .dgst), скачивает архив, считает хэш exe и пишет запись в `tools/cores.extra.json`. Команда `manifest` кладёт этот список в `extraCores`. По умолчанию пользователю ничего не ставится — он выбирает сам в «Настройки → Ядра и обновления → Версии ядер».
+
 ## 3. Подпись кода (Authenticode)
 
 Пока не подписываем (ADR-025, владелец согласен оставить так). Следствие: при запуске установщика,

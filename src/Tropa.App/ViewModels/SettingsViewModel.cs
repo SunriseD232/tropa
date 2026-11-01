@@ -83,6 +83,13 @@ internal sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void Select(SettingsSection section) => Current = section;
 
+    /// <summary>Открыть раздел по ключу (меню вида v2rayN).</summary>
+    public void ShowSection(string key)
+    {
+        if (Sections.FirstOrDefault(s => s.Key == key) is { } section)
+            Current = section;
+    }
+
     partial void OnCurrentChanged(SettingsSection value)
     {
         foreach (var s in Sections)
@@ -313,6 +320,11 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new ToggleRow("Проверять новые ядра и списки сайтов раз в сутки", "geoUpdate", s => s.Cores.GeoUpdate, (s, v) => s with { Cores = s.Cores with { GeoUpdate = v } }),
         new ToggleRow("Скачивать обновления через подключение", "geoViaProxy", s => s.Cores.GeoViaProxy, (s, v) => s with { Cores = s.Cores with { GeoViaProxy = v } }),
         new ToggleRow("Сообщать о новой версии Тропы", "appUpdate", s => s.Cores.AppCheck, (s, v) => s with { Cores = s.Cores with { AppCheck = v } }),
+        new CoreVersionsRow(_engine),
+        new ToggleRow("Показывать preview-версии ядер", "previewCores", s => s.Cores.PreviewCores, (s, v) => s with { Cores = s.Cores with { PreviewCores = v } },
+            hint: "Beta и rc: новые функции раньше, но возможны сбои."),
+        new ToggleRow("Версии ядер прямо с GitHub (без проверки владельцем)", "githubCores", s => s.Cores.GitHubCores, (s, v) => s with { Cores = s.Cores with { GitHubCores = v } },
+            hint: "Любой выпуск sing-box и Xray из их официальных репозиториев. Хэш сверяет служба по данным GitHub, но владелец Тропы эту версию не проверял."),
     ]);
 
     /// <summary>Тексты для буфера обмена — только по нажатию кнопки (docs/02-security.md, правило 8).</summary>

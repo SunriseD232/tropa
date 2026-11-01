@@ -140,7 +140,8 @@ internal sealed partial class PipeServer(ServiceOptions options, ILogger<PipeSer
                 session.Greeted = true;
                 var locations = _supervisor!.Locations;
                 return new HelloReply(hello.Id, IpcProtocol.Version, Version, options.Privileged, options.GeoDirectory,
-                    Infrastructure.Cores.CoreProcess.ExecutablePath(locations, "xray"), locations.Versions, locations.Sequence);
+                    Infrastructure.Cores.CoreProcess.ExecutablePath(locations, "xray"), locations.Versions, locations.Sequence,
+                    $"sing-box {locations.ReleaseCores.Get("sing-box").Version} · Xray {locations.ReleaseCores.Get("xray").Version}", _supervisor.PickList());
 
             case StatusRequest status:
                 await session.SendAsync(_supervisor!.Status, ct).ConfigureAwait(false);
@@ -167,6 +168,18 @@ internal sealed partial class PipeServer(ServiceOptions options, ILogger<PipeSer
             case InstallUpdateRequest install:
                 var installError = await _supervisor!.InstallUpdateAsync(install).ConfigureAwait(false);
                 return new Reply(install.Id, installError is null, installError);
+
+            case InstallCoreRequest installCore:
+                if (_controller is not null && !ReferenceEquals(_controller, session))
+                    return new Reply(installCore.Id, false, "Тропой управляет другой пользователь этого компьютера.");
+                var coreError = await _supervisor!.InstallCoreAsync(installCore, ct).ConfigureAwait(false);
+                return new Reply(installCore.Id, coreError is null, coreError);
+
+            case SelectCoreRequest selectCore:
+                if (_controller is not null && !ReferenceEquals(_controller, session))
+                    return new Reply(selectCore.Id, false, "Тропой управляет другой пользователь этого компьютера.");
+                var selectError = await _supervisor!.SelectCoreAsync(selectCore).ConfigureAwait(false);
+                return new Reply(selectCore.Id, selectError is null, selectError);
 
             case RollbackAllRequest rollback:
                 // Аварийный откат доступен любому проверенному клиенту: это «красная кнопка».

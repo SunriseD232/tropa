@@ -31,8 +31,111 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
 
     private CoreLocations? _locations;
 
-    /// <summary>Файлы ядер и правил: последнее установленное обновление или файлы установщика.</summary>
-    public CoreLocations Locations => _locations ??= new Infrastructure.Updates.UpdateStore(options.UpdatesDirectory, options.Updates).Load(options.Cores);
+    /// <summary>
+    /// Файлы ядер и правил: последнее установленное обновление или файлы установщика, а вместо ядер
+    /// выпуска — версии, выбранные пользователем (ADR-058).
+    /// </summary>
+    public CoreLocations Locations => _locations ??= Picks.Apply(new Infrastructure.Updates.UpdateStore(options.UpdatesDirectory, options.Updates).Load(options.Cores));
+
+    private CorePickStore Picks => new(options.CorePicksDirectory);
+
+    /// <summary>Установленные по выбору пользователя версии — для приветствия интерфейсу.</summary>
+    public IReadOnlyList<CorePickDto> PickList()
+    {
+        var state = Picks.Load();
+        return [.. state.Installed.Select(p => new CorePickDto(p.Core, p.Version, p.Source == CorePickSource.Manifest ? CoreSourceDto.Manifest : CoreSourceDto.GitHub,
+            p.Preview, state.Selected.GetValueOrDefault(p.Core) == p.Version, state.Previous.GetValueOrDefault(p.Core) == p.Version))];
+    }
+
+    /// <summary>
+    /// Устанавливает и выбирает версию ядра. Хэш берётся только из подписанного манифеста или у GitHub —
+    /// не от интерфейса: иначе программа, захватившая интерфейс, заставила бы службу запустить свой exe.
+    /// Применяется при следующем подключении.
+    /// </summary>
+    public async Task<string?> InstallCoreAsync(InstallCoreRequest request, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        var work = Path.Combine(options.CorePicksDirectory, $"work-{Guid.NewGuid():N}");
+        try
+        {
+            if (!Path.IsPathFullyQualified(request.FilesDirectory) || !Directory.Exists(request.FilesDirectory))
+                return "Каталог с файлами ядра не найден.";
+            var repo = Tropa.Core.Cores.CoreReleases.For(request.Core);
+            var version = Tropa.Core.Cores.CoreReleases.RequireVersion(request.Version);
+            PrepareDirectories();
+            Tropa.Core.Cores.CoreEntry entry;
+            bool preview;
+            string exe;
+            if (request.Source == CoreSourceDto.Manifest)
+            {
+                var m = Infrastructure.Updates.VerifiedManifest.Verify(Convert.FromBase64String(request.ManifestBase64 ?? ""),
+                    Convert.FromBase64String(request.SignatureBase64 ?? ""), options.Updates).Manifest;
+                var extra = m.ExtraCores.FirstOrDefault(x => x.Entry.Name == repo.Core && x.Entry.Version == version);
+                var main = m.Cores.Get(repo.Core);
+                entry = extra?.Entry ?? (main.Version == version ? main : throw new IntegrityException($"Версии {repo.Core} {version} нет в манифесте."));
+                preview = extra?.Preview ?? false;
+                exe = Path.Combine(request.FilesDirectory, entry.Files[0].Target);
+            }
+            else
+            {
+                using var http = options.GitHubHttp();
+                var release = await new CoreReleaseClient(http).GetReleaseAsync(repo.Core, version, ct).ConfigureAwait(false);
+                entry = CoreReleaseClient.ExtractExe(repo.Core, version, Path.Combine(request.FilesDirectory, repo.AssetName(version)), release.ArchiveSha256!, work);
+                preview = release.Preview;
+                exe = Path.Combine(work, repo.ExeTarget);
+            }
+
+            Picks.Install(entry, request.Source == CoreSourceDto.Manifest ? CorePickSource.Manifest : CorePickSource.GitHub, preview, exe, DateTimeOffset.Now);
+            _locations = null;
+            onLog($"Выбрана версия {repo.Core} {version} ({(request.Source == CoreSourceDto.Manifest ? "из манифеста" : "с GitHub")}). Применится при следующем подключении.");
+            return null;
+        }
+        catch (Exception ex) when (ex is IntegrityException or InvalidDataException or IOException or UnauthorizedAccessException or FormatException
+            or InvalidOperationException or HttpRequestException or TaskCanceledException or KeyNotFoundException)
+        {
+            return ex.Message;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(work))
+                    Directory.Delete(work, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Временный каталог удалим в следующий раз.
+            }
+
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Выбирает уже установленную версию ядра или (null) версию выпуска.</summary>
+    public async Task<string?> SelectCoreAsync(SelectCoreRequest request)
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (request.Version is not null)
+                Tropa.Core.Cores.CoreReleases.RequireVersion(request.Version);
+            PrepareDirectories();
+            Picks.Select(request.Core, request.Version);
+            _locations = null;
+            onLog(request.Version is null
+                ? $"Для {request.Core} снова версия выпуска. Применится при следующем подключении."
+                : $"Выбрана версия {request.Core} {request.Version}. Применится при следующем подключении.");
+            return null;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return ex.Message;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 
     /// <summary>Устанавливает обновление ядер и правил. Применяется при следующем подключении.</summary>
     public async Task<string?> InstallUpdateAsync(InstallUpdateRequest request)
@@ -43,8 +146,8 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
             if (!Path.IsPathFullyQualified(request.FilesDirectory) || !Directory.Exists(request.FilesDirectory))
                 return "Каталог с файлами обновления не найден.";
             PrepareDirectories();
-            _locations = new Infrastructure.Updates.UpdateStore(options.UpdatesDirectory, options.Updates).Install(
-                Convert.FromBase64String(request.ManifestBase64), Convert.FromBase64String(request.SignatureBase64), request.FilesDirectory, Locations);
+            _locations = Picks.Apply(new Infrastructure.Updates.UpdateStore(options.UpdatesDirectory, options.Updates).Install(
+                Convert.FromBase64String(request.ManifestBase64), Convert.FromBase64String(request.SignatureBase64), request.FilesDirectory, Locations));
             onLog($"Установлено обновление №{_locations.Sequence}: {_locations.Versions}. Применится при следующем подключении.");
             return null;
         }
@@ -156,6 +259,8 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
             // Не удалось запустить: блокировка остаётся, если пользователь её включил, — так и задумано.
             await StopCoreAsync(keepKillSwitch: request.KillSwitch && request.Mode == CaptureModeDto.Tun).ConfigureAwait(false);
             var message = _scrubber.Scrub(ex.Message);
+            if (ex is CoreStartException && Locations.PickedDirectories.Count > 0)
+                message += " Запущена выбранная вами версия ядра — если она не работает, верните прежнюю: Настройки → Ядра и обновления.";
             SetStatus(new StatusEvent(ServiceState.Failed, message, null, Blocking: _killSwitch is not null));
             return message;
         }

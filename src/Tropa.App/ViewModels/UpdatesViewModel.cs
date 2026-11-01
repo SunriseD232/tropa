@@ -38,16 +38,35 @@ internal sealed partial class UpdatesViewModel : ObservableObject
     public partial bool Busy { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBanner))]
     public partial string? Status { get; set; }
 
     [ObservableProperty]
     public partial bool StatusIsError { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBanner), nameof(DismissLabel))]
     public partial string? CoresOffer { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBanner), nameof(DismissLabel))]
     public partial string? AppOffer { get; set; }
+
+    /// <summary>«Позже» на плашке вида v2rayN: прячет её до следующей найденной версии.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBanner))]
+    public partial bool BannerDismissed { get; set; }
+
+    /// <summary>
+    /// Плашка об обновлении в виде v2rayN: там нет главного экрана с карточкой «Версии и обновления».
+    /// Видна, пока есть что поставить или есть ответ на «Проверить обновления».
+    /// </summary>
+    public bool ShowBanner => !BannerDismissed && (CoresOffer is not null || AppOffer is not null || (Enabled && Status is not null));
+
+    public string DismissLabel => CoresOffer is not null || AppOffer is not null ? "Позже" : "Понятно";
+
+    [RelayCommand]
+    private void DismissBanner() => BannerDismissed = true;
 
     private bool CanRun() => !Busy && Enabled;
 
@@ -62,11 +81,14 @@ internal sealed partial class UpdatesViewModel : ObservableObject
         try
         {
             _check = await Task.Run(() => _engine.CheckUpdatesAsync());
+            var before = (CoresOffer, AppOffer);
             CoresOffer = _check.NewCores || _check.NewGeo
                 ? "Есть новые " + (_check.NewCores && _check.NewGeo ? "ядра и списки сайтов" : _check.NewCores ? "версии ядер" : "списки сайтов")
                     + $" (выпуск №{_check.Manifest.Manifest.Sequence})."
                 : null;
             AppOffer = _check.NewApp is { } app ? $"Доступна Тропа {app.Version.ToString(3)}." + (app.Notes is null ? "" : " " + app.Notes) : null;
+            if (!quiet || (CoresOffer, AppOffer) != before)
+                BannerDismissed = false;
             if (!quiet || _check.Any)
                 Report(_check.Any ? null : "Установлены последние версии.");
         }

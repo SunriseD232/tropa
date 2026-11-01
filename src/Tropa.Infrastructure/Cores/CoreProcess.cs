@@ -19,6 +19,33 @@ public sealed record CoreLocations(string CoresDirectory, string GeoSourceDirect
 
     public string Versions => $"sing-box {Cores.Get("sing-box").Version} · Xray {Cores.Get("xray").Version}";
 
+    /// <summary>Ядра выпуска (установщик или манифест) — до замены версиями, выбранными пользователем (ADR-058).</summary>
+    public Tropa.Core.Cores.CoresLock ReleaseCores => _releaseCores ?? Cores;
+
+    private Tropa.Core.Cores.CoresLock? _releaseCores;
+
+    /// <summary>Каталоги ядер, выбранных пользователем: имя ядра → каталог с его exe. Остальные — в <see cref="CoresDirectory"/>.</summary>
+    public IReadOnlyDictionary<string, string> PickedDirectories { get; private init; } = new Dictionary<string, string>();
+
+    /// <summary>Каталог exe ядра: выбранная пользователем версия или общий каталог выпуска.</summary>
+    public string DirectoryFor(string coreName) => PickedDirectories.TryGetValue(coreName, out var dir) ? dir : CoresDirectory;
+
+    /// <summary>Те же файлы, но указанные ядра заменены выбранными версиями из своих каталогов.</summary>
+    public CoreLocations WithPicked(IReadOnlyList<(Tropa.Core.Cores.CoreEntry Entry, string Directory)> picked)
+    {
+        ArgumentNullException.ThrowIfNull(picked);
+        var release = ReleaseCores;
+        if (picked.Count == 0)
+            return _releaseCores is null ? this : this with { Cores = release, _releaseCores = null, PickedDirectories = new Dictionary<string, string>() };
+        var cores = release.Cores.Select(c => picked.FirstOrDefault(p => p.Entry.Name == c.Name) is { Entry: { } e } ? e : c).ToList();
+        return this with
+        {
+            Cores = new Tropa.Core.Cores.CoresLock(release.Schema, cores),
+            _releaseCores = release,
+            PickedDirectories = picked.ToDictionary(p => p.Entry.Name, p => p.Directory, StringComparer.Ordinal),
+        };
+    }
+
     /// <summary>
     /// Рядом с программой. В отладочной сборке, если рядом пусто, — каталоги cores/ и geo/ репозитория
     /// (их наполняют tools/fetch-cores.ps1 и tools/fetch-geo.ps1 с проверкой хэшей).
@@ -101,7 +128,7 @@ public sealed class CoreProcess : IAsyncDisposable
     public static string ExecutablePath(CoreLocations locations, string coreName)
     {
         ArgumentNullException.ThrowIfNull(locations);
-        return Path.Combine(locations.CoresDirectory, locations.Cores.Get(coreName).Files[0].Target);
+        return Path.Combine(locations.DirectoryFor(coreName), locations.Cores.Get(coreName).Files[0].Target);
     }
 
     private static async Task<CoreProcess> StartAsync(string coreName, Func<string, string[]> arguments,
@@ -110,7 +137,7 @@ public sealed class CoreProcess : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(locations);
         var entry = locations.Cores.Get(coreName);
-        var exePath = Path.Combine(locations.CoresDirectory, entry.Files[0].Target);
+        var exePath = Path.Combine(locations.DirectoryFor(coreName), entry.Files[0].Target);
 
         Directory.CreateDirectory(runDirectory);
         var configPath = Path.Combine(runDirectory, $"config-{Guid.NewGuid():N}.json");

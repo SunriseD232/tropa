@@ -174,7 +174,7 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
     public partial string Stability { get; set; } = "не проверялась";
 
     [ObservableProperty]
-    public partial string Explanation { get; set; } = "Сервер ещё не проверялся.";
+    public partial string? Explanation { get; set; } = "Сервер ещё не проверялся.";
 
     [ObservableProperty]
     public partial string Checked { get; set; } = "";
@@ -208,7 +208,8 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
             HealthStatus.Unknown => "",
             _ => "bad",
         };
-        Explanation = ServerHealth.Explain(r);
+        // У рабочего сервера пояснения нет: null прячет и карточку, и подсказку в списке.
+        Explanation = ServerHealth.Explain(r) is { Length: > 0 } text ? text : null;
         Checked = "Проверено " + r.At.ToLocalTime().ToString("dd.MM HH:mm", Ru);
     }
 }
@@ -335,7 +336,7 @@ internal sealed partial class ServersViewModel : ObservableObject
                     (item.Status, item.StatusKind, item.Explanation) = ("Без проверки сертификата", "bad", insecure);
                 else
                 {
-                    item.Explanation = insecure + " " + item.Explanation;
+                    item.Explanation = (insecure + " " + item.Explanation).TrimEnd();
                     if (item.StatusKind == "ok")
                         item.StatusKind = "warn";
                 }
@@ -536,6 +537,7 @@ internal sealed partial class ServersViewModel : ObservableObject
         foreach (var t in Tabs)
             t.IsSelected = t == tab;
         PendingSubscriptionDelete = null;
+        PendingSubscriptionName = null;
         OnPropertyChanged(nameof(CurrentTabInfo));
         RebuildItems();
     }
@@ -703,6 +705,34 @@ internal sealed partial class ServersViewModel : ObservableObject
             t.IsSelected = false;
         Refresh();
         Message = $"Подписка «{name}» удалена.";
+    }
+
+    /// <summary>Новое имя открытой подписки, пока поле переименования открыто; null — поле закрыто.</summary>
+    [ObservableProperty]
+    public partial string? PendingSubscriptionName { get; set; }
+
+    [RelayCommand]
+    private void AskRenameSubscription()
+    {
+        if (CurrentTab is { SubscriptionId: { } id } && _engine.State.Subscriptions.FirstOrDefault(x => x.Id == id) is { } sub)
+            PendingSubscriptionName = sub.Name;
+    }
+
+    [RelayCommand]
+    private void CancelRenameSubscription() => PendingSubscriptionName = null;
+
+    [RelayCommand]
+    private void ConfirmRenameSubscription()
+    {
+        var name = PendingSubscriptionName;
+        PendingSubscriptionName = null;
+        if (CurrentTab is not { SubscriptionId: { } id })
+            return;
+        _engine.RenameSubscription(id, name);
+        Refresh();
+        Message = string.IsNullOrWhiteSpace(name)
+            ? "Подписке возвращено имя от провайдера: оно появится после обновления подписки."
+            : $"Подписка переименована: «{_engine.State.Subscriptions.FirstOrDefault(x => x.Id == id)?.Name}».";
     }
 
     [RelayCommand]

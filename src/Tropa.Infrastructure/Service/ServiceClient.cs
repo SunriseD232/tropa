@@ -41,6 +41,11 @@ public sealed partial class ServiceClient : IAsyncDisposable
 
     public long UpdateSequence { get; private set; }
 
+    /// <summary>Версии ядер выпуска (без выбранных пользователем) и выбранные версии (ADR-058).</summary>
+    public string? ReleaseCoreVersions { get; private set; }
+
+    public IReadOnlyList<CorePickDto> CorePicks { get; private set; } = [];
+
     public event EventHandler<StatusEvent>? Status;
 
     public event EventHandler<string>? Log;
@@ -94,6 +99,8 @@ public sealed partial class ServiceClient : IAsyncDisposable
         client.XrayPath = info.XrayPath;
         client.CoreVersions = info.CoreVersions;
         client.UpdateSequence = info.UpdateSequence;
+        client.ReleaseCoreVersions = info.ReleaseCoreVersions;
+        client.CorePicks = info.CorePicks ?? [];
         return client;
     }
 

@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sec="using:Tropa.Core.Security"
              xmlns:vm="using:Tropa.App.ViewModels"
              xmlns:v="using:Tropa.App.Views"
              x:Class="Tropa.App.Views.ServersView"
@@ -67,6 +68,7 @@
       <WrapPanel>
         <WrapPanel IsVisible="{Binding CurrentTabInfo.IsSubscription, FallbackValue=False}">
           <Button Classes="small" Content="Обновить эту подписку" Command="{Binding UpdateCurrentSubscriptionCommand}" IsEnabled="{Binding !IsBusy}" />
+          <Button Classes="small" Content="Переименовать" Command="{Binding AskRenameSubscriptionCommand}" ToolTip.Tip="Своё имя вкладки подписки — обновление его не заменит" />
           <Button Classes="small" Command="{Binding MoveSubscriptionLeftCommand}" ToolTip.Tip="Сдвинуть вкладку подписки левее" AutomationProperties.Name="Сдвинуть вкладку подписки левее">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <v:Icon Data="{StaticResource IconUp}" Width="14" Height="14" RenderTransform="rotate(-90deg)" VerticalAlignment="Center" />
@@ -114,6 +116,22 @@
           <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="adminSub" />
         </StackPanel>
         <TextBlock Text="{Binding CurrentTabInfo.AdminNote, FallbackValue=''}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+
+    <Border Background="{DynamicResource Card2}" CornerRadius="12" Padding="14,12" IsVisible="{Binding PendingSubscriptionName, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Center">
+          <Button Content="Отмена" Command="{Binding CancelRenameSubscriptionCommand}" />
+          <Button Classes="primary" Content="Сохранить" Command="{Binding ConfirmRenameSubscriptionCommand}" />
+        </StackPanel>
+        <TextBox Text="{Binding PendingSubscriptionName}" MaxLength="{x:Static sec:NameSanitizer.MaxLength}" PlaceholderText="Пусто — имя от провайдера"
+                 AutomationProperties.Name="Новое имя подписки">
+          <TextBox.KeyBindings>
+            <KeyBinding Gesture="Enter" Command="{Binding ConfirmRenameSubscriptionCommand}" />
+            <KeyBinding Gesture="Escape" Command="{Binding CancelRenameSubscriptionCommand}" />
+          </TextBox.KeyBindings>
+        </TextBox>
       </DockPanel>
     </Border>
 
@@ -270,7 +288,8 @@
             </StackPanel>
             <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Selected.Stability}" />
           </Grid>
-          <Border CornerRadius="10" Padding="10,8" Background="{DynamicResource Card2}">
+          <Border CornerRadius="10" Padding="10,8" Background="{DynamicResource Card2}"
+                  IsVisible="{Binding Selected.Explanation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
             <TextBlock Text="{Binding Selected.Explanation}" TextWrapping="Wrap" />
           </Border>
           <TextBlock Classes="muted" Text="{Binding Selected.Checked}" />

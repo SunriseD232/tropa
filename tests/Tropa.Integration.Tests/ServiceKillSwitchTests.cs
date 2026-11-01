@@ -39,6 +39,17 @@ public sealed class ServiceKillSwitchTests : IAsyncLifetime
     private readonly System.Security.Cryptography.ECDsa _updateKey = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
     private PipeServer? _server;
 
+    /// <summary>Ответы «GitHub» для службы: адрес → тело.</summary>
+    private readonly Dictionary<string, byte[]> _github = [];
+
+    private sealed class FakeGitHub(Dictionary<string, byte[]> files) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(files.TryGetValue(request.RequestUri!.ToString(), out var body)
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) }
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+    }
+
     private static string Self => Environment.ProcessPath!;
 
     private static string RepoRoot()
@@ -81,6 +92,7 @@ public sealed class ServiceKillSwitchTests : IAsyncLifetime
             FindTunLuid = _ => Task.FromResult<ulong?>(42),
             Updates = new Infrastructure.Updates.UpdateConfig("https://updates.example/manifest.json",
                 Convert.ToBase64String(_updateKey.ExportSubjectPublicKeyInfo()), 0),
+            GitHubHttp = () => new HttpClient(new FakeGitHub(_github)),
         }, NullLogger<PipeServer>.Instance);
         await _server.StartAsync(_cts.Token);
     }
@@ -238,6 +250,111 @@ public sealed class ServiceKillSwitchTests : IAsyncLifetime
         var reply = await again.SendAsync(Start(again, FreePort(), killSwitch: false), ct);
         Assert.True(reply.Ok, reply.Error);
         await again.SendAsync(new StopRequest(), ct);
+    }
+
+    [Fact]
+    public async Task Core_version_from_signed_manifest_is_picked_and_released()
+    {
+        if (!CoresPresent)
+            Assert.Skip("Ядра не скачаны");
+        var ct = TestContext.Current.CancellationToken;
+        var tools = Path.Combine(RepoRoot(), "tools");
+        var xray = Cores.Cores.Get("xray");
+        // Та же сборка Xray под другим номером — как дополнительная версия, проверенная владельцем.
+        var extra = new System.Text.Json.Nodes.JsonObject
+        {
+            ["name"] = "xray", ["version"] = "26.9.31", ["source"] = xray.Source, ["license"] = xray.License,
+            ["url"] = xray.Url, ["archiveSha256"] = xray.ArchiveSha256,
+            ["files"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject { ["entry"] = "xray.exe", ["target"] = "xray.exe", ["sha256"] = xray.Files[0].Sha256 }),
+            ["channel"] = "preview",
+        };
+        var now = DateTimeOffset.UtcNow;
+        var manifest = System.Text.Encoding.UTF8.GetBytes(new System.Text.Json.Nodes.JsonObject
+        {
+            ["schema"] = 1, ["sequence"] = 1, ["issued"] = now.ToString("o"), ["expires"] = now.AddDays(30).ToString("o"),
+            ["cores"] = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(tools, "cores.lock.json"))),
+            ["geo"] = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(tools, "geo.lock.json"))),
+            ["extraCores"] = new System.Text.Json.Nodes.JsonArray(extra),
+        }.ToJsonString());
+        var sig = Convert.ToBase64String(Core.Updates.ManifestSignature.Sign(manifest, _updateKey));
+        var files = Directory.CreateDirectory(Path.Combine(_work.FullName, "core-download")).FullName;
+        File.Copy(Path.Combine(Cores.CoresDirectory, "xray.exe"), Path.Combine(files, "xray.exe"));
+
+        await using (var client = (await Connect())!)
+        {
+            // Версии нет в манифесте — отказ; служба не берёт хэш у интерфейса.
+            var missing = await client.SendAsync(new InstallCoreRequest("xray", "26.9.99", CoreSourceDto.Manifest, files, Convert.ToBase64String(manifest), sig), ct);
+            Assert.False(missing.Ok);
+            var ok = await client.SendAsync(new InstallCoreRequest("xray", "26.9.31", CoreSourceDto.Manifest, files, Convert.ToBase64String(manifest), sig), ct);
+            Assert.True(ok.Ok, ok.Error);
+        }
+
+        await using (var again = (await Connect())!)
+        {
+            var pick = Assert.Single(again.CorePicks);
+            Assert.True(pick is { Core: "xray", Version: "26.9.31", Selected: true, Preview: true, Source: CoreSourceDto.Manifest });
+            Assert.Contains("cores-picked", again.XrayPath, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Xray 26.9.31", again.CoreVersions, StringComparison.Ordinal);
+            Assert.Contains("Xray " + xray.Version, again.ReleaseCoreVersions, StringComparison.Ordinal);
+            var reply = await again.SendAsync(Start(again, FreePort(), killSwitch: false), ct);
+            Assert.True(reply.Ok, reply.Error);
+            await again.SendAsync(new StopRequest(), ct);
+            Assert.True((await again.SendAsync(new SelectCoreRequest("xray", null), ct)).Ok);
+        }
+
+        await using var released = (await Connect())!;
+        Assert.DoesNotContain("cores-picked", released.XrayPath, StringComparison.OrdinalIgnoreCase);
+        Assert.True(Assert.Single(released.CorePicks).Previous);
+    }
+
+    [Fact]
+    public async Task Core_version_from_github_is_checked_by_service_itself()
+    {
+        if (!CoresPresent)
+            Assert.Skip("Ядра не скачаны");
+        var ct = TestContext.Current.CancellationToken;
+        const string version = "26.10.5";
+        var repo = Core.Cores.CoreReleases.For("xray");
+        var files = Directory.CreateDirectory(Path.Combine(_work.FullName, "gh-download")).FullName;
+        var zipPath = Path.Combine(files, repo.AssetName(version));
+        using (var zip = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using var entry = zip.CreateEntry("xray.exe").Open();
+            using var exe = File.OpenRead(Path.Combine(Cores.CoresDirectory, "xray.exe"));
+            exe.CopyTo(entry);
+        }
+        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(zipPath)));
+        var dgstUrl = $"https://github.com/XTLS/Xray-core/releases/download/v{version}/Xray-windows-64.zip.dgst";
+        _github[repo.ApiTag(version)] = System.Text.Encoding.UTF8.GetBytes(new System.Text.Json.Nodes.JsonObject
+        {
+            ["tag_name"] = "v" + version,
+            ["prerelease"] = false,
+            ["assets"] = new System.Text.Json.Nodes.JsonArray(
+                new System.Text.Json.Nodes.JsonObject { ["name"] = "Xray-windows-64.zip", ["digest"] = "sha256:" + sha },
+                new System.Text.Json.Nodes.JsonObject { ["name"] = "Xray-windows-64.zip.dgst", ["browser_download_url"] = dgstUrl }),
+        }.ToJsonString());
+        _github[dgstUrl] = System.Text.Encoding.UTF8.GetBytes("SHA2-256= " + new string('0', 64) + "\n");
+
+        await using var client = (await Connect())!;
+        // .dgst не совпадает с digest GitHub — отказ.
+        var bad = await client.SendAsync(new InstallCoreRequest("xray", version, CoreSourceDto.GitHub, files), ct);
+        Assert.False(bad.Ok);
+        Assert.Contains(".dgst", bad.Error, StringComparison.Ordinal);
+
+        _github[dgstUrl] = System.Text.Encoding.UTF8.GetBytes("SHA2-256= " + sha + "\n");
+        // Архив подменили после того, как интерфейс его проверил, — служба считает хэш сама.
+        var original = File.ReadAllBytes(zipPath);
+        File.WriteAllBytes(zipPath, [.. original, 0]);
+        var tampered = await client.SendAsync(new InstallCoreRequest("xray", version, CoreSourceDto.GitHub, files), ct);
+        Assert.False(tampered.Ok);
+
+        File.WriteAllBytes(zipPath, original);
+        var ok = await client.SendAsync(new InstallCoreRequest("xray", version, CoreSourceDto.GitHub, files), ct);
+        Assert.True(ok.Ok, ok.Error);
+
+        // Чужой репозиторий или путь в номере версии не принимаются.
+        Assert.False((await client.SendAsync(new InstallCoreRequest("evil", version, CoreSourceDto.GitHub, files), ct)).Ok);
+        Assert.False((await client.SendAsync(new InstallCoreRequest("xray", "../../x", CoreSourceDto.GitHub, files), ct)).Ok);
     }
 
     [Fact]

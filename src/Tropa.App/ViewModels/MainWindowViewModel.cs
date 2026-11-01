@@ -143,8 +143,15 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         "rules" => Rules,
         "diagnostics" => ShowDiagnostics(),
         "settings" => Settings,
+        "settings:cores" => ShowSettings("cores"),
         _ => Home,
     };
+
+    private SettingsViewModel ShowSettings(string section)
+    {
+        Settings.ShowSection(section);
+        return Settings;
+    }
 
     private DiagnosticsViewModel ShowDiagnostics()
     {

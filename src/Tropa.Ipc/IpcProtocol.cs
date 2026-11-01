@@ -4,10 +4,10 @@ namespace Tropa.Ipc;
 public static class IpcProtocol
 {
     /// <summary>Версия протокола. Меняется при любом несовместимом изменении сообщений.</summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     /// <summary>Имя именованного канала. Версия в имени, чтобы старый клиент не говорил с новой службой.</summary>
-    public const string PipeName = "Tropa.Service.v4";
+    public const string PipeName = "Tropa.Service.v5";
 
     /// <summary>Максимальный размер одного сообщения в байтах.</summary>
     public const int MaxMessageBytes = 4 * 1024 * 1024;

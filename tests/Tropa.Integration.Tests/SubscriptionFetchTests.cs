@@ -155,6 +155,32 @@ public sealed class SubscriptionFetchTests : IDisposable
     }
 
     [Fact]
+    public async Task Renamed_subscription_keeps_name_after_update()
+    {
+        _handler = async ctx =>
+        {
+            ctx.Response.Headers["profile-title"] = "base64:" + Convert.ToBase64String(Encoding.UTF8.GetBytes("Провайдер"));
+            await Write(ctx, $"vless://{Uuid}@nl.example.com:443?security=none#NL");
+        };
+        await using var engine = Engine();
+        var ct = TestContext.Current.CancellationToken;
+        await engine.ImportTextAsync(Url("sub/TOKEN"), null, ct);
+        var id = Assert.Single(engine.State.Subscriptions).Id;
+        Assert.Equal("Провайдер", engine.State.Subscriptions[0].Name);
+
+        engine.RenameSubscription(id, "  Домашняя\nподписка  ");
+        Assert.Equal("Домашняя подписка", engine.State.Subscriptions[0].Name);
+        await engine.UpdateSubscriptionAsync(id, ct);
+        Assert.Equal("Домашняя подписка", engine.State.Subscriptions[0].Name);
+
+        // Пустое имя — вернуть имя от провайдера: сначала адрес, после обновления — profile-title.
+        engine.RenameSubscription(id, " ");
+        Assert.Equal("127.0.0.1", engine.State.Subscriptions[0].Name);
+        await engine.UpdateSubscriptionAsync(id, ct);
+        Assert.Equal("Провайдер", engine.State.Subscriptions[0].Name);
+    }
+
+    [Fact]
     public async Task Empty_answer_suggests_user_agent_change()
     {
         _handler = ctx => Write(ctx, "<html>Unsupported client</html>");

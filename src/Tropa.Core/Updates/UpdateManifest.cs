@@ -6,6 +6,15 @@ using Tropa.Core.Cores;
 
 namespace Tropa.Core.Updates;
 
+/// <summary>
+/// Дополнительная версия ядра в манифесте (ADR-058): владелец проверил её, но по умолчанию она не ставится —
+/// пользователь выбирает её сам. Channel — stable или preview.
+/// </summary>
+public sealed record ExtraCore(CoreEntry Entry, string Channel)
+{
+    public bool Preview => Channel == "preview";
+}
+
 /// <summary>Новая версия Тропы: установщик и его SHA-256.</summary>
 public sealed record AppRelease(Version Version, Uri Url, string Sha256, string? Notes);
 
@@ -23,6 +32,9 @@ public sealed partial record UpdateManifest(
     GeoLock Geo)
 {
     public const int SupportedSchema = 1;
+
+    /// <summary>Другие проверенные владельцем версии ядер, из которых пользователь может выбрать (и откатиться).</summary>
+    public IReadOnlyList<ExtraCore> ExtraCores { get; init; } = [];
 
     /// <summary>Ядра, без которых Тропа не работает.</summary>
     public static readonly IReadOnlyList<string> RequiredCores = ["sing-box", "xray"];
@@ -87,7 +99,31 @@ public sealed partial record UpdateManifest(
             app = new AppRelease(version, new Uri(url), sha, notes is { Length: > 2000 } ? notes[..2000] : notes);
         }
 
-        return new UpdateManifest(sequence, issued, expires, app, cores, geo);
+        var extras = new List<ExtraCore>();
+        if (o["extraCores"] is JsonArray list)
+        {
+            if (list.Count > 64)
+                throw new InvalidDataException("В манифесте слишком много дополнительных версий ядер.");
+            foreach (var item in list)
+            {
+                if (item is not JsonObject x)
+                    throw new InvalidDataException("Дополнительная версия ядра в манифесте повреждена.");
+                var channel = (string?)x["channel"] ?? "stable";
+                if (channel is not ("stable" or "preview"))
+                    throw new InvalidDataException("У дополнительной версии ядра неизвестный канал.");
+                var copy = x.DeepClone().AsObject();
+                copy.Remove("channel");
+                // Та же строгая проверка, что у основного списка: github.com, формат хэшей, безопасные имена файлов.
+                var entry = CoresLock.Parse(new JsonObject { ["schema"] = CoresLock.SupportedSchema, ["cores"] = new JsonArray(copy) }.ToJsonString()).Cores[0];
+                if (!RequiredCores.Contains(entry.Name) || !CoreReleases.IsValidVersion(entry.Version))
+                    throw new InvalidDataException($"Дополнительная версия ядра «{entry.Name}» {entry.Version} не поддерживается.");
+                if (entry.Files.Count != 1 || entry.Files[0].Target != cores.Get(entry.Name).Files[0].Target)
+                    throw new InvalidDataException($"У дополнительной версии ядра «{entry.Name}» неверный состав файлов.");
+                extras.Add(new ExtraCore(entry, channel));
+            }
+        }
+
+        return new UpdateManifest(sequence, issued, expires, app, cores, geo) { ExtraCores = extras };
     }
 }
 

@@ -23,7 +23,7 @@ public static class GeoListReader
         var file = locations.Geo.Files.FirstOrDefault(f => f.Name == tag)
             ?? throw new InvalidOperationException($"Набора «{tag}» нет среди закреплённых.");
         var core = locations.Cores.Get("sing-box").Files[0];
-        var exePath = Path.Combine(locations.CoresDirectory, core.Target);
+        var exePath = Path.Combine(locations.DirectoryFor("sing-box"), core.Target);
         var srsPath = Path.Combine(locations.GeoSourceDirectory, file.FileName);
 
         Directory.CreateDirectory(runDirectory);

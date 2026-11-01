@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Tropa.App.ViewModels"
+             xmlns:infra="using:Tropa.Infrastructure"
              x:Class="Tropa.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
   <UserControl.Styles>
@@ -76,6 +77,59 @@
             <Button Content="{Binding FirstLabel}" Command="{Binding FirstCommand}" Margin="0,0,8,0" />
             <Button Content="{Binding SecondLabel}" Command="{Binding SecondCommand}" IsVisible="{Binding HasSecond}" />
           </WrapPanel>
+        </StackPanel>
+      </DockPanel>
+    </DataTemplate>
+    <DataTemplate DataType="vm:CoreVersionsRow">
+      <DockPanel Margin="0,8">
+        <Button DockPanel.Dock="Right" Classes="info" Margin="8,0,0,0" Command="{Binding InfoCommand}" VerticalAlignment="Top" />
+        <StackPanel Spacing="10">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+              <ProgressBar IsIndeterminate="True" Width="60" MinWidth="0" IsVisible="{Binding Busy}" VerticalAlignment="Center" />
+              <Button Content="Обновить список" Command="{Binding RefreshCommand}" />
+            </StackPanel>
+            <StackPanel Spacing="2" Margin="0,0,12,0">
+              <TextBlock Text="{Binding Title}" FontSize="15" TextWrapping="Wrap" />
+              <TextBlock Classes="note" Text="{Binding Note}" IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+          </DockPanel>
+          <ItemsControl ItemsSource="{Binding Cores}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:CoreVersionItem">
+                <Border Background="{DynamicResource Card2}" CornerRadius="10" Padding="12,10" Margin="0,0,0,8">
+                  <StackPanel Spacing="8">
+                    <TextBlock>
+                      <Run Text="{Binding Name}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding Current}" Foreground="{DynamicResource Label}" />
+                    </TextBlock>
+                    <WrapPanel IsVisible="{Binding HasOptions}">
+                      <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding SelectedOption}" MinWidth="300" Margin="0,0,8,6"
+                                AutomationProperties.Name="{Binding Name, StringFormat='Версия {0}'}">
+                        <ComboBox.ItemTemplate>
+                          <DataTemplate DataType="infra:CoreVersionOption">
+                            <TextBlock Text="{Binding Label}" />
+                          </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                      </ComboBox>
+                      <Button Classes="primary" Content="{Binding InstallLabel}" Command="{Binding InstallCommand}" Margin="0,0,8,6" />
+                    </WrapPanel>
+                    <TextBlock Classes="note" IsVisible="{Binding !HasOptions}" Text="Других версий пока нет. Нажмите «Обновить список»." />
+                    <TextBlock Classes="note warn" Text="{Binding Warning}" TextWrapping="Wrap" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    <WrapPanel>
+                      <Button Content="{Binding RollbackLabel}" Command="{Binding RollbackCommand}" IsVisible="{Binding CanRollback}" Margin="0,0,8,0" />
+                      <Button Content="Как в выпуске" Command="{Binding ReleaseCommand}" IsVisible="{Binding IsPicked}" />
+                    </WrapPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Classes="muted" Classes.err="{Binding StatusIsError}"
+                     IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock.Styles>
+              <Style Selector="TextBlock.err"><Setter Property="Foreground" Value="{DynamicResource BadFg}" /></Style>
+            </TextBlock.Styles>
+          </TextBlock>
         </StackPanel>
       </DockPanel>
     </DataTemplate>

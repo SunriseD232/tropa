@@ -40,6 +40,19 @@ internal sealed record ServiceOptions
     public string JournalPath => Path.Combine(DataDirectory, "journal.json");
     public string UpdatesDirectory => Path.Combine(DataDirectory, "updates");
 
+    /// <summary>Версии ядер, выбранные пользователем вместо версий выпуска (ADR-058).</summary>
+    public string CorePicksDirectory => Path.Combine(DataDirectory, "cores-picked");
+
+    /// <summary>Запросы к GitHub при установке ядра «с GitHub»: служба сама узнаёт хэш архива (в тестах подменяется).</summary>
+    public Func<HttpClient> GitHubHttp { get; init; } = DefaultGitHubHttp;
+
+    private static HttpClient DefaultGitHubHttp()
+    {
+        var http = new HttpClient(new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(15) }) { Timeout = TimeSpan.FromMinutes(1) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Tropa-Service");
+        return http;
+    }
+
     /// <summary>Настройки обновлений (в тестах — свой ключ).</summary>
     public Infrastructure.Updates.UpdateConfig Updates { get; init; } = Infrastructure.Updates.UpdateConfig.Embedded;
 
