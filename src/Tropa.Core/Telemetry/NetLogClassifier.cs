@@ -152,7 +152,8 @@ public static partial class NetLogClassifier
     [GeneratedRegex(@"\btun\b.*(fail|error)|wintun|configure tun|create tun|auto[-_ ]route|strict[-_ ]route", RegexOptions.IgnoreCase)]
     private static partial Regex TunRx();
 
-    [GeneratedRegex(@"\b407\b|proxy authentication|authentication failed|unauthorized|socks5? auth", RegexOptions.IgnoreCase)]
+    // Только наш вход: отказ в пароле от сервера (outbound, например Hysteria2) — это класс Reality/ключ.
+    [GeneratedRegex(@"\b407\b|proxy authentication|Proxy-Authorization|inbound/[\w-]+\[[^\]]*\]:.*(authentication failed|unauthorized|socks5? auth)", RegexOptions.IgnoreCase)]
     private static partial Regex ProxyAuthRx();
 
     [GeneratedRegex(@"reality|invalid (user|uuid|password)|not a valid user|processed invalid|auth(entication)? (failed|error)", RegexOptions.IgnoreCase)]

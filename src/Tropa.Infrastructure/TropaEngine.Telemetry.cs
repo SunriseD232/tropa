@@ -237,6 +237,8 @@ public sealed partial class TropaEngine
         var clean = Scrubber.Scrub(line);
         if (NetLogClassifier.Classify(clean) is { } c)
         {
+            if (c.Code == NetLogClassifier.ProxyAuth)
+                RecordProxyNoAuthClients(clean);
             lock (_netErrors)
             {
                 var key = (c.Code, c.Source, c.Template);
@@ -275,6 +277,47 @@ public sealed partial class TropaEngine
 
         Rec(Ev.LogLine, ("l", NetLogClassifier.Anonymize(clean)));
     }
+
+    private long _proxyClientsCheckedTicks;
+
+    /// <summary>
+    /// 407 на входе Тропы: какая программа ходит в него без пароля (3.8). Не чаще раза в минуту, в фоне:
+    /// соединение после 407 часто ещё открыто, а программы, которые так делают, стучатся постоянно.
+    /// Только имена процессов — без адресов и портов.
+    /// </summary>
+    private void RecordProxyNoAuthClients(string line)
+    {
+        var now = _now().UtcTicks;
+        var last = Interlocked.Read(ref _proxyClientsCheckedTicks);
+        if (now - last < TimeSpan.TicksPerMinute || Interlocked.CompareExchange(ref _proxyClientsCheckedTicks, now, last) != last)
+            return;
+        var port = _mixedPort;
+        if (port <= 0)
+            return;
+        int? clientPort = ProxyClientPortRx().Match(line) is { Success: true } m
+            && int.TryParse(m.Groups[1].ValueSpan, CultureInfo.InvariantCulture, out var p) ? p : null;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var names = TcpOwners.LoopbackClients(port, clientPort);
+                var proxy = _systemProxy.Snapshot();
+                Rec(Ev.ProxyNoAuthClients,
+                    ("processes", names.Count > 0 ? string.Join(", ", names) : "не найдены"),
+                    ("winProxy", Flag(proxy.Enabled)),
+                    ("winProxyOurPort", Flag(proxy.Server?.Contains($":{port.ToString(CultureInfo.InvariantCulture)}", StringComparison.Ordinal) == true)));
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException
+                or UnauthorizedAccessException or IOException)
+            {
+                // Журнал разработчика не критичен.
+            }
+        });
+    }
+
+    // sing-box: «inbound/mixed[mixed-in]: process connection from 127.0.0.1:54321: http: authentication failed».
+    [System.Text.RegularExpressions.GeneratedRegex(@"connection from 127\.0\.0\.1:(\d{1,5})\b")]
+    private static partial System.Text.RegularExpressions.Regex ProxyClientPortRx();
 
     /// <summary>Сетевые ошибки за минуту: одна запись на класс и шаблон с числом повторов.</summary>
     private void FlushNetErrors()

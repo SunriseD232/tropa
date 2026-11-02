@@ -73,7 +73,7 @@ Filename: "{app}\Tropa.exe"; Parameters: "{code:RelaunchArgs}"; Flags: nowait ru
 
 [UninstallRun]
 ; Сначала откат от имени пользователя (прокси Windows, блокировка, служба), затем удаление службы.
-Filename: "{app}\Tropa.exe"; Parameters: "--emergency-rollback"; Flags: runhidden waituntilterminated; RunOnceId: "TropaRollback"
+Filename: "{app}\Tropa.exe"; Parameters: "--emergency-rollback --reason=uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "TropaRollback"
 Filename: "{app}\Tropa.exe"; Parameters: "--set-autostart=off"; Flags: runhidden waituntilterminated; RunOnceId: "TropaAutostartOff"
 Filename: "{app}\Tropa.Service.exe"; Parameters: "--uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "TropaService"
 
@@ -131,7 +131,7 @@ begin
   if FileExists(Dir + '\' + AppExe) then
   begin
     { Прежняя версия: вернуть прокси и сеть, закрыть интерфейс, убрать службу. }
-    RunHidden(Dir + '\' + AppExe, '--emergency-rollback');
+    RunHidden(Dir + '\' + AppExe, '--emergency-rollback --reason=update');
     StopInstalledApp(Dir);
   end;
   if FileExists(Dir + '\Tropa.Service.exe') then

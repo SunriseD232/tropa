@@ -553,9 +553,10 @@ public sealed partial class TropaEngine : IAsyncDisposable
                     .OrderBy(p => p.Order).FirstOrDefault()?.Profile.Id,
         });
 
-        Rec(Ev.SubscriptionUpdated, ("ok", Flag(parsed.Profiles.Count > 0)), ("servers", Num(parsed.Profiles.Count)), ("added", Num(merged.Added)),
+        Rec(Ev.SubscriptionUpdated, [("ok", Flag(parsed.Profiles.Count > 0)), ("servers", Num(parsed.Profiles.Count)), ("added", Num(merged.Added)),
             ("updated", Num(merged.Updated)), ("errors", Num(parsed.Errors.Count)), ("skipped", Num(parsed.SkippedUnsupported)),
-            ("viaProxy", Flag(fetched.ViaProxy)), ("admin", Flag(admin is not null)), ("trustAdmin", Flag(sub.TrustAdmin)));
+            ("viaProxy", Flag(fetched.ViaProxy)), ("admin", Flag(admin is not null)), ("trustAdmin", Flag(sub.TrustAdmin)),
+            .. parsed.Profiles.Count == 0 ? EmptySubscriptionFields(fetched.Body, parsed.Format, info, sub) : []]);
 
         // Администратор выбрал другой сервер или поменял правила — применяем сразу (если ему доверяют).
         var activeChanged = ApplyAdminActive(sub.Id);
@@ -581,6 +582,26 @@ public sealed partial class TropaEngine : IAsyncDisposable
         if (fetched.ViaProxy)
             messages.Insert(0, "Адрес подписки недоступен напрямую — загружено через сервер.");
         return new ImportReport(merged.Added, merged.Updated, parsed.Errors.Count, parsed.SkippedUnsupported, messages);
+    }
+
+    /// <summary>
+    /// Подписка скачалась, но серверов в ней нет (журнал 2026-11-02: «ok=0» без причины). Что пришло — без
+    /// содержимого: формат, размер, похоже ли на страницу, закончились ли срок и трафик по заголовкам, как представлялись.
+    /// </summary>
+    private (string, string?)[] EmptySubscriptionFields(string body, SubscriptionFormat format, SubscriptionInfo info, Subscription sub)
+    {
+        var trimmed = body.AsSpan().Trim();
+        return
+        [
+            ("format", format.ToString()),
+            ("chars", trimmed.Length switch { 0 => "0", < 100 => "<100", < 10_000 => "<10K", _ => "10K+" }),
+            ("html", Flag(trimmed.StartsWith("<"))),
+            ("expired", info.Expire is { } exp ? Flag(exp < _now()) : null),
+            ("trafficLeft0", info.Remaining is { } left ? Flag(left == 0) : null),
+            ("announce", Flag(info.Announce is { Length: > 0 })),
+            ("ua", sub.UserAgent.ToString()),
+            ("hwid", Flag(sub.SendHwid)),
+        ];
     }
 
     /// <summary>
@@ -829,7 +850,8 @@ public sealed partial class TropaEngine : IAsyncDisposable
     /// </summary>
     private HttpClient UpdateHttp()
     {
-        var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(15) };
+        // Сжатие нужно списку выпусков ядер с GitHub (~10 МБ JSON → ~1 МБ); лимиты считаются по распакованным байтам.
+        var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(15), AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate };
         if (Status.State == ConnectionState.Connected && State.Settings.Cores.GeoViaProxy && _mixedPort > 0)
         {
             handler.UseProxy = true;
@@ -1107,9 +1129,16 @@ public sealed partial class TropaEngine : IAsyncDisposable
     /// «Аварийно вернуть настройки сети» (docs/02-security.md, §3.6): отключиться, вернуть прокси
     /// Windows и попросить службу откатить всё своё. Работает даже при сломанном состоянии.
     /// </summary>
-    public async Task EmergencyRollbackAsync()
+    /// <param name="reason">
+    /// null — пользователь («красная кнопка» или ярлык в «Пуске»). «update» / «uninstall» — установщик перед
+    /// новой версией или удалением: это не сбой, в журнал разработчика идёт 1.7, а не 2.10.
+    /// </param>
+    public async Task EmergencyRollbackAsync(string? reason = null)
     {
-        RecUrgent(Ev.EmergencyRollback, ("state", Status.State.ToString()), ("blocking", Flag(Blocking)));
+        if (reason is "update" or "uninstall")
+            Rec(Ev.StoppedByInstaller, ("reason", reason), ("state", Status.State.ToString()));
+        else
+            RecUrgent(Ev.EmergencyRollback, ("state", Status.State.ToString()), ("blocking", Flag(Blocking)));
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -1127,7 +1156,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         {
             await AttachServiceAsync().ConfigureAwait(false);
             if (_service is { IsConnected: true } service)
-                await service.SendAsync(new Ipc.RollbackAllRequest(), CancellationToken.None).ConfigureAwait(false);
+                await service.SendAsync(new Ipc.RollbackAllRequest { Reason = reason is "update" or "uninstall" ? reason : null }, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is ServiceException or TimeoutException or IOException)
         {
@@ -1193,7 +1222,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         {
             var viaService = _runningViaService;
             SetStatus(new ConnectionStatus(ConnectionState.Disconnecting));
-            await StopCoreAsync(sendStop: !viaService).ConfigureAwait(false);
+            await StopCoreAsync(sendStop: !viaService, keepCache: true).ConfigureAwait(false);
             _servicePending = viaService;
             SetStatus(new ConnectionStatus(ConnectionState.Disconnected));
         }
@@ -1498,7 +1527,8 @@ public sealed partial class TropaEngine : IAsyncDisposable
         });
     }
 
-    private async Task StopCoreAsync(bool sendStop = true)
+    /// <param name="keepCache">Переподключение: кэш fakeip ядра оставляем, иначе он удаляется (CacheFileName).</param>
+    private async Task StopCoreAsync(bool sendStop = true, bool keepCache = false)
     {
         if (_systemProxyApplied)
         {
@@ -1525,6 +1555,20 @@ public sealed partial class TropaEngine : IAsyncDisposable
 
         _core = null;
         _xray = null;
+
+        if (!keepCache)
+        {
+            var cache = Path.Combine(_paths.RunDirectory, SingBoxConfigBuilder.CacheFileName);
+            try
+            {
+                if (File.Exists(cache))
+                    File.Delete(cache);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log?.Invoke(this, "Не удалось удалить кэш ядра: " + ex.Message);
+            }
+        }
 
         if (_runningViaService)
         {
@@ -1564,7 +1608,11 @@ public sealed partial class TropaEngine : IAsyncDisposable
                     _runningViaService = false;
                     await StopCoreAsync(sendStop: false).ConfigureAwait(false);
                     SetStatus(new ConnectionStatus(ConnectionState.Disconnected, status.Message));
-                    RecUrgent(Ev.ServiceStoppedOutside, ("msg", NetLogClassifier.Anonymize(status.Message)));
+                    // Установщик останавливает всё перед новой версией — это не обрыв (журнал 2026-11-02).
+                    if (status.StopReason is { } reason)
+                        Rec(Ev.StoppedByInstaller, ("reason", reason), ("state", "Connected"));
+                    else
+                        RecUrgent(Ev.ServiceStoppedOutside, ("msg", NetLogClassifier.Anonymize(status.Message)));
                 }
                 finally
                 {

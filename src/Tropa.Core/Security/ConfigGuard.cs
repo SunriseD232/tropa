@@ -26,7 +26,8 @@ public static class ConfigGuard
     private static readonly FrozenSet<string> OutboundTypes = new[] { "vless", "vmess", "trojan", "shadowsocks", "hysteria2", "direct", "block", "selector", "socks" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> DnsServerTypes = new[] { "https", "tls", "quic", "h3", "udp", "tcp", "fakeip", "hosts" }.ToFrozenSet(StringComparer.Ordinal);
     private static readonly FrozenSet<string> ExperimentalKeys = new[] { "clash_api", "cache_file" }.ToFrozenSet(StringComparer.Ordinal);
-    private static readonly FrozenSet<string> ClashApiKeys = new[] { "external_controller", "secret" }.ToFrozenSet(StringComparer.Ordinal);
+    private static readonly FrozenSet<string> CacheFileKeys = new[] { "enabled", "path", "store_fakeip" }.ToFrozenSet(StringComparer.Ordinal);
+    private static readonly FrozenSet<string> ClashApiKeys =new[] { "external_controller", "secret" }.ToFrozenSet(StringComparer.Ordinal);
 
     public static IReadOnlyList<string> CheckSingBox(string json, GuardPolicy policy)
     {
@@ -293,9 +294,16 @@ public static class ConfigGuard
                 if (string.IsNullOrEmpty(Str(p.Value, "secret")))
                     v.Add("API статистики без секрета запрещено.");
             }
-            else if (p.Name == "cache_file" && p.Value.TryGetProperty("path", out _) && !IsWithin(Str(p.Value, "path"), policy.AllowedDirectories))
+            else if (p.Name == "cache_file")
             {
-                v.Add("Файл кэша лежит вне разрешённых каталогов.");
+                foreach (var k in p.Value.EnumerateObject())
+                {
+                    if (!CacheFileKeys.Contains(k.Name))
+                        v.Add($"experimental.cache_file.{k.Name}: запрещено.");
+                }
+
+                if (p.Value.TryGetProperty("path", out _) && !IsWithin(Str(p.Value, "path"), policy.AllowedDirectories))
+                    v.Add("Файл кэша лежит вне разрешённых каталогов.");
             }
         }
     }

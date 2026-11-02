@@ -103,6 +103,10 @@ public sealed class ConfigGuardTests
     [Fact]
     public void Minimal_config_passes() => Assert.Empty(ConfigGuard.CheckSingBox(Base, Policy));
 
+    [Fact]
+    public void Fakeip_cache_in_working_directory_passes() =>
+        Assert.Empty(ConfigGuard.CheckSingBox(With("\"route\":", """ "experimental": { "cache_file": { "enabled": true, "store_fakeip": true } }, "route": """), Policy));
+
     public static TheoryData<string, string> Malicious => new()
     {
         { "запись лога в файл", With("\"level\": \"warn\"", """ "level": "warn", "output": "C:\\Windows\\evil.dll" """) },
@@ -115,6 +119,8 @@ public sealed class ConfigGuardTests
         { "веб-панель API", With("\"route\":", """ "experimental": { "clash_api": { "external_controller": "127.0.0.1:9090", "secret": "s", "external_ui": "ui" } }, "route": """) },
         { "API без секрета", With("\"route\":", """ "experimental": { "clash_api": { "external_controller": "127.0.0.1:9090" } }, "route": """) },
         { "v2ray api", With("\"route\":", """ "experimental": { "v2ray_api": {} }, "route": """) },
+        { "кэш вне каталога", With("\"route\":", """ "experimental": { "cache_file": { "enabled": true, "path": "C:\\Windows\\cache.db" } }, "route": """) },
+        { "кэш с неописанным ключом", With("\"route\":", """ "experimental": { "cache_file": { "enabled": true, "store_dns": true } }, "route": """) },
         { "путь к сертификату", With(DirectOutbound, """{ "type": "trojan", "tag": "t", "server": "a", "server_port": 1, "password": "p", "tls": { "enabled": true, "certificate_path": "C:\\x.pem" } }, """ + DirectOutbound) },
         { "неизвестный outbound", With("\"type\": \"direct\"", "\"type\": \"tor\"") },
         { "ссылка в никуда", With("\"final\": \"direct\"", "\"final\": \"proxy\"") },

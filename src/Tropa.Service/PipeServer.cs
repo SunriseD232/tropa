@@ -183,7 +183,7 @@ internal sealed partial class PipeServer(ServiceOptions options, ILogger<PipeSer
 
             case RollbackAllRequest rollback:
                 // Аварийный откат доступен любому проверенному клиенту: это «красная кнопка».
-                await _supervisor!.RollbackAllAsync().ConfigureAwait(false);
+                await _supervisor!.RollbackAllAsync(rollback.Reason).ConfigureAwait(false);
                 lock (_sessionsLock)
                     _controller = null;
                 return new Reply(rollback.Id, true, null);

@@ -174,6 +174,26 @@ public sealed class ServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Rollback_by_installer_is_reported_as_update_not_failure()
+    {
+        if (!CoresPresent)
+            Assert.Skip("Ядра не скачаны");
+        await using var client = (await Connect())!;
+        var statuses = new List<StatusEvent>();
+        client.Status += (_, s) => { lock (statuses) statuses.Add(s); };
+        var port = FreePort();
+        Assert.True((await client.SendAsync(new StartRequest(Config(client, port), CaptureModeDto.SystemProxy, port, false, false), TestContext.Current.CancellationToken)).Ok);
+        // Кэш fakeip из прошлого подключения откат тоже убирает.
+        var cache = Path.Combine(_work.FullName, "svc", "run", SingBoxConfigBuilder.CacheFileName);
+        await File.WriteAllTextAsync(cache, "x", TestContext.Current.CancellationToken);
+
+        Assert.True((await client.SendAsync(new RollbackAllRequest { Reason = "update" }, TestContext.Current.CancellationToken)).Ok);
+        Assert.True(await Eventually(() => Task.FromResult(statuses.ToArray().Any(s => s.State == ServiceState.Idle && s.StopReason == "update"))));
+        Assert.False(File.Exists(cache));
+        Assert.True(await Eventually(async () => !await PortOpen(port)));
+    }
+
+    [Fact]
     public async Task Tun_without_privileges_is_refused_clearly()
     {
         if (!CoresPresent)

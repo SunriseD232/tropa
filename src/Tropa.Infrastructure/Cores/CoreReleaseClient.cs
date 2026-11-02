@@ -13,6 +13,9 @@ namespace Tropa.Infrastructure.Cores;
 public sealed class CoreReleaseClient(HttpClient http)
 {
     private const int MaxApiBytes = 2 * 1024 * 1024;
+
+    // Список выпусков у GitHub тяжёлый: у sing-box по ~50 файлов в каждом выпуске, 30 выпусков — около 10 МБ.
+    private const int MaxListBytes = 32 * 1024 * 1024;
     private const int MaxDgstBytes = 16 * 1024;
     private const long MaxArchiveBytes = 150L * 1024 * 1024;
 
@@ -20,7 +23,7 @@ public sealed class CoreReleaseClient(HttpClient http)
     public async Task<IReadOnlyList<CoreReleases.Release>> ListAsync(string core, CancellationToken ct)
     {
         var repo = CoreReleases.For(core);
-        var json = await GetLimitedAsync(new Uri(repo.ApiReleases), MaxApiBytes, api: true, ct).ConfigureAwait(false);
+        var json = await GetLimitedAsync(new Uri(repo.ApiReleases), MaxListBytes, api: true, ct).ConfigureAwait(false);
         return [.. CoreReleases.ParseReleases(repo, json).Where(r => r.ArchiveSha256 is not null)];
     }
 

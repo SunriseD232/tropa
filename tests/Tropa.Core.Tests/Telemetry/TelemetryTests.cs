@@ -87,6 +87,10 @@ public sealed class TelemetryTests
     [InlineData("ERROR [4 0ms] inbound/mixed[mixed-in]: listen tcp 127.0.0.1:10880: bind: Only one usage of each socket address is normally permitted.", NetLogClassifier.PortBusy, "sing-box")]
     [InlineData("ERROR [5 0ms] outbound/direct[direct]: dial udp 8.8.8.8:53: connect: network is unreachable", NetLogClassifier.Unreachable, "sing-box")]
     [InlineData("ERROR [5 0ms] outbound/direct[direct]: dial tcp 9.9.9.9:443: connect: network is unreachable", NetLogClassifier.Unreachable, "sing-box")]
+    // Журнал 2026-11-02: отказ сервера Hysteria2 в пароле — это ключ сервера, а не 407 на нашем входе.
+    [InlineData("ERROR connection: open connection to 1.2.3.4:443 using outbound/hysteria2[srv-abc]: authentication failed, status code: 404", NetLogClassifier.Reality, "sing-box")]
+    [InlineData("ERROR inbound/mixed[mixed-in]: process connection from 127.0.0.1:54321: http: authentication failed, no Proxy-Authorization header", NetLogClassifier.ProxyAuth, "sing-box")]
+    [InlineData("ERROR inbound/mixed[mixed-in]: process connection from 127.0.0.1:54321: socks5: authentication failed", NetLogClassifier.ProxyAuth, "sing-box")]
     public void Network_lines_are_classified(string line, string code, string source)
     {
         var c = NetLogClassifier.Classify(line);

@@ -9,8 +9,9 @@ internal static class Program
     {
         // «Аварийно вернуть настройки сети» из меню «Пуск» и из деинсталлятора: без окна,
         // работает даже при испорченных настройках и при запущенном основном экземпляре.
+        // Установщик добавляет --reason=update или --reason=uninstall: тогда в журнале это не авария.
         if (args.Contains("--emergency-rollback", StringComparer.OrdinalIgnoreCase))
-            return EmergencyRollback();
+            return EmergencyRollback(args.FirstOrDefault(a => a.StartsWith("--reason=", StringComparison.OrdinalIgnoreCase))?["--reason=".Length..].ToLowerInvariant());
         // Выбор «Запускать вместе с Windows» в установщике (он запускает Тропу от имени пользователя).
         if (args.FirstOrDefault(a => a.StartsWith("--set-autostart=", StringComparison.OrdinalIgnoreCase)) is { } autostart)
             return SetAutostart(autostart.EndsWith("=on", StringComparison.OrdinalIgnoreCase));
@@ -45,12 +46,12 @@ internal static class Program
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
-    private static int EmergencyRollback()
+    private static int EmergencyRollback(string? reason)
     {
         try
         {
             var engine = Infrastructure.TropaEngine.Open(Infrastructure.EnginePaths.Default(), connectService: Infrastructure.TropaEngine.DefaultServiceConnector());
-            engine.EmergencyRollbackAsync().GetAwaiter().GetResult();
+            engine.EmergencyRollbackAsync(reason).GetAwaiter().GetResult();
             engine.DisposeAsync().AsTask().GetAwaiter().GetResult();
             return 0;
         }

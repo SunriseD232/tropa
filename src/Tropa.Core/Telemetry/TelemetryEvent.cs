@@ -51,6 +51,7 @@ public static class Ev
     public const string ServiceAttached = "1.4";
     public const string ServiceLost = "1.5";
     public const string StartupWarning = "1.6";
+    public const string StoppedByInstaller = "1.7";
 
     // 2 — подключение
     public const string ConnectStart = "2.1";
@@ -76,6 +77,7 @@ public static class Ev
     public const string Adapters = "3.5";
     public const string WindowsProxy = "3.6";
     public const string UdpFlow = "3.7";
+    public const string ProxyNoAuthClients = "3.8";
 
     // 4 — настройки
     public const string SettingsSnapshot = "4.1";
@@ -114,6 +116,7 @@ public static class Ev
         (ServiceAttached, "Служба Тропы на связи"),
         (ServiceLost, "Связь со службой Тропы потеряна"),
         (StartupWarning, "Предупреждение при запуске"),
+        (StoppedByInstaller, "Тропу остановил установщик (обновление или удаление)"),
         (ConnectStart, "Подключение: начало"),
         (Connected, "Подключено"),
         (ConnectFailed, "Подключение не удалось"),
@@ -135,6 +138,7 @@ public static class Ev
         (Adapters, "Сетевые адаптеры"),
         (WindowsProxy, "Прокси Windows"),
         (UdpFlow, "Поток UDP за минуту (звонки, видео)"),
+        (ProxyNoAuthClients, "Кто ходит в локальный прокси без пароля"),
         (SettingsSnapshot, "Все настройки"),
         (SettingsChanged, "Изменены настройки"),
         (ActiveServer, "Выбран сервер"),

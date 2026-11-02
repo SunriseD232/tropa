@@ -18,6 +18,9 @@ public sealed class ServiceException(string message) : Exception(message);
 /// </summary>
 public sealed partial class ServiceClient : IAsyncDisposable
 {
+    private static readonly TimeSpan ReplyTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan StartReplyTimeout = TimeSpan.FromSeconds(60);
+
     private readonly NamedPipeClientStream _pipe;
     private readonly ConcurrentDictionary<int, TaskCompletionSource<Reply>> _pending = new();
     private readonly SemaphoreSlim _write = new(1, 1);
@@ -153,7 +156,9 @@ public sealed partial class ServiceClient : IAsyncDisposable
         }
 
         using var reg = ct.Register(() => tcs.TrySetCanceled(ct));
-        return await tcs.Task.WaitAsync(TimeSpan.FromSeconds(30), ct).ConfigureAwait(false);
+        // Запуск в режиме TUN может включать повтор после зависшего адаптера Wintun: Xray + 2 × sing-box (CoreSupervisor).
+        var timeout = request is StartRequest ? StartReplyTimeout : ReplyTimeout;
+        return await tcs.Task.WaitAsync(timeout, ct).ConfigureAwait(false);
     }
 
     private async Task ReadLoopAsync(CancellationToken ct)

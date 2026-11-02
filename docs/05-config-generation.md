@@ -61,7 +61,8 @@
     "find_process": true                                    // при правилах по процессам и mode=tun
   },
   "experimental": {
-    "clash_api": { "external_controller": "127.0.0.1:<random>", "secret": "<random>" }  // статистика
+    "clash_api": { "external_controller": "127.0.0.1:<random>", "secret": "<random>" }, // статистика
+    "cache_file": { "enabled": true, "store_fakeip": true }  // при fakeip; cache.db в рабочем каталоге ядра (ADR-059)
   }
 }
 ```
@@ -160,5 +161,6 @@
 - inbound с listen ≠ 127.0.0.1/::1, кроме разрешённого `lanAllow` mixed с паролем;
 - любые пути к файлам вне `%ProgramData%\Tropa` и `%LOCALAPPDATA%\Tropa\geo`;
 - `log.output`, неизвестные поля в `experimental`, `external_ui`, `external_controller` вне loopback;
+- в `cache_file` — что-либо кроме `enabled`, `path` (только в разрешённых каталогах) и `store_fakeip`;
 - типы outbound/inbound вне белого списка;
 - ссылки на неописанные наборы правил, в том числе внутри логических правил.

@@ -51,7 +51,11 @@ public sealed record StatusRequest : Request;
 /// «Аварийно вернуть настройки сети»: остановить ядра, снять блокировку и откатить все изменения
 /// системы. Разрешено любому проверенному клиенту, даже если подключением управляет другой.
 /// </summary>
-public sealed record RollbackAllRequest : Request;
+public sealed record RollbackAllRequest : Request
+{
+    /// <summary>Кто откатывает: null — пользователь («красная кнопка»), «update» и «uninstall» — установщик.</summary>
+    public string? Reason { get; init; }
+}
 
 /// <summary>
 /// Установить обновление ядер и наборов правил (ADR-023). Интерфейс скачал файлы в
@@ -97,7 +101,8 @@ public sealed record HelloReply(int Id, int Protocol, string ServiceVersion, boo
     : Reply(Id, true, null);
 
 /// <param name="Blocking">Kill switch держит блокировку: ядро не работает, но интернет мимо туннеля закрыт.</param>
-public sealed record StatusEvent(ServiceState State, string? Message, DateTimeOffset? Since, bool Blocking = false) : ServerMessage;
+/// <param name="StopReason">Причина остановки по <see cref="RollbackAllRequest"/> от установщика: «update» или «uninstall».</param>
+public sealed record StatusEvent(ServiceState State, string? Message, DateTimeOffset? Since, bool Blocking = false, string? StopReason = null) : ServerMessage;
 
 /// <summary>Строка журнала ядра, уже очищенная от секретов на стороне службы.</summary>
 public sealed record LogEvent(string Line) : ServerMessage;

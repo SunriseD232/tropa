@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Tropa.Core.Generation;
 using Tropa.Core.Security;
 using Tropa.Infrastructure.Cores;
 using Tropa.Infrastructure.SystemIntegration;
@@ -15,6 +16,11 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
 {
     private const int MaxRestarts = 3;
     private static readonly TimeSpan RestartWindow = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan StaleTunRetryDelay = TimeSpan.FromSeconds(3);
+
+    internal static bool IsStaleTunAdapter(string message) =>
+        message.Contains("create adapter", StringComparison.Ordinal)
+        && message.Contains("already exists", StringComparison.Ordinal);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Queue<DateTimeOffset> _restarts = new();
@@ -176,6 +182,26 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
             foreach (var f in Directory.GetFiles(options.RunDirectory, "config-*.json"))
                 File.Delete(f);
         }
+
+        DeleteCoreCache();
+    }
+
+    /// <summary>
+    /// Кэш fakeip (домены, которые открывались) нужен только между переподключениями: при отключении
+    /// его удаляем. Переподключение — это Start без Stop, его кэш не трогает.
+    /// </summary>
+    private void DeleteCoreCache()
+    {
+        var path = Path.Combine(options.RunDirectory, SingBoxConfigBuilder.CacheFileName);
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            onLog("Не удалось удалить кэш ядра: " + ex.Message);
+        }
     }
 
     /// <summary>null — ядро запущено; иначе понятная причина отказа.</summary>
@@ -283,6 +309,7 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
                 return;
             SetStatus(new StatusEvent(ServiceState.Stopping, null, null));
             await StopCoreAsync(keepKillSwitch: keepBlocking).ConfigureAwait(false);
+            DeleteCoreCache();
             SetStatus(_killSwitch is null
                 ? new StatusEvent(ServiceState.Idle, null, null)
                 : new StatusEvent(ServiceState.Idle, "Интернет заблокирован аварийной блокировкой: Тропа закрылась, не отключившись.", null, Blocking: true));
@@ -294,14 +321,20 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
     }
 
     /// <summary>«Аварийно вернуть настройки сети»: всё остановить и откатить, даже если состояние непонятное.</summary>
-    public async Task RollbackAllAsync()
+    /// <param name="reason">«update» или «uninstall» — откат перед установкой новой версии или удалением; иначе — пользователь.</param>
+    public async Task RollbackAllAsync(string? reason = null)
     {
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
             await StopCoreAsync(keepKillSwitch: false).ConfigureAwait(false);
             RecoverAfterCrash();
-            SetStatus(new StatusEvent(ServiceState.Idle, "Настройки сети возвращены.", null));
+            SetStatus(reason switch
+            {
+                "update" => new StatusEvent(ServiceState.Idle, "Тропа обновляется: подключение остановлено.", null, StopReason: "update"),
+                "uninstall" => new StatusEvent(ServiceState.Idle, "Тропа удаляется: настройки сети возвращены.", null, StopReason: "uninstall"),
+                _ => new StatusEvent(ServiceState.Idle, "Настройки сети возвращены.", null),
+            });
         }
         finally
         {
@@ -341,8 +374,21 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         var tun = request.Mode == CaptureModeDto.Tun;
         try
         {
-            _core = await CoreProcess.StartSingBoxAsync(Locations, request.SingBoxConfig, request.ReadinessPort,
-                options.RunDirectory, _scrubber, onLog, ct, tun ? CoreProcess.TunStartTimeout : null).ConfigureAwait(false);
+            try
+            {
+                _core = await CoreProcess.StartSingBoxAsync(Locations, request.SingBoxConfig, request.ReadinessPort,
+                    options.RunDirectory, _scrubber, onLog, ct, tun ? CoreProcess.TunStartTimeout : null).ConfigureAwait(false);
+            }
+            catch (CoreStartException ex) when (tun && IsStaleTunAdapter(ex.Message))
+            {
+                // Адаптер Wintun от убитого ядра (остановка службы при обновлении) Windows удаляет не сразу:
+                // «create adapter: … already exists | open existing adapter: Element not found».
+                // Через несколько секунд он исчезает (журнал разработчика, 2026-11-01).
+                onLog("Адаптер туннеля от прошлого запуска ещё не удалён Windows, повтор через 3 с…");
+                await Task.Delay(StaleTunRetryDelay, ct).ConfigureAwait(false);
+                _core = await CoreProcess.StartSingBoxAsync(Locations, request.SingBoxConfig, request.ReadinessPort,
+                    options.RunDirectory, _scrubber, onLog, ct, CoreProcess.TunStartTimeout).ConfigureAwait(false);
+            }
         }
         catch (CoreStartException ex) when (tun)
         {
@@ -481,6 +527,7 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         try
         {
             await StopCoreAsync().ConfigureAwait(false);
+            DeleteCoreCache();
         }
         finally
         {

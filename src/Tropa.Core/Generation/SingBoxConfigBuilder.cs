@@ -63,6 +63,12 @@ public static class SingBoxConfigBuilder
     public const string LanInboundTag = "lan-in";
     public const string ExitProbeInboundTag = "exit-probe-in";
 
+    /// <summary>
+    /// Файл кэша sing-box в рабочем каталоге ядра: записи fakeip «домен ↔ адрес». Переживает
+    /// переподключение, а при отключении удаляется — это по сути список посещённых сайтов.
+    /// </summary>
+    public const string CacheFileName = "cache.db";
+
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, IndentSize = 2, NewLine = "\n" };
 
     public static string Build(SingBoxInput input)
@@ -90,17 +96,24 @@ public static class SingBoxConfigBuilder
             ["route"] = BuildRoute(ctx),
         };
 
+        var experimental = new JsonObject();
         if (input.ClashApiPort is { } port)
         {
-            config["experimental"] = new JsonObject
+            experimental["clash_api"] = new JsonObject
             {
-                ["clash_api"] = new JsonObject
-                {
-                    ["external_controller"] = $"127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}",
-                    ["secret"] = input.ClashApiSecret ?? throw new ArgumentException("Для API статистики нужен секрет.", nameof(input)),
-                },
+                ["external_controller"] = $"127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}",
+                ["secret"] = input.ClashApiSecret ?? throw new ArgumentException("Для API статистики нужен секрет.", nameof(input)),
             };
         }
+
+        // Без сохранённых записей fakeip каждое переподключение ломает соединения программ, которые уже
+        // получили поддельный адрес: «missing fakeip record» (журнал разработчика, 2026-11-01). Файл
+        // без пути — cache.db в рабочем каталоге ядра (-D); при отключении его удаляют (CacheFileName).
+        if (s.Dns.Fakeip)
+            experimental["cache_file"] = new JsonObject { ["enabled"] = true, ["store_fakeip"] = true };
+
+        if (experimental.Count > 0)
+            config["experimental"] = experimental;
 
         return config.ToJsonString(Indented) + "\n";
     }
