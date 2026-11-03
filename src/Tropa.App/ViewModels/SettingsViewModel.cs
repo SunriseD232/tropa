@@ -317,7 +317,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new LabelRow("Списки сайтов и адресов", "geoBases", () => "Обновляются вместе с ядрами по подписанному манифесту"),
         new ChoiceRow("Какое ядро использовать", "coreChoice", Opts("Автоматически (рекомендуется)", "Всегда sing-box", "Всегда Xray"),
             s => (int)s.Cores.CoreChoice, (s, i) => s with { Cores = s.Cores with { CoreChoice = (CoreChoice)i } }),
-        new ToggleRow("Проверять новые ядра и списки сайтов раз в сутки", "geoUpdate", s => s.Cores.GeoUpdate, (s, v) => s with { Cores = s.Cores with { GeoUpdate = v } }),
+        new ToggleRow("Проверять новые ядра и списки сайтов", "geoUpdate", s => s.Cores.GeoUpdate, (s, v) => s with { Cores = s.Cores with { GeoUpdate = v } }),
         new ToggleRow("Скачивать обновления через подключение", "geoViaProxy", s => s.Cores.GeoViaProxy, (s, v) => s with { Cores = s.Cores with { GeoViaProxy = v } }),
         new ToggleRow("Сообщать о новой версии Тропы", "appUpdate", s => s.Cores.AppCheck, (s, v) => s with { Cores = s.Cores with { AppCheck = v } }),
         new CoreVersionsRow(_engine),

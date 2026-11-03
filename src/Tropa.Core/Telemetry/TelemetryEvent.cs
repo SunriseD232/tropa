@@ -102,6 +102,7 @@ public static class Ev
     public const string CoreUpdateInstalled = "7.2";
     public const string AppUpdateDownloaded = "7.3";
     public const string CoreVersionPicked = "7.4";
+    public const string UpdateCheckFailed = "7.5";
 
     // 8 — журнал ядер и движка
     public const string LogLine = "8.1";
@@ -155,6 +156,7 @@ public static class Ev
         (CoreUpdateInstalled, "Установлено обновление ядер"),
         (AppUpdateDownloaded, "Скачано обновление Тропы"),
         (CoreVersionPicked, "Выбрана версия ядра"),
+        (UpdateCheckFailed, "Проверка обновлений не удалась"),
         (LogLine, "Строка журнала"),
         (LogSuppressed, "Пропущены строки журнала (слишком много)"),
     ];

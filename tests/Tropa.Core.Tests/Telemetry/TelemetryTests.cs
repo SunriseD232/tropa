@@ -127,6 +127,13 @@ public sealed class TelemetryTests
         Assert.Null(NetLogClassifier.Classify(access));
         Assert.Null(NetLogClassifier.Classify("2026/10/30 03:14:12.939276 from tcp:127.0.0.1:51234 accepted tcp:failed-site.example:443 [in -> out]"));
         Assert.Null(NetLogClassifier.Classify("2026/10/30 03:14:37.120000 [Warning] core: Xray 26.9.30 started"));
+
+        // Заставка Xray при каждом запуске (в том числе для проверок серверов) уходила как 8.1 — найдено в журнале 0.1.24.
+        foreach (var banner in new[] { "Xray 26.9.30 (Xray, Penetrates Everything.) b26a91d (go1.27.1 windows/amd64)", "A unified platform for anti-censorship." })
+        {
+            Assert.True(NetLogClassifier.IsCoreLine(banner));
+            Assert.Null(NetLogClassifier.Classify(banner));
+        }
     }
 
     [Fact]

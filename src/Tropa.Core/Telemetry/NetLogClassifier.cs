@@ -86,8 +86,9 @@ public static partial class NetLogClassifier
     }
 
     // У Xray каждая строка начинается с «2026/10/30 03:14:12», даже строки журнала соединений без уровня.
+    // Исключение — две строки заставки при каждом запуске Xray (без времени): это тоже строки ядра.
     private static string? Source(string line) =>
-        XrayRx().IsMatch(line) || XrayTimeRx().IsMatch(line) || XrayAccessRx().IsMatch(line) ? "xray"
+        XrayRx().IsMatch(line) || XrayTimeRx().IsMatch(line) || XrayAccessRx().IsMatch(line) || XrayBannerRx().IsMatch(line) ? "xray"
         : SingBoxRx().IsMatch(line) ? "sing-box"
         : null;
 
@@ -137,6 +138,10 @@ public static partial class NetLogClassifier
 
     [GeneratedRegex(@"\bfrom (tcp|udp):\S+ (accepted|rejected) ", RegexOptions.IgnoreCase)]
     private static partial Regex XrayAccessRx();
+
+    // «Xray 26.9.30 (Xray, Penetrates Everything.) b26a91d (go1.27.1 windows/amd64)» и «A unified platform for anti-censorship.»
+    [GeneratedRegex(@"^\s*(Xray \d+\.\d+\.\d+\S* \(Xray,|A unified platform for anti-censorship)")]
+    private static partial Regex XrayBannerRx();
 
     // Xray пишет запуск с уровнем Warning — это не ошибка.
     [GeneratedRegex(@"core: Xray \S+ started|\bsing-box started\b", RegexOptions.IgnoreCase)]

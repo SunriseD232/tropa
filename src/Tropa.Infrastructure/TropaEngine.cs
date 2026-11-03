@@ -875,8 +875,24 @@ public sealed partial class TropaEngine : IAsyncDisposable
     public async Task<UpdateCheck> CheckUpdatesAsync(CancellationToken ct = default)
     {
         using var http = UpdateHttp();
-        var check = await new UpdateClient(http, Updates).CheckAsync(CurrentLocations, AppVersion,
-            State.Settings.Cores.LastManifestSequence, _now(), ct).ConfigureAwait(false);
+        UpdateCheck check;
+        try
+        {
+            check = await new UpdateClient(http, Updates).CheckAsync(CurrentLocations, AppVersion,
+                State.Settings.Cores.LastManifestSequence, _now(), ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            // Тихая проверка молчит в интерфейсе — без этой записи не понять, почему человек сидит на старой версии.
+            // Только класс ошибки и код HTTP: в тексте может быть адрес.
+            var viaProxy = Status.State == ConnectionState.Connected && State.Settings.Cores.GeoViaProxy && _mixedPort > 0;
+            Rec(Ev.UpdateCheckFailed, ("type", ex.GetType().Name),
+                ("http", (ex as HttpRequestException)?.StatusCode is { } code ? ((int)code).ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                ("socket", (ex.InnerException as System.Net.Sockets.SocketException)?.SocketErrorCode.ToString()),
+                ("viaProxy", Flag(viaProxy)), ("connected", Flag(Status.State == ConnectionState.Connected)));
+            throw;
+        }
+
         UpdateSettings(s => s with { Cores = s.Cores with { LastManifestSequence = check.Manifest.Manifest.Sequence, LastUpdateCheck = _now() } });
         Rec(Ev.UpdateCheck, ("sequence", check.Manifest.Manifest.Sequence.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         return check;

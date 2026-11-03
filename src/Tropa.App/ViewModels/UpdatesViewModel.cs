@@ -23,10 +23,28 @@ internal sealed partial class UpdatesViewModel : ObservableObject
         _engine = engine;
         engine.ServiceChanged += (_, _) => Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(Versions)));
         Status = engine.Updates.Enabled ? null : "Источник обновлений в этой сборке не настроен.";
-        // Тихая проверка раз в сутки, если включено appCheck.
-        var s = engine.State.Settings.Cores;
-        if (engine.Updates.Enabled && (s.AppCheck || s.GeoUpdate) && (s.LastUpdateCheck is null || DateTimeOffset.Now - s.LastUpdateCheck > TimeSpan.FromDays(1)))
-            Dispatcher.UIThread.Post(() => _ = CheckAsync(quiet: true), DispatcherPriority.Background);
+        if (!engine.Updates.Enabled)
+            return;
+        // Тихая проверка при каждом запуске (это один маленький манифест) и потом раз в QuietCheckInterval, пока Тропа
+        // работает. Раньше проверка была только при запуске и не чаще раза в сутки: у тех, кто не выключает компьютер,
+        // Тропа не узнавала о выпуске днями, а найденная и отложенная версия не напоминала о себе при следующем запуске
+        // (журнал 30.10–03.11: 4 установки из 7 остались на старых версиях). Неудачная проверка повторяется через полчаса.
+        Dispatcher.UIThread.Post(() => QuietCheck(force: true), DispatcherPriority.Background);
+        _timer = new DispatcherTimer(TimeSpan.FromMinutes(30), DispatcherPriority.Background, (_, _) => QuietCheck(force: false));
+        _timer.Start();
+    }
+
+    internal static readonly TimeSpan QuietCheckInterval = TimeSpan.FromHours(6);
+
+    private readonly DispatcherTimer? _timer;
+
+    private void QuietCheck(bool force)
+    {
+        var s = _engine.State.Settings.Cores;
+        if (Busy || !(s.AppCheck || s.GeoUpdate))
+            return;
+        if (force || s.LastUpdateCheck is null || DateTimeOffset.Now - s.LastUpdateCheck > QuietCheckInterval)
+            _ = CheckAsync(quiet: true);
     }
 
     public string Versions => $"Тропа {TropaEngine.AppVersion.ToString(3)} · {_engine.CoreVersions}";
