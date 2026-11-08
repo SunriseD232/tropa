@@ -153,6 +153,12 @@ internal sealed partial class UpdatesViewModel : ObservableObject
     {
         if (_check?.NewApp is not { } app)
             return;
+        if (Infrastructure.Service.PortableMode.Directory is { } portableDir)
+        {
+            await InstallPortableAsync(app, portableDir);
+            return;
+        }
+
         Busy = true;
         try
         {
@@ -175,6 +181,47 @@ internal sealed partial class UpdatesViewModel : ObservableObject
             Report("Обновление отменено: Windows не получила разрешения. Нажмите «Установить» ещё раз и ответьте «Да».", error: true);
         }
         catch (Exception ex) when (ex is IntegrityException or HttpRequestException or TaskCanceledException or IOException or System.ComponentModel.Win32Exception)
+        {
+            Report(Explain(ex), error: true);
+        }
+        finally
+        {
+            Busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Портативная Тропа (ADR-063): zip из выпуска распаковывается рядом, новая версия запускается из распакованной
+    /// папки, ждёт закрытия этой, копирует файлы поверх (папка data остаётся) и открывает обновлённую Тропу.
+    /// </summary>
+    private async Task InstallPortableAsync(Core.Updates.AppRelease app, string portableDir)
+    {
+        if (app.PortableUrl is null)
+        {
+            Report($"У выпуска {app.Version.ToString(3)} нет портативной версии: скачайте её со страницы выпуска на GitHub.", error: true);
+            return;
+        }
+
+        Busy = true;
+        try
+        {
+            Report($"Скачиваю Тропу {app.Version.ToString(3)}…");
+            var staged = await Task.Run(() => _engine.StagePortableUpdateAsync(app));
+            Report($"Обновляю Тропу до {app.Version.ToString(3)}: она закроется на несколько секунд и откроется сама.");
+            var info = new ProcessStartInfo(Path.Combine(staged, "Tropa.exe")) { UseShellExecute = false, WorkingDirectory = staged };
+            info.ArgumentList.Add(Infrastructure.Updates.PortableUpdater.ApplyArgument);
+            info.ArgumentList.Add(portableDir);
+            info.ArgumentList.Add(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (_engine.Status.State == ConnectionState.Connected)
+                info.ArgumentList.Add("--reconnect");
+            using (Process.Start(info))
+            {
+            }
+
+            await App.ExitForUpdateAsync();
+        }
+        catch (Exception ex) when (ex is IntegrityException or HttpRequestException or TaskCanceledException or IOException
+            or InvalidDataException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             Report(Explain(ex), error: true);
         }

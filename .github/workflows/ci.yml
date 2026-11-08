@@ -89,4 +89,5 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             out/Tropa-*-setup.exe
+            out/Tropa-*-portable.zip
             out/SHA256SUMS.txt

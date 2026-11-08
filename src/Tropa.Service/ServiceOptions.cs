@@ -22,6 +22,12 @@ internal sealed record ServiceOptions
     /// <summary>Закрыть каталог данных от пользователей (только SYSTEM и администраторы). У службы — всегда.</summary>
     public bool SecureDataDirectory { get; init; }
 
+    /// <summary>
+    /// Портативная Тропа (ADR-063): канал только для SYSTEM и администраторов — интерфейс запущен с правами,
+    /// и программа того же пользователя без прав до службы не достучится.
+    /// </summary>
+    public bool AdminsOnlyPipe { get; init; }
+
     /// <summary>Политика DNS в HKLM; null — недоступна (нет прав).</summary>
     public IRegistryValues? DnsRegistry { get; init; }
 
@@ -61,6 +67,25 @@ internal sealed record ServiceOptions
         using var identity = WindowsIdentity.GetCurrent();
         return identity.IsSystem || new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
     }
+
+    /// <summary>
+    /// Служба портативной Тропы (ADR-063): процесс-потомок Tropa.exe, запущенного от имени администратора.
+    /// Канал со своим именем и только для администраторов, управлять может только Tropa.exe из той же
+    /// папки и только с номером процесса родителя. Данные — в папке портативной Тропы.
+    /// </summary>
+    public static ServiceOptions Portable(string pipeName, string dataDirectory, int parentProcessId) => new()
+    {
+        PipeName = pipeName,
+        DataDirectory = dataDirectory,
+        Cores = CoreLocations.Default(),
+        ClientVerifier = new ExecutablePathVerifier(Path.Combine(AppContext.BaseDirectory, "Tropa.exe"), parentProcessId),
+        Privileged = true,
+        SecureDataDirectory = false,
+        AdminsOnlyPipe = true,
+        DnsRegistry = new DnsClientPolicyRegistry(),
+        LoopbackStore = new FirewallLoopbackStore(),
+        KillSwitchFactory = (apps, lan) => new KillSwitch(apps, lan),
+    };
 
     public static ServiceOptions Production()
     {

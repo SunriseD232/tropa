@@ -8,7 +8,8 @@ using Tropa.Core.Updates;
 // паролем, и никогда не попадает в репозиторий.
 //
 //   tropa-release keygen  --out <файл.pem>                 новый ключ; печатает публичный ключ для tools/update.config.json
-//   tropa-release manifest --sequence N [--expires-days 90] [--app-version X --app-url URL --installer setup.exe] --out manifest.json
+//   tropa-release manifest --sequence N [--expires-days 90] [--app-version X --app-url URL --installer setup.exe [--portable portable.zip]] --out manifest.json
+//                         --portable: zip портативной версии (ADR-063), адрес — рядом с установщиком в том же выпуске
 //   tropa-release sign    --key <файл.pem> --in manifest.json     создаёт manifest.json.sig и сразу проверяет её
 //   tropa-release verify  --in manifest.json                       проверка подписи публичным ключом из tools/update.config.json
 //   tropa-release extra-core --core sing-box|xray --version X [--channel stable|preview]
@@ -68,6 +69,12 @@ internal static class Program
 
     private static string Required(Dictionary<string, string> o, string name) =>
         o.TryGetValue(name, out var v) ? v : throw new ArgumentException($"Не указан параметр --{name}.");
+
+    private static string Sha256File(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexStringLower(SHA256.HashData(stream));
+    }
 
     private static string RepoRoot()
     {
@@ -162,14 +169,21 @@ internal static class Program
         if (o.TryGetValue("app-version", out var version))
         {
             var installer = Required(o, "installer");
-            using var stream = File.OpenRead(installer);
-            manifest["app"] = new JsonObject
+            var appUrl = Required(o, "app-url");
+            var app = new JsonObject
             {
                 ["version"] = version,
-                ["url"] = Required(o, "app-url"),
-                ["sha256"] = Convert.ToHexStringLower(SHA256.HashData(stream)),
+                ["url"] = appUrl,
+                ["sha256"] = Sha256File(installer),
                 ["notes"] = o.GetValueOrDefault("notes"),
             };
+            if (o.TryGetValue("portable", out var portable))
+            {
+                app["portableUrl"] = appUrl[..(appUrl.LastIndexOf('/') + 1)] + Path.GetFileName(portable);
+                app["portableSha256"] = Sha256File(portable);
+            }
+
+            manifest["app"] = app;
         }
 
         var bytes = Encoding.UTF8.GetBytes(manifest.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }) + "\n");

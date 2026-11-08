@@ -18,11 +18,14 @@ internal interface IClientVerifier
 /// Каталог в Program Files доступен на запись только администраторам, поэтому подложить туда
 /// свою программу обычный пользователь или вирус без прав администратора не сможет.
 /// </summary>
-internal sealed partial class ExecutablePathVerifier(string expectedPath) : IClientVerifier
+internal sealed partial class ExecutablePathVerifier(string expectedPath, int? expectedProcessId = null) : IClientVerifier
 {
     public string? Verify(NamedPipeServerStream pipe)
     {
         var pid = PipeProcess.ClientProcessId(pipe.SafePipeHandle);
+        // Портативная Тропа (ADR-063): службу запустил этот интерфейс — другой процесс, даже тот же exe, не пускаем.
+        if (expectedProcessId is { } only && pid != (uint)only)
+            return $"не тот процесс: pid {pid}, ожидался {only}";
         string? path;
         try
         {

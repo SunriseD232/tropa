@@ -62,7 +62,9 @@ internal sealed partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            _engine = TropaEngine.Open(DataPaths(), connectService: TropaEngine.DefaultServiceConnector());
+            _engine = OpenEngine();
+            if (AfterUpdate && Infrastructure.Service.PortableMode.IsPortable)
+                _engine.CleanUpPortableUpdate();
             _ = _engine.AttachServiceAsync();
             var vm = new MainWindowViewModel(_engine);
             _window = new MainWindow { DataContext = vm };
@@ -117,14 +119,33 @@ internal sealed partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static EnginePaths DataPaths()
+    /// <summary>
+    /// Установленная Тропа — данные в профиле пользователя, служба Windows. Портативная (ADR-063) — данные
+    /// в папке программы, служба запускается из этой же папки, только когда Тропа запущена с правами.
+    /// </summary>
+    internal static TropaEngine OpenEngine()
+    {
+        if (Infrastructure.Service.PortableMode.Directory is { } portable)
+        {
+            var service = new Infrastructure.Service.PortableService(portable);
+            var engine = TropaEngine.Open(DataPaths(), connectService: service.Connector(), serviceInstalled: () => false);
+            engine.PortableService = service;
+            return engine;
+        }
+
+        return TropaEngine.Open(DataPaths(), connectService: TropaEngine.DefaultServiceConnector());
+    }
+
+    internal static EnginePaths DataPaths()
     {
 #if DEBUG
         // Только для разработки: отдельный каталог данных, чтобы проверки не трогали настоящий профиль.
         if (Environment.GetEnvironmentVariable("TROPA_DATA_DIR") is { Length: > 0 } dir)
             return new EnginePaths(Path.Combine(dir, "roaming"), Path.Combine(dir, "local"));
 #endif
-        return EnginePaths.Default();
+        return Infrastructure.Service.PortableMode.Directory is { } portable
+            ? Infrastructure.Service.PortableMode.Paths(portable)
+            : EnginePaths.Default();
     }
 
     private void CreateTray()
@@ -251,6 +272,13 @@ internal sealed partial class App : Application
             return "Перезапуск отменён в окне Windows «Контроль учётных записей».";
         await app.ExitAsync();
         return null;
+    }
+
+    /// <summary>Обновление портативной Тропы: новая версия ждёт, пока эта закроется штатно (с откатом прокси).</summary>
+    public static async Task ExitForUpdateAsync()
+    {
+        if (Instance is { } app)
+            await app.ExitAsync();
     }
 
     private async Task ExitAsync()

@@ -16,7 +16,13 @@ public sealed record ExtraCore(CoreEntry Entry, string Channel)
 }
 
 /// <summary>Новая версия Тропы: установщик и его SHA-256.</summary>
-public sealed record AppRelease(Version Version, Uri Url, string Sha256, string? Notes);
+public sealed record AppRelease(Version Version, Uri Url, string Sha256, string? Notes)
+{
+    /// <summary>Портативная версия (zip, ADR-063); null — в этом выпуске её нет.</summary>
+    public Uri? PortableUrl { get; init; }
+
+    public string? PortableSha256 { get; init; }
+}
 
 /// <summary>
 /// Манифест обновлений (docs/02-security.md, §3.8; ADR-023). Подписан ключом владельца, публичный
@@ -41,6 +47,9 @@ public sealed partial record UpdateManifest(
 
     [GeneratedRegex(@"^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/releases/download/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\.exe$", RegexOptions.CultureInvariant)]
     private static partial Regex InstallerUrl();
+
+    [GeneratedRegex(@"^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/releases/download/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\.zip$", RegexOptions.CultureInvariant)]
+    private static partial Regex PortableUrlRx();
 
     [GeneratedRegex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant)]
     private static partial Regex Sha256Hex();
@@ -97,6 +106,17 @@ public sealed partial record UpdateManifest(
                 throw new InvalidDataException("У установщика Тропы неверный SHA-256.");
             var notes = (string?)a["notes"];
             app = new AppRelease(version, new Uri(url), sha, notes is { Length: > 2000 } ? notes[..2000] : notes);
+            // Портативная версия — необязательные поля: старые версии Тропы их не знают и пропускают.
+            if (a["portableUrl"] is not null || a["portableSha256"] is not null)
+            {
+                var portableUrl = (string?)a["portableUrl"];
+                if (portableUrl is null || !PortableUrlRx().IsMatch(portableUrl))
+                    throw new InvalidDataException("Портативную Тропу разрешено скачивать только из выпусков на github.com.");
+                var portableSha = (string?)a["portableSha256"];
+                if (portableSha is null || !Sha256Hex().IsMatch(portableSha))
+                    throw new InvalidDataException("У портативной Тропы неверный SHA-256.");
+                app = app with { PortableUrl = new Uri(portableUrl), PortableSha256 = portableSha };
+            }
         }
 
         var extras = new List<ExtraCore>();

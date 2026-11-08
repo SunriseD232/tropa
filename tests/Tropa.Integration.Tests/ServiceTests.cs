@@ -239,6 +239,43 @@ public sealed class ServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Portable_service_pipe_rejects_non_admin_and_other_process()
+    {
+        if (!CoresPresent)
+            Assert.Skip("Ядра не скачаны");
+        // ADR-063: канал портативной службы — только для администраторов; тесты идут без прав, значит не пустит.
+        var pipe = "Tropa.Portable.Test." + Guid.NewGuid().ToString("N");
+        var options = Options(new ExecutablePathVerifier(Self), pipe) with { AdminsOnlyPipe = true };
+        using var portable = new PipeServer(options, NullLogger<PipeServer>.Instance);
+        await portable.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            var attempt = () => ServiceClient.TryConnectAsync(pipe, Self, TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+            if (Tropa.Infrastructure.Service.PortableMode.IsAdmin)
+                Assert.NotNull(await attempt());
+            else
+                await Assert.ThrowsAsync<UnauthorizedAccessException>(attempt);
+        }
+        finally
+        {
+            await portable.StopAsync(CancellationToken.None);
+        }
+
+        // Тот же exe, но не тот процесс, что запустил службу, — отказ.
+        var otherPipe = "Tropa.Portable.Test." + Guid.NewGuid().ToString("N");
+        using var bound = new PipeServer(Options(new ExecutablePathVerifier(Self, Environment.ProcessId + 1), otherPipe), NullLogger<PipeServer>.Instance);
+        await bound.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await Assert.ThrowsAnyAsync<Exception>(() => ServiceClient.TryConnectAsync(otherPipe, Self, TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            await bound.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
     public async Task Client_refuses_impostor_server()
     {
         if (!CoresPresent)

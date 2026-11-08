@@ -150,7 +150,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
         {
             SyncAutostart(v);
             return s with { General = s.General with { Autostart = v } };
-        }),
+        }, hint: Infrastructure.Service.PortableMode.IsPortable ? "В портативной версии не работает: Windows не запускает при входе программы, которым нужны права администратора, а папка может лежать где угодно." : null),
         new ToggleRow("Подключаться сразу после запуска", "autoconnect", s => s.General.Autoconnect, (s, v) => s with { General = s.General with { Autoconnect = v } }),
         new ToggleRow("Запускаться свёрнутой в трей", "startMin", s => s.General.StartMin, (s, v) => s with { General = s.General with { StartMin = v } }),
         new ToggleRow("Ждать сеть перед подключением", "waitNet", s => s.General.WaitNet, (s, v) => s with { General = s.General with { WaitNet = v } }, hint: "До 30 секунд после входа в Windows."),
@@ -182,7 +182,9 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new ActionRow("Права администратора", "runAsAdmin",
             Services.Elevation.IsAdmin
                 ? "Тропа запущена от имени администратора. Чтобы вернуться к обычным правам, закройте её (Выход в трее) и запустите снова."
-                : "Тропа запущена с правами обычного пользователя — так и рекомендуется: всё системное делает служба.",
+                : Infrastructure.Service.PortableMode.IsPortable
+                    ? "Портативная Тропа без прав администратора работает только как системный прокси. Для режима «Весь компьютер» перезапустите её с правами — она сама запустит службу из своей папки."
+                    : "Тропа запущена с правами обычного пользователя — так и рекомендуется: всё системное делает служба.",
             ("Перезапустить от имени администратора", new AsyncRelayCommand(async () =>
             {
                 if (await App.RestartElevatedAsync() is { } reason)

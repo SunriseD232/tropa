@@ -8,10 +8,15 @@ using Tropa.Service;
 //   (без аргументов)  — работа: служба Windows или, при запуске вручную, консольный режим разработки;
 //   --install         — установить службу (нужны права администратора);
 //   --uninstall       — откатить изменения и удалить службу;
-//   --rollback-all    — вернуть системные настройки, изменённые службой (для деинсталлятора и аварий).
+//   --rollback-all    — вернуть системные настройки, изменённые службой (для деинсталлятора и аварий);
+//                       с --data <каталог> — службы портативной Тропы;
+//   --portable --pipe <имя> --parent <pid> --data <каталог>
+//                     — служба портативной Тропы (ADR-063): потомок Tropa.exe с правами администратора,
+//                       живёт, пока жив родитель.
+var portableData = ArgValue(args, "--data");
 if (args.Contains("--rollback-all"))
 {
-    var o = ServiceOptions.Production();
+    var o = portableData is null ? ServiceOptions.Production() : ServiceOptions.Portable("unused", portableData, 0);
     if (o.DnsRegistry is { } registry)
         new DnsClientPolicy(registry, new ChangeJournal(o.JournalPath)).Restore();
     if (o.LoopbackStore is { } loopback)
@@ -24,6 +29,39 @@ if (args.Contains("--rollback-all"))
 if (args.Contains("--install") || args.Contains("--uninstall"))
     return ServiceInstaller.Run(args.Contains("--install"));
 
+if (args.Contains("--portable"))
+{
+    var pipe = ArgValue(args, "--pipe");
+    if (pipe is null || portableData is null || !int.TryParse(ArgValue(args, "--parent"), out var parent)
+        || !pipe.StartsWith(PortableParent.PipePrefix, StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("Портативный режим: нужны --pipe, --parent и --data.");
+        return 2;
+    }
+
+    if (!ServiceOptions.IsPrivileged())
+    {
+        Console.Error.WriteLine("Портативной службе нужны права администратора.");
+        return 5;
+    }
+
+    // Родитель — Tropa.exe из этой же папки; иначе службу запустил кто-то другой.
+    if (PortableParent.PathOf(parent) is not { } parentPath
+        || !string.Equals(parentPath, Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "Tropa.exe")), StringComparison.OrdinalIgnoreCase))
+    {
+        Console.Error.WriteLine("Портативную службу запускает только Tropa.exe из её папки.");
+        return 3;
+    }
+
+    var portable = Host.CreateApplicationBuilder([]);
+    portable.Services.AddSingleton(ServiceOptions.Portable(pipe, portableData, parent));
+    portable.Services.AddSingleton(new PortableParent(parent));
+    portable.Services.AddHostedService<PipeServer>();
+    portable.Services.AddHostedService<PortableParentWatcher>();
+    await portable.Build().RunAsync().ConfigureAwait(false);
+    return 0;
+}
+
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(options => options.ServiceName = IpcProtocol.ServiceName);
 builder.Services.AddSingleton(ServiceOptions.Production());
@@ -32,6 +70,12 @@ builder.Services.AddHostedService<PipeServer>();
 var host = builder.Build();
 await host.RunAsync().ConfigureAwait(false);
 return 0;
+
+static string? ArgValue(string[] args, string name)
+{
+    var i = Array.IndexOf(args, name);
+    return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+}
 
 internal static class ServiceInstaller
 {

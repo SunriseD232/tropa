@@ -90,6 +90,33 @@ public sealed class UpdateManifestTests
     }
 
     [Fact]
+    public void Portable_zip_is_optional_and_checked()
+    {
+        var o = Valid();
+        o["app"] = new JsonObject
+        {
+            ["version"] = "0.2.0",
+            ["url"] = "https://github.com/owner/tropa/releases/download/v0.2.0/Tropa-0.2.0-setup.exe",
+            ["sha256"] = Hash('d'),
+        };
+        Assert.Null(Parse(o).App!.PortableUrl);
+
+        o["app"]!["portableUrl"] = "https://github.com/owner/tropa/releases/download/v0.2.0/Tropa-0.2.0-portable.zip";
+        o["app"]!["portableSha256"] = Hash('e');
+        var app = Parse(o).App!;
+        Assert.Equal("Tropa-0.2.0-portable.zip", app.PortableUrl!.Segments[^1]);
+        Assert.Equal(Hash('e'), app.PortableSha256);
+
+        o["app"]!["portableUrl"] = "https://evil.example/o/t/releases/download/v1/Tropa-portable.zip";
+        Assert.Throws<InvalidDataException>(() => Parse(o));
+        o["app"]!["portableUrl"] = "https://github.com/owner/tropa/releases/download/v0.2.0/Tropa-0.2.0-portable.zip";
+        o["app"]!["portableSha256"] = "nothex";
+        Assert.Throws<InvalidDataException>(() => Parse(o));
+        o["app"]!.AsObject().Remove("portableSha256");
+        Assert.Throws<InvalidDataException>(() => Parse(o));
+    }
+
+    [Fact]
     public void Bad_core_url_and_dates_are_rejected()
     {
         var o = Valid();

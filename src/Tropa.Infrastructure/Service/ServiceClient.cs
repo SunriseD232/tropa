@@ -61,7 +61,8 @@ public sealed partial class ServiceClient : IAsyncDisposable
     /// Подключается к службе. null — службы нет (не установлена или не запущена): тогда интерфейс
     /// работает сам в режиме «Только браузеры».
     /// </summary>
-    public static async Task<ServiceClient?> TryConnectAsync(string pipeName, string? expectedServerPath, TimeSpan timeout, CancellationToken ct)
+    public static async Task<ServiceClient?> TryConnectAsync(string pipeName, string? expectedServerPath, TimeSpan timeout, CancellationToken ct,
+        int? expectedServerProcessId = null)
     {
         // Identification: служба может узнать, кто подключился, но не может действовать от имени пользователя.
         var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.Identification);
@@ -85,6 +86,13 @@ public sealed partial class ServiceClient : IAsyncDisposable
         {
             await pipe.DisposeAsync().ConfigureAwait(false);
             throw new ServiceException($"Канал Тропы открыт чужой программой ({actual ?? "неизвестно"}). Подключение через службу отменено.");
+        }
+
+        // Портативная служба (ADR-063): канал должен держать именно запущенный нами процесс.
+        if (expectedServerProcessId is { } pid && GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var serverPid) && serverPid != (uint)pid)
+        {
+            await pipe.DisposeAsync().ConfigureAwait(false);
+            throw new ServiceException("Канал портативной службы Тропы открыт чужим процессом. Подключение через службу отменено.");
         }
 
         var client = new ServiceClient(pipe);

@@ -33,11 +33,11 @@ dotnet run --project tools/Tropa.Release -- keygen --out "$env:USERPROFILE\Tropa
    ```powershell
    dotnet run --project tools/Tropa.Release -- manifest --sequence N --app-version X.Y.Z `
      --app-url https://github.com/<владелец>/<репозиторий>/releases/download/vX.Y.Z/Tropa-X.Y.Z-setup.exe `
-     --installer out\Tropa-X.Y.Z-setup.exe --notes "Что нового" --out out\manifest.json
+     --installer out\Tropa-X.Y.Z-setup.exe --portable out\Tropa-X.Y.Z-portable.zip --notes "Что нового" --out out\manifest.json
    dotnet run --project tools/Tropa.Release -- sign --key "$env:USERPROFILE\TropaKeys\manifest-signing.pem" --in out\manifest.json
    ```
    `sign` сразу проверяет подпись публичным ключом из `tools/update.config.json`.
-7. Приложить к черновику выпуска `manifest.json` и `manifest.json.sig` и опубликовать его.
+7. Приложить к черновику выпуска `Tropa-X.Y.Z-portable.zip` (портативная версия, ADR-063: `--portable` кладёт её адрес и хэш в манифест), `manifest.json` и `manifest.json.sig` и опубликовать его.
    Ссылку на установщик из выпуска можно передавать друзьям.
 
 Кнопка «Установить» в Тропе ставит новую версию тихо (ADR-041): установщик получает `/SILENT … /TROPAUPDATE`, сам закрывает и снова запускает Тропу. Значит, [Run]-секцию `IsInAppUpdate` в installer/tropa.iss нельзя убирать — иначе после тихого обновления Тропа не откроется.

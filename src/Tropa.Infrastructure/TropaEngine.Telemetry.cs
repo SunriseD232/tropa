@@ -6,6 +6,7 @@ using Tropa.Core.Telemetry;
 using Tropa.Infrastructure.Diagnostics;
 using Tropa.Infrastructure.Net;
 using Tropa.Infrastructure.Telemetry;
+using Tropa.Infrastructure.Service;
 
 namespace Tropa.Infrastructure;
 
@@ -67,7 +68,9 @@ public sealed partial class TropaEngine
             ("launch", launch),
             ("os", Environment.OSVersion.Version.ToString()),
             ("cores", CoreVersions),
-            ("service", ServiceAvailable ? (TunAvailable ? "tun" : "no-tun") : ServiceStarting ? "starting" : "none"));
+            ("service", ServiceAvailable ? (TunAvailable ? "tun" : "no-tun") : ServiceStarting ? "starting" : "none"),
+            ("portable", Flag(PortableMode.IsPortable)),
+            ("admin", Flag(PortableMode.IsAdmin)));
         if (StartupWarning is { } warning)
             Rec(Ev.StartupWarning, ("msg", warning));
         Rec(Ev.SettingsSnapshot, SettingsFlattener.Flatten(State.Settings));

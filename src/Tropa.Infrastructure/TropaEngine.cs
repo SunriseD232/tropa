@@ -115,12 +115,19 @@ public sealed partial class TropaEngine : IAsyncDisposable
     }
 
     /// <summary>Почему режим «Весь компьютер» сейчас недоступен — для подсказок на Главной и после подключения.</summary>
-    public string NoTunReason() => (ServiceAvailable, ServiceStarting) switch
+    public string NoTunReason() => PortableMode.IsPortable
+        ? (PortableMode.IsAdmin
+            ? (PortableService?.LastError ?? "Служба из папки портативной Тропы не запустилась") + " Поэтому режим «Весь компьютер» недоступен."
+            : "Портативная Тропа запущена без прав администратора, поэтому режим «Весь компьютер» недоступен — перезапустите её от имени администратора («Настройки → Общие → Права администратора»).")
+        : (ServiceAvailable, ServiceStarting) switch
     {
         (true, _) => "Служба Тропы работает без прав системы, поэтому режим «Весь компьютер» недоступен — переустановите Тропу.",
         (false, true) => "Служба Тропы установлена, но не отвечает (не запустилась или остановлена), поэтому режим «Весь компьютер» недоступен. Переподключитесь через минуту; если не поможет — перезагрузите компьютер или переустановите Тропу.",
         _ => "Служба Тропы не установлена, поэтому режим «Весь компьютер» недоступен — установите Тропу установщиком.",
     };
+
+    /// <summary>Служба портативной Тропы (ADR-063); null — установленная Тропа.</summary>
+    public PortableService? PortableService { get; set; }
 
     /// <summary>Сколько ждать запуска установленной службы перед подключением.</summary>
     public static readonly TimeSpan ServiceStartWait = TimeSpan.FromSeconds(90);
@@ -964,6 +971,22 @@ public sealed partial class TropaEngine : IAsyncDisposable
         Rec(Ev.AppUpdateDownloaded, ("version", app.Version.ToString()));
         return path;
     }
+
+    /// <summary>
+    /// Портативная Тропа (ADR-063): скачивает zip, сверяет хэш с манифестом и распаковывает. Возвращает папку
+    /// новой версии — из неё запускается Tropa.exe с <see cref="PortableUpdater.ApplyArgument"/>.
+    /// </summary>
+    public async Task<string> StagePortableUpdateAsync(AppRelease app, CancellationToken ct = default)
+    {
+        using var http = UpdateHttp();
+        var zip = await new UpdateClient(http, Updates).DownloadPortableAsync(app, Path.Combine(_paths.Local, "update-download"), ct).ConfigureAwait(false);
+        var staged = PortableUpdater.Stage(zip, Path.Combine(_paths.Local, PortableUpdater.StagingFolder));
+        Rec(Ev.AppUpdateDownloaded, ("version", app.Version.ToString()), ("portable", "1"));
+        return staged;
+    }
+
+    /// <summary>Убирает распакованную прошлую версию после обновления портативной Тропы.</summary>
+    public void CleanUpPortableUpdate() => PortableUpdater.CleanUp(_paths.Local);
 
     // ---------------- Переподключение после сна и смены сети ----------------
 

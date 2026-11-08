@@ -118,6 +118,21 @@ public sealed class UpdateClient(HttpClient http, UpdateConfig config)
         return path;
     }
 
+    /// <summary>Портативная Тропа (ADR-063): zip из выпуска, хэш — из подписанного манифеста.</summary>
+    public async Task<string> DownloadPortableAsync(AppRelease app, string directory, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        if (app.PortableUrl is null || app.PortableSha256 is null)
+            throw new IntegrityException("В этом выпуске нет портативной версии.");
+        Directory.CreateDirectory(directory);
+        var data = await GetLimitedAsync(app.PortableUrl, MaxArchiveBytes, ct).ConfigureAwait(false);
+        if (Convert.ToHexStringLower(SHA256.HashData(data)) != app.PortableSha256)
+            throw new IntegrityException("Архив Тропы не совпадает с манифестом. Обновление отменено.");
+        var path = Path.Combine(directory, $"Tropa-{app.Version}-portable.zip");
+        await File.WriteAllBytesAsync(path, data, ct).ConfigureAwait(false);
+        return path;
+    }
+
     private static bool HasFile(string directory, string name, string sha256)
     {
         var path = Path.Combine(directory, name);

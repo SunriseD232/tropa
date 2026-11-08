@@ -54,6 +54,23 @@ $iscc = @(
 ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 
 $artifacts = @()
+
+# Портативная версия (ADR-063): та же программа в zip с папкой «Tropa» и меткой Tropa.portable.
+$portableStage = Join-Path $out 'portable'
+if (Test-Path -LiteralPath $portableStage) { Remove-Item -LiteralPath $portableStage -Recurse -Force }
+$portableDir = Join-Path $portableStage 'Tropa'
+New-Item -ItemType Directory -Force -Path $portableStage | Out-Null
+Copy-Item -LiteralPath $publish -Destination $portableDir -Recurse
+Set-Content -LiteralPath (Join-Path $portableDir 'Tropa.portable') -Encoding UTF8 -Value @(
+    'Портативная Тропа: ничего не устанавливается, настройки и подписки хранятся в папке data рядом с программой.',
+    'Режим «Весь компьютер» — после «Перезапустить от имени администратора». Не удаляйте этот файл.')
+$portableZip = Join-Path $out "Tropa-$version-portable.zip"
+if (Test-Path -LiteralPath $portableZip) { Remove-Item -LiteralPath $portableZip -Force }
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory($portableDir, $portableZip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+Remove-Item -LiteralPath $portableStage -Recurse -Force
+$artifacts += $portableZip
+
 if ($iscc) {
     & $iscc "/DAppVersion=$version" "/DSourceDir=$publish" "/DOutputDir=$out" (Join-Path $repo 'installer\tropa.iss')
     if ($LASTEXITCODE -ne 0) { throw 'Установщик не собрался.' }
