@@ -1029,7 +1029,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
             var props = ni.GetIPProperties();
             var gateways = props.GatewayAddresses.Select(g => g.Address).Where(a => !a.Equals(IPAddress.Any) && !a.Equals(IPAddress.IPv6Any)).ToList();
             var addresses = props.UnicastAddresses.Select(u => u.Address).ToList();
-            if (gateways.Count == 0 || addresses.Contains(Diagnosis.OwnTunAddress) || ni.Name.Equals(Diagnosis.OwnTunName, StringComparison.OrdinalIgnoreCase))
+            if (gateways.Count == 0 || addresses.Contains(Diagnosis.OwnTunAddress) || Diagnosis.IsOwnTunName(ni.Name))
                 continue;
             parts.Add(ni.Id + "=" + string.Join(",", addresses.Where(a => a.AddressFamily == AddressFamily.InterNetwork).OrderBy(a => a.ToString(), StringComparer.Ordinal))
                 + "@" + string.Join(",", gateways.OrderBy(a => a.ToString(), StringComparer.Ordinal)));

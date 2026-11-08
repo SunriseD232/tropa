@@ -100,23 +100,50 @@ public static partial class ServerTester
         }
 
         var xrayIds = viaXray.Select(p => p.Id).ToHashSet();
-        var singTargets = testable.Where(p => !xrayIds.Contains(p.Id)).Select(p => new SingBoxConfigBuilder.TestTarget(p, FreePort())).ToList();
-        var xrayTargets = viaXray.Select(p => new XrayTarget(p, FreePort())).ToList();
-        var targets = singTargets.Concat(xrayTargets.Select(x => new SingBoxConfigBuilder.TestTarget(x.Profile, x.Port))).ToList();
-        if (targets.Count == 0)
-            return results;
-        var pingPort = FreePort();
-        var config = SingBoxConfigBuilder.BuildTest(singTargets, settings, auth, allProfiles, pingPort, Diagnostics.LocalNetwork.PhysicalInterfaceName());
+        List<SingBoxConfigBuilder.TestTarget> targets;
+        int pingPort;
+        CoreProcess? startedXray = null;
+        CoreProcess startedCore;
+        for (var attempt = 1; ; attempt++)
+        {
+            var singTargets = testable.Where(p => !xrayIds.Contains(p.Id)).Select(p => new SingBoxConfigBuilder.TestTarget(p, FreePort())).ToList();
+            var xrayTargets = viaXray.Select(p => new XrayTarget(p, FreePort())).ToList();
+            targets = singTargets.Concat(xrayTargets.Select(x => new SingBoxConfigBuilder.TestTarget(x.Profile, x.Port))).ToList();
+            if (targets.Count == 0)
+                return results;
+            pingPort = FreePort();
+            var config = SingBoxConfigBuilder.BuildTest(singTargets, settings, auth, allProfiles, pingPort, Diagnostics.LocalNetwork.PhysicalInterfaceName());
 
-        var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy { AllowedDirectories = [runDirectory] });
-        if (violations.Count > 0)
-            throw new IntegrityException("Тестовый конфиг не прошёл проверку: " + violations[0]);
+            var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy { AllowedDirectories = [runDirectory] });
+            if (violations.Count > 0)
+                throw new IntegrityException("Тестовый конфиг не прошёл проверку: " + violations[0]);
 
-        // Временный Xray (если нужен) — первым; его трафик в режиме TUN отпускается правилом основного sing-box.
-        await using var xray = xrayTargets.Count > 0
-            ? await StartXrayAsync(xrayTargets, settings, auth, locations, runDirectory, scrubber, log, ct).ConfigureAwait(false)
-            : null;
-        await using var core = await CoreProcess.StartSingBoxAsync(locations, config, pingPort, runDirectory, scrubber, log, ct).ConfigureAwait(false);
+            try
+            {
+                // Временный Xray (если нужен) — первым; его трафик в режиме TUN отпускается правилом основного sing-box.
+                startedXray = xrayTargets.Count > 0
+                    ? await StartXrayAsync(xrayTargets, settings, auth, locations, runDirectory, scrubber, log, ct).ConfigureAwait(false)
+                    : null;
+                startedCore = await CoreProcess.StartSingBoxAsync(locations, config, pingPort, runDirectory, scrubber, log, ct).ConfigureAwait(false);
+                break;
+            }
+            catch (Exception ex)
+            {
+                if (startedXray is not null)
+                    await startedXray.DisposeAsync().ConfigureAwait(false);
+                startedXray = null;
+                if (attempt == 1 && ex is CoreStartException && IsPortBindError(ex.Message))
+                {
+                    log(PortRetryMessage);
+                    continue;
+                }
+
+                throw;
+            }
+        }
+
+        await using var xray = startedXray;
+        await using var core = startedCore;
         using var limiter = new SemaphoreSlim(Math.Clamp(settings.Connection.Parallel, 1, 10));
         using var speedLimiter = new SemaphoreSlim(Math.Max(1, options.ParallelSpeedTests));
         var tasks = targets.Select(async t =>
@@ -148,35 +175,76 @@ public static partial class ServerTester
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(body);
         var auth = new LocalAuth("probe-" + Storage.SecretStore.NewRandomToken(4), Storage.SecretStore.NewRandomToken());
-        var directPort = FreePort();
-        int? serverPort = null;
-        var singTargets = new List<SingBoxConfigBuilder.TestTarget>();
-        var xrayTargets = new List<XrayTarget>();
-        if (server is not null && ProfileCompat.Issues(server).Count == 0)
+        var useServer = server is not null && ProfileCompat.Issues(server).Count == 0;
+        var serverViaXray = useServer && CorePlan.Make(settings, [server!]).XrayProfiles.Count > 0;
+        int directPort;
+        int? serverPort;
+        CoreProcess? startedXray = null;
+        CoreProcess startedCore;
+        for (var attempt = 1; ; attempt++)
         {
-            serverPort = FreePort();
-            var viaXray = CorePlan.Make(settings, [server]).XrayProfiles.Count > 0;
-            if (viaXray)
-                xrayTargets.Add(new XrayTarget(server, serverPort.Value));
-            else
-                singTargets.Add(new SingBoxConfigBuilder.TestTarget(server, serverPort.Value));
+            directPort = FreePort();
+            serverPort = null;
+            var singTargets = new List<SingBoxConfigBuilder.TestTarget>();
+            var xrayTargets = new List<XrayTarget>();
+            if (useServer)
+            {
+                serverPort = FreePort();
+                if (serverViaXray)
+                    xrayTargets.Add(new XrayTarget(server!, serverPort.Value));
+                else
+                    singTargets.Add(new SingBoxConfigBuilder.TestTarget(server!, serverPort.Value));
+            }
+
+            var all = singTargets.Concat(xrayTargets.Select(x => new SingBoxConfigBuilder.TestTarget(x.Profile, x.Port))).ToList();
+            // Привязка к сетевой карте не пускает трафик через TUN другого VPN; адреса 127.0.0.1 через неё
+            // недоступны по UDP, поэтому тесты с локальными серверами её выключают.
+            var config = SingBoxConfigBuilder.BuildTest(all, settings, auth, allProfiles, directPort,
+                bindPhysical ? Diagnostics.LocalNetwork.PhysicalInterfaceName() : null);
+            var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy { AllowedDirectories = [runDirectory] });
+            if (violations.Count > 0)
+                throw new IntegrityException("Конфиг проверки не прошёл проверку: " + violations[0]);
+
+            try
+            {
+                startedXray = xrayTargets.Count > 0
+                    ? await StartXrayAsync(xrayTargets, settings, auth, locations, runDirectory, scrubber, log, ct).ConfigureAwait(false)
+                    : null;
+                startedCore = await CoreProcess.StartSingBoxAsync(locations, config, directPort, runDirectory, scrubber, log, ct).ConfigureAwait(false);
+                break;
+            }
+            catch (Exception ex)
+            {
+                if (startedXray is not null)
+                    await startedXray.DisposeAsync().ConfigureAwait(false);
+                startedXray = null;
+                if (attempt == 1 && ex is CoreStartException && IsPortBindError(ex.Message))
+                {
+                    log(PortRetryMessage);
+                    continue;
+                }
+
+                throw;
+            }
         }
 
-        var all = singTargets.Concat(xrayTargets.Select(x => new SingBoxConfigBuilder.TestTarget(x.Profile, x.Port))).ToList();
-        // Привязка к сетевой карте не пускает трафик через TUN другого VPN; адреса 127.0.0.1 через неё
-        // недоступны по UDP, поэтому тесты с локальными серверами её выключают.
-        var config = SingBoxConfigBuilder.BuildTest(all, settings, auth, allProfiles, directPort,
-            bindPhysical ? Diagnostics.LocalNetwork.PhysicalInterfaceName() : null);
-        var violations = ConfigGuard.CheckSingBox(config, new GuardPolicy { AllowedDirectories = [runDirectory] });
-        if (violations.Count > 0)
-            throw new IntegrityException("Конфиг проверки не прошёл проверку: " + violations[0]);
-
-        await using var xray = xrayTargets.Count > 0
-            ? await StartXrayAsync(xrayTargets, settings, auth, locations, runDirectory, scrubber, log, ct).ConfigureAwait(false)
-            : null;
-        await using var core = await CoreProcess.StartSingBoxAsync(locations, config, directPort, runDirectory, scrubber, log, ct).ConfigureAwait(false);
+        await using var xray = startedXray;
+        await using var core = startedCore;
         return await body(new ProbePorts(directPort, serverPort, auth), ct).ConfigureAwait(false);
     }
+
+    private const string PortRetryMessage = "Windows не дала временному ядру занять локальный порт, пробую другой…";
+
+    /// <summary>
+    /// Свободный порт выбран заранее, а Windows может закрыть его до запуска ядра: его занял другой процесс
+    /// или он попал в диапазон, который резервируют Hyper-V и WSL (журнал разработчика, 2026-11-07:
+    /// «bind: An attempt was made to access a socket in a way forbidden by its access permissions»).
+    /// </summary>
+    internal static bool IsPortBindError(string message) =>
+        message.Contains("bind:", StringComparison.OrdinalIgnoreCase)
+        && (message.Contains("forbidden by its access permissions", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Only one usage of each socket address", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("address already in use", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>HTTP-клиент через локальный SOCKS-вход временного ядра.</summary>
     public static HttpClient ProbeClient(int port, LocalAuth auth, TimeSpan timeout, bool allowRedirect = true) => new(new SocketsHttpHandler

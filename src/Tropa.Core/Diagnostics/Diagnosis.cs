@@ -25,6 +25,18 @@ public static partial class Diagnosis
     /// <summary>Имя адаптера TUN Тропы.</summary>
     public const string OwnTunName = "Tropa";
 
+    /// <summary>
+    /// Запасное имя. sing-box выводит GUID адаптера Wintun из имени, а адаптер от ядра, убитого при выключении
+    /// Windows, после загрузки ещё висит: с тем же именем ядро 15 с ждёт и падает («create adapter: … already
+    /// exists»). Служба чередует имена (журнал разработчика, 2026-11-08).
+    /// </summary>
+    public const string OwnTunNameAlt = "Tropa-2";
+
+    /// <summary>Адаптер с таким именем — TUN Тропы (любое из двух имён).</summary>
+    public static bool IsOwnTunName(string? name) =>
+        string.Equals(name, OwnTunName, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, OwnTunNameAlt, StringComparison.OrdinalIgnoreCase);
+
     public static StepResult Clock(TimeSpan skew)
     {
         var abs = skew.Duration();
@@ -106,7 +118,7 @@ public static partial class Diagnosis
     public static IReadOnlyList<AdapterInfo> ForeignVpnAdapters(IEnumerable<AdapterInfo> adapters) =>
         adapters.Where(a => a.IsUp
                 && !a.Addresses.Contains(OwnTunAddress)
-                && !a.Name.Equals(OwnTunName, StringComparison.OrdinalIgnoreCase)
+                && !IsOwnTunName(a.Name)
                 && !FilterPseudoAdapter().IsMatch(a.Name) && !FilterPseudoAdapter().IsMatch(a.Description)
                 && (VpnAdapterPattern().IsMatch(a.Description) || VpnAdapterPattern().IsMatch(a.Name)))
             .ToList();

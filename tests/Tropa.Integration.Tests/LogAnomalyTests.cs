@@ -39,4 +39,33 @@ public sealed class LogAnomalyTests
     [InlineData("Ядро sing-box не запустилось за 20 с: процесс работает, но локальный порт не открылся (ядро ничего не вывело).", false)]
     public void Stale_tun_adapter_is_recognized(string message, bool expected) =>
         Assert.Equal(expected, CoreSupervisor.IsStaleTunAdapter(message));
+
+    [Fact]
+    public void Tun_names_alternate()
+    {
+        Assert.Equal("Tropa-2", CoreSupervisor.OtherTunName("Tropa"));
+        Assert.Equal("Tropa", CoreSupervisor.OtherTunName("Tropa-2"));
+        Assert.Equal("Tropa-2", CoreSupervisor.OtherTunName(null));
+        Assert.True(Tropa.Core.Diagnostics.Diagnosis.IsOwnTunName("tropa-2"));
+        Assert.False(Tropa.Core.Diagnostics.Diagnosis.IsOwnTunName("Tropa-3"));
+    }
+
+    [Fact]
+    public void Tun_name_is_replaced_only_in_tun_inbound()
+    {
+        const string json = """{"inbounds":[{"type":"tun","tag":"tun-in","interface_name":"Tropa"},{"type":"mixed","tag":"mixed-in","listen":"127.0.0.1"}],"outbounds":[]}""";
+        var result = System.Text.Json.Nodes.JsonNode.Parse(CoreSupervisor.WithTunName(json, "Tropa-2"))!;
+        Assert.Equal("Tropa-2", (string?)result["inbounds"]![0]!["interface_name"]);
+        Assert.Null(result["inbounds"]![1]!["interface_name"]);
+        const string noTun = """{"inbounds":[{"type":"mixed"}]}""";
+        Assert.Equal(noTun, CoreSupervisor.WithTunName(noTun, "Tropa-2"));
+    }
+
+    [Theory]
+    // Журнал 2026-11-07: порт временного ядра проверки попал под запрет Windows.
+    [InlineData("Ядро sing-box завершилось при запуске: FATAL[0000] start service: start inbound/socks[test-direct]: listen tcp 127.0.0.1:50123: bind: An attempt was made to access a socket in a way forbidden by its access permissions.", true)]
+    [InlineData("Ядро sing-box завершилось при запуске: FATAL[0000] start service: start inbound/socks[t1]: listen tcp 127.0.0.1:50123: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.", true)]
+    [InlineData("Ядро sing-box завершилось при запуске: FATAL[0000] decode config: unknown field", false)]
+    public void Port_bind_error_is_recognized(string message, bool expected) =>
+        Assert.Equal(expected, Tropa.Infrastructure.Testing.ServerTester.IsPortBindError(message));
 }

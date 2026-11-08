@@ -47,6 +47,8 @@ public static partial class NetLogClassifier
 
     private static readonly (string Code, Regex Pattern)[] Rules =
     [
+        // Адаптер от прошлого запуска: служба сама повторяет с другим именем, это не фатальная ошибка.
+        (Tun, StaleTunRx()),
         (Fatal, FatalRx()),
         (PortBusy, PortBusyRx()),
         (Tun, TunRx()),
@@ -150,6 +152,9 @@ public static partial class NetLogClassifier
     // Классы
     [GeneratedRegex(@"\b(FATAL|PANIC)\b|start service|failed to start|failed to load config|decode config|parse config", RegexOptions.IgnoreCase)]
     private static partial Regex FatalRx();
+
+    [GeneratedRegex(@"create adapter:.*already exists", RegexOptions.IgnoreCase)]
+    private static partial Regex StaleTunRx();
 
     [GeneratedRegex(@"address already in use|only one usage of each socket address|bind: |listen (tcp|udp)", RegexOptions.IgnoreCase)]
     private static partial Regex PortBusyRx();

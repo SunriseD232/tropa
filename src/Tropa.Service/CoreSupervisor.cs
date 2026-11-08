@@ -16,11 +16,78 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
 {
     private const int MaxRestarts = 3;
     private static readonly TimeSpan RestartWindow = TimeSpan.FromMinutes(1);
-    private static readonly TimeSpan StaleTunRetryDelay = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan StaleTunRetryDelay = TimeSpan.FromSeconds(1);
 
     internal static bool IsStaleTunAdapter(string message) =>
         message.Contains("create adapter", StringComparison.Ordinal)
         && message.Contains("already exists", StringComparison.Ordinal);
+
+    /// <summary>Другое из двух имён адаптера TUN.</summary>
+    internal static string OtherTunName(string? name) =>
+        string.Equals(name, Core.Diagnostics.Diagnosis.OwnTunNameAlt, StringComparison.OrdinalIgnoreCase)
+            ? Core.Diagnostics.Diagnosis.OwnTunName
+            : Core.Diagnostics.Diagnosis.OwnTunNameAlt;
+
+    /// <summary>Конфиг sing-box с другим именем адаптера у входа TUN; остальное не трогаем.</summary>
+    internal static string WithTunName(string json, string name)
+    {
+        if (System.Text.Json.Nodes.JsonNode.Parse(json) is not System.Text.Json.Nodes.JsonObject root
+            || root["inbounds"] is not System.Text.Json.Nodes.JsonArray inbounds)
+            return json;
+        var changed = false;
+        foreach (var ib in inbounds.OfType<System.Text.Json.Nodes.JsonObject>())
+        {
+            if ((string?)ib["type"] == "tun")
+            {
+                ib["interface_name"] = name;
+                changed = true;
+            }
+        }
+
+        return changed ? root.ToJsonString() : json;
+    }
+
+    /// <summary>Имя адаптера TUN для этого процесса службы; null — ещё не выбрано.</summary>
+    private string? _tunName;
+
+    private string TunNamePath => Path.Combine(options.DataDirectory, "tun-name.txt");
+
+    /// <summary>
+    /// Первый запуск TUN после старта службы (обычно после загрузки Windows): адаптер прошлого сеанса мог
+    /// остаться, если ядро убили при выключении. Берём не то имя, что было в прошлый раз. Файла нет —
+    /// прошлые версии Тропы всегда брали «Tropa».
+    /// </summary>
+    private string CurrentTunName()
+    {
+        if (_tunName is not null)
+            return _tunName;
+        string? last = null;
+        try
+        {
+            if (File.Exists(TunNamePath))
+                last = File.ReadAllText(TunNamePath).Trim();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return UseTunName(OtherTunName(last ?? Core.Diagnostics.Diagnosis.OwnTunNameAlt));
+    }
+
+    private string UseTunName(string name)
+    {
+        _tunName = name;
+        try
+        {
+            Infrastructure.Storage.AtomicFile.WriteAllText(TunNamePath, name);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Не запомнили — в худшем случае после перезагрузки снова сработает повтор с другим именем.
+        }
+
+        return name;
+    }
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Queue<DateTimeOffset> _restarts = new();
@@ -376,17 +443,19 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         {
             try
             {
-                _core = await CoreProcess.StartSingBoxAsync(Locations, request.SingBoxConfig, request.ReadinessPort,
+                var config = tun ? WithTunName(request.SingBoxConfig, CurrentTunName()) : request.SingBoxConfig;
+                _core = await CoreProcess.StartSingBoxAsync(Locations, config, request.ReadinessPort,
                     options.RunDirectory, _scrubber, onLog, ct, tun ? CoreProcess.TunStartTimeout : null).ConfigureAwait(false);
             }
             catch (CoreStartException ex) when (tun && IsStaleTunAdapter(ex.Message))
             {
-                // Адаптер Wintun от убитого ядра (остановка службы при обновлении) Windows удаляет не сразу:
-                // «create adapter: … already exists | open existing adapter: Element not found».
-                // Через несколько секунд он исчезает (журнал разработчика, 2026-11-01).
-                onLog("Адаптер туннеля от прошлого запуска ещё не удалён Windows, повтор через 3 с…");
+                // Адаптер Wintun от убитого ядра (выключение Windows, остановка службы при обновлении) Windows
+                // удаляет не сразу: «create adapter: … already exists | open existing adapter: Element not found».
+                // GUID адаптера sing-box выводит из имени — с другим именем столкновения нет.
+                var name = UseTunName(OtherTunName(_tunName));
+                onLog($"Адаптер туннеля от прошлого запуска ещё не удалён Windows, повтор с именем {name}…");
                 await Task.Delay(StaleTunRetryDelay, ct).ConfigureAwait(false);
-                _core = await CoreProcess.StartSingBoxAsync(Locations, request.SingBoxConfig, request.ReadinessPort,
+                _core = await CoreProcess.StartSingBoxAsync(Locations, WithTunName(request.SingBoxConfig, name), request.ReadinessPort,
                     options.RunDirectory, _scrubber, onLog, ct, CoreProcess.TunStartTimeout).ConfigureAwait(false);
             }
         }
@@ -394,7 +463,7 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         {
             // В журнал разработчика: застряло ли ядро на создании адаптера или уже после него.
             var adapter = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
-                .Any(n => n.Name.Equals(Tropa.Core.Diagnostics.Diagnosis.OwnTunName, StringComparison.OrdinalIgnoreCase));
+                .Any(n => n.Name.Equals(_tunName, StringComparison.OrdinalIgnoreCase));
             throw new CoreStartException(ex.Message + (adapter ? " Адаптер туннеля создан." : " Адаптер туннеля не появился."));
         }
 

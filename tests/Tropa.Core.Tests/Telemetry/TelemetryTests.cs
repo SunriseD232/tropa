@@ -84,6 +84,8 @@ public sealed class TelemetryTests
     [InlineData("2026/10/30 12:00:01 [Warning] [9] transport/internet/tls: tls: handshake failure", NetLogClassifier.Tls, "xray")]
     [InlineData("ERROR [3 1ms] outbound/vless[proxy]: REALITY: processed invalid connection", NetLogClassifier.Reality, "sing-box")]
     [InlineData("FATAL[0000] start service: start inbound/tun[tun-in]: configure tun interface: Cannot create a file when that file already exists.", NetLogClassifier.Fatal, "sing-box")]
+    // Журнал 2026-11-08: адаптер от прошлого запуска — служба повторяет с другим именем, это не фатально.
+    [InlineData("FATAL[0015] start service: start inbound/tun[tun-in]: configure tun interface: (create adapter: Cannot create a file when that file already exists. | open existing adapter: Element not found.)", NetLogClassifier.Tun, "sing-box")]
     [InlineData("ERROR [4 0ms] inbound/mixed[mixed-in]: listen tcp 127.0.0.1:10880: bind: Only one usage of each socket address is normally permitted.", NetLogClassifier.PortBusy, "sing-box")]
     [InlineData("ERROR [5 0ms] outbound/direct[direct]: dial udp 8.8.8.8:53: connect: network is unreachable", NetLogClassifier.Unreachable, "sing-box")]
     [InlineData("ERROR [5 0ms] outbound/direct[direct]: dial tcp 9.9.9.9:443: connect: network is unreachable", NetLogClassifier.Unreachable, "sing-box")]

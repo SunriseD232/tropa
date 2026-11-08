@@ -73,13 +73,16 @@ internal sealed partial class App : Application
             _engine.StartNetworkWatch();
             // Журнал для разработчика (ADR-050): необработанные ошибки тоже попадают в него.
             _engine.StartTelemetry(AfterUpdate ? "after-update" : FromAutostart ? "autostart" : "manual");
+            // Своя ссылка на движок: при выходе из Windows ShutdownEngine обнуляет _engine раньше, чем
+            // случается ошибка, и она пропадала мимо журнала. Очередь журнала — файл, запись уйдёт при следующем запуске.
+            var crashLog = _engine;
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
                 if (e.ExceptionObject is Exception ex)
-                    _engine?.RecordCrash(ex, "domain");
+                    crashLog.RecordCrash(ex, "domain");
             };
-            TaskScheduler.UnobservedTaskException += (_, e) => _engine?.RecordCrash(e.Exception, "task");
-            Dispatcher.UIThread.UnhandledException += (_, e) => _engine?.RecordCrash(e.Exception, "ui");
+            TaskScheduler.UnobservedTaskException += (_, e) => crashLog.RecordCrash(e.Exception, "task");
+            Dispatcher.UIThread.UnhandledException += (_, e) => crashLog.RecordCrash(e.Exception, "ui");
             // Автообновление подписок (subUpdate): раз в минуту смотрим, какие пора обновить — у каждой свой
             // интервал (подписка администратора — раз в 5 минут, ADR-048). Сама проверка ничего не скачивает.
             _subscriptionTimer = new DispatcherTimer(TimeSpan.FromMinutes(1), DispatcherPriority.Background, async (_, _) =>
@@ -89,7 +92,13 @@ internal sealed partial class App : Application
             });
             _subscriptionTimer.Start();
             _engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => UpdateTray(s));
-            _engine.ExitRegionChanged += (_, _) => Dispatcher.UIThread.Post(() => UpdateTray(_engine.Status));
+            // При выходе из Windows ShutdownEngine обнуляет _engine, а отключение ещё шлёт ExitRegionChanged:
+            // отложенный вызов не должен разыменовывать уже обнулённое поле.
+            _engine.ExitRegionChanged += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                if (_engine is { } e)
+                    UpdateTray(e.Status);
+            });
 
             // Выход из Windows или завершение сеанса: вернуть прокси до того, как процесс убьют.
             desktop.ShutdownRequested += (_, _) => ShutdownEngine();
@@ -123,25 +132,31 @@ internal sealed partial class App : Application
         _toggleItem = new NativeMenuItem("Подключить");
         _toggleItem.Click += async (_, _) =>
         {
-            if (_engine!.Status.State == ConnectionState.Connected)
-                await _engine.DisconnectAsync("tray");
+            if (_engine is not { } engine)
+                return;
+            if (engine.Status.State == ConnectionState.Connected)
+                await engine.DisconnectAsync("tray");
             else
-                await _engine.ConnectAsync("tray");
+                await engine.ConnectAsync("tray");
         };
         var open = new NativeMenuItem("Открыть Тропу");
         open.Click += (_, _) => ShowWindow();
         // Работает даже при сломанной конфигурации: отключает, возвращает прокси Windows и просит службу откатить всё.
         var emergency = new NativeMenuItem("Аварийно вернуть настройки сети");
-        emergency.Click += async (_, _) => await _engine!.EmergencyRollbackAsync();
+        emergency.Click += async (_, _) =>
+        {
+            if (_engine is { } engine)
+                await engine.EmergencyRollbackAsync();
+        };
         var refresh = new NativeMenuItem("Проверить страну выхода");
         _refreshItem = refresh;
-        refresh.Click += (_, _) => _engine!.RefreshExitRegion();
+        refresh.Click += (_, _) => _engine?.RefreshExitRegion();
         var exit = new NativeMenuItem("Выход");
         exit.Click += async (_, _) => await ExitAsync();
 
         var menu = new NativeMenu { Items = { _toggleItem, refresh, open, new NativeMenuItemSeparator(), emergency, exit } };
         // Правый клик по значку сам обновляет страну выхода: флаг в трее догоняет переключение выхода сервером.
-        menu.Opening += (_, _) => _engine!.RefreshExitRegion();
+        menu.Opening += (_, _) => _engine?.RefreshExitRegion();
         _tray = new TrayIcon
         {
             Icon = Services.TrayIconArt.Get(ConnectionState.Disconnected, null),
