@@ -148,9 +148,14 @@ internal sealed partial class SettingsViewModel : ObservableObject
             ("Включить рекомендуемые", new RelayCommand(ApplyRecommended))),
         new ToggleRow("Запускать вместе с Windows", "autostart", s => s.General.Autostart, (s, v) =>
         {
-            SyncAutostart(v);
+            if (SyncAutostart(v) is { } error)
+                Dispatcher.UIThread.Post(() => Report(error, error: true));
             return s with { General = s.General with { Autostart = v } };
-        }, hint: Infrastructure.Service.PortableMode.IsPortable ? "В портативной версии не работает: Windows не запускает при входе программы, которым нужны права администратора, а папка может лежать где угодно." : null),
+        }, hint: Infrastructure.Service.PortableMode.IsPortable
+            ? (Infrastructure.Service.PortableMode.IsAdmin
+                ? "Запущена с правами: при входе в Windows Тропа откроется через Планировщик заданий тоже с правами, без окна UAC, и «Весь компьютер» будет доступен сразу."
+                : "Запущена без прав: при входе в Windows Тропа откроется без прав (только системный прокси). Чтобы автозапуск был с правами, включите пункт в Тропе, запущенной от имени администратора.")
+            : null),
         new ToggleRow("Подключаться сразу после запуска", "autoconnect", s => s.General.Autoconnect, (s, v) => s with { General = s.General with { Autoconnect = v } }),
         new ToggleRow("Запускаться свёрнутой в трей", "startMin", s => s.General.StartMin, (s, v) => s with { General = s.General with { StartMin = v } }),
         new ToggleRow("Ждать сеть перед подключением", "waitNet", s => s.General.WaitNet, (s, v) => s with { General = s.General with { WaitNet = v } }, hint: "До 30 секунд после входа в Windows."),
@@ -448,17 +453,29 @@ internal sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    internal static void SyncAutostart(bool enabled)
+    /// <summary>null — готово (или не нужно); иначе что показать человеку.</summary>
+    internal static string? SyncAutostart(bool enabled)
     {
-        if (Environment.ProcessPath is not { } exe || !Autostart.IsInstalledCopy(exe))
-            return;
+        if (Environment.ProcessPath is not { } exe)
+            return null;
         try
         {
-            new Autostart(new RegistryRunKey()).Sync(enabled, exe);
+            // Портативная Тропа (ADR-063): с правами — задача Планировщика «при входе, с наивысшими правами», как в v2rayN.
+            if (Infrastructure.Service.PortableMode.Directory is { } portable)
+            {
+                return PortableAutostart.Sync(enabled, exe, Infrastructure.Service.PortableMode.IsAdmin,
+                    Path.Combine(portable, Infrastructure.Service.PortableMode.DataFolder, "local"), new RegistryRunKey());
+            }
+
+            if (Autostart.IsInstalledCopy(exe))
+                new Autostart(new RegistryRunKey()).Sync(enabled, exe);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
         {
+            return "Не удалось изменить автозапуск: " + ex.Message;
         }
+
+        return null;
     }
 
     // ---------------- Импорт списка сайтов ----------------

@@ -204,19 +204,17 @@ internal sealed partial class App : Application
         };
     }
 
-    /// <summary>Автозагрузка следует настройке autostart; только у установленной копии.</summary>
+    /// <summary>
+    /// Автозагрузка следует настройке autostart: у установленной копии — значение Run, у портативной —
+    /// задача Планировщика с правами или значение Run (ADR-063). Отладочные сборки не прописываются.
+    /// </summary>
     private void SyncAutostart()
     {
-        var exe = Environment.ProcessPath;
-        if (_engine is null || exe is null || !Infrastructure.SystemIntegration.Autostart.IsInstalledCopy(exe))
+        if (_engine is null)
             return;
-        try
-        {
-            new Infrastructure.SystemIntegration.Autostart(new Infrastructure.SystemIntegration.RegistryRunKey()).Sync(_engine.State.Settings.General.Autostart, exe);
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
-        {
-        }
+        var enabled = _engine.State.Settings.General.Autostart;
+        // Портативной Тропе нужен schtasks.exe — не задерживаем открытие окна.
+        _ = Task.Run(() => SettingsViewModel.SyncAutostart(enabled));
     }
 
     /// <summary>После входа в Windows сеть появляется не сразу: ждём её до 30 секунд (waitNet), затем подключаемся.</summary>
