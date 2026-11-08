@@ -27,6 +27,26 @@ public sealed class PortableAutostartTests
         Assert.NotEqual(PortableAutostart.TaskName(@"C:\A\Tropa.exe"), PortableAutostart.TaskName(@"C:\B\Tropa.exe"));
     }
 
+    private sealed class MemoryRunKey : IRunKey
+    {
+        public Dictionary<string, string?> Values { get; } = [];
+
+        public string? Read(string name) => Values.GetValueOrDefault(name);
+
+        public void Write(string name, string? value) => Values[name] = value;
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Without_admin_rights_autostart_is_not_changed(bool enabled)
+    {
+        var key = new MemoryRunKey();
+        var message = PortableAutostart.Sync(enabled, @"C:\Nonexistent\Tropa.exe", isAdmin: false, Path.GetTempPath(), key);
+        Assert.Contains("от имени администратора", message, StringComparison.Ordinal);
+        Assert.Empty(key.Values);
+    }
+
     [Fact]
     public void Windows_accepts_the_task_xml()
     {

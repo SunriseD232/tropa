@@ -7,10 +7,10 @@ using System.Text;
 namespace Tropa.Infrastructure.SystemIntegration;
 
 /// <summary>
-/// Автозапуск портативной Тропы (ADR-063), как в v2rayN. Запущенная от имени администратора, она заводит задачу
-/// Планировщика «при входе этого пользователя, с наивысшими правами» — Windows запускает её без окна UAC, и сразу
-/// доступен режим «Весь компьютер». Без прав — обычное значение в HKCU\…\Run (только «Системный прокси»).
-/// Имя задачи и значения зависят от пути к exe: две копии Тропы в разных папках друг другу не мешают.
+/// Автозапуск портативной Тропы (ADR-063), как в v2rayN: задача Планировщика «при входе этого пользователя,
+/// с наивысшими правами» — Windows запускает её без окна UAC, и сразу доступен режим «Весь компьютер».
+/// Менять можно только из Тропы с правами администратора. Имя задачи зависит от пути к exe: две копии Тропы
+/// в разных папках друг другу не мешают.
 /// </summary>
 public static class PortableAutostart
 {
@@ -19,33 +19,22 @@ public static class PortableAutostart
 
     public static string RunValueName(string exePath) => TaskName(exePath);
 
-    /// <summary>Приводит автозапуск к настройке. null — готово; иначе что сказать человеку.</summary>
+    /// <summary>
+    /// Приводит автозапуск к настройке. null — готово; иначе что сказать человеку. Только с правами администратора
+    /// (решение владельца): без прав задачу с наивысшими правами не создать и не убрать, а запуск без прав при входе
+    /// давал бы «Весь компьютер» недоступным.
+    /// </summary>
     public static string? Sync(bool enabled, string exePath, bool isAdmin, string tempDirectory, IRunKey runKey)
     {
         ArgumentNullException.ThrowIfNull(runKey);
+        if (!isAdmin)
+            return "Автозапуск портативной Тропы включается и выключается только в Тропе, запущенной от имени администратора.";
         var task = TaskName(exePath);
-        var runValue = RunValueName(exePath);
-        var wantedRun = $"\"{exePath}\" {Autostart.Argument}";
+        // Значение Run от предварительных сборок — убираем, запуск идёт только через задачу.
+        runKey.Write(RunValueName(exePath), null);
         if (!enabled)
-        {
-            runKey.Write(runValue, null);
-            if (TaskExists(task) && !Schtasks("/Delete", "/TN", task, "/F"))
-                return "Задачу автозапуска с правами администратора может убрать только Тропа, запущенная от имени администратора.";
-            return null;
-        }
-
-        if (isAdmin)
-        {
-            if (!CreateTask(task, exePath, tempDirectory))
-                return "Не удалось создать задачу автозапуска в Планировщике заданий Windows.";
-            runKey.Write(runValue, null);
-            return null;
-        }
-
-        // Без прав: задача, созданная раньше с правами, уже запускает Тропу — второй запуск не нужен.
-        if (!TaskExists(task) && runKey.Read(runValue) != wantedRun)
-            runKey.Write(runValue, wantedRun);
-        return null;
+            return TaskExists(task) && !Schtasks("/Delete", "/TN", task, "/F") ? "Не удалось убрать задачу автозапуска из Планировщика заданий Windows." : null;
+        return CreateTask(task, exePath, tempDirectory) ? null : "Не удалось создать задачу автозапуска в Планировщике заданий Windows.";
     }
 
     internal static string TaskXml(string exePath, string userId) => $"""

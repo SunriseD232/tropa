@@ -152,10 +152,12 @@ internal sealed partial class SettingsViewModel : ObservableObject
                 Dispatcher.UIThread.Post(() => Report(error, error: true));
             return s with { General = s.General with { Autostart = v } };
         }, hint: Infrastructure.Service.PortableMode.IsPortable
-            ? (Infrastructure.Service.PortableMode.IsAdmin
-                ? "Запущена с правами: при входе в Windows Тропа откроется через Планировщик заданий тоже с правами, без окна UAC, и «Весь компьютер» будет доступен сразу."
-                : "Запущена без прав: при входе в Windows Тропа откроется без прав (только системный прокси). Чтобы автозапуск был с правами, включите пункт в Тропе, запущенной от имени администратора.")
-            : null),
+            ? "При входе в Windows Тропа откроется через Планировщик заданий с правами администратора, без окна UAC, и «Весь компьютер» будет доступен сразу."
+            : null)
+        {
+            ForcedDisabledReason = AutostartAllowed ? null
+                : "портативная Тропа запущена без прав администратора. Перезапустите её от имени администратора (пункт «Права администратора» ниже) — тогда автозапуск можно включить или выключить.",
+        },
         new ToggleRow("Подключаться сразу после запуска", "autoconnect", s => s.General.Autoconnect, (s, v) => s with { General = s.General with { Autoconnect = v } }),
         new ToggleRow("Запускаться свёрнутой в трей", "startMin", s => s.General.StartMin, (s, v) => s with { General = s.General with { StartMin = v } }),
         new ToggleRow("Ждать сеть перед подключением", "waitNet", s => s.General.WaitNet, (s, v) => s with { General = s.General with { WaitNet = v } }, hint: "До 30 секунд после входа в Windows."),
@@ -435,8 +437,9 @@ internal sealed partial class SettingsViewModel : ObservableObject
 
     private void ApplyRecommended()
     {
-        Commit(RecommendedSettings.Apply);
-        SyncAutostart(true);
+        Commit(s => KeepAutostartIfNotAllowed(s, RecommendedSettings.Apply(s)));
+        if (AutostartAllowed)
+            SyncAutostart(true);
         Report("Включены рекомендуемые настройки." + (_engine.Status.State == ConnectionState.Connected ? " Нажмите «Применить сейчас», чтобы они заработали." : ""));
     }
 
@@ -452,6 +455,16 @@ internal sealed partial class SettingsViewModel : ObservableObject
             Report(ex.Message, error: true);
         }
     }
+
+    /// <summary>
+    /// Портативная Тропа меняет автозапуск только с правами администратора (решение владельца, ADR-063): автозапуск
+    /// портативной версии — задача Планировщика с наивысшими правами, а без прав её не создать и не убрать.
+    /// </summary>
+    internal static bool AutostartAllowed => !Infrastructure.Service.PortableMode.IsPortable || Infrastructure.Service.PortableMode.IsAdmin;
+
+    /// <summary>Рекомендуемые настройки и первая настройка не трогают автозапуск, если его сейчас нельзя менять.</summary>
+    internal static AppSettings KeepAutostartIfNotAllowed(AppSettings before, AppSettings after) =>
+        AutostartAllowed ? after : after with { General = after.General with { Autostart = before.General.Autostart } };
 
     /// <summary>null — готово (или не нужно); иначе что показать человеку.</summary>
     internal static string? SyncAutostart(bool enabled)

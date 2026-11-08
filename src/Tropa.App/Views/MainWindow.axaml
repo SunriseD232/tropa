@@ -72,7 +72,7 @@
             </StackPanel>
             <RadioButton GroupName="onbRoute" IsChecked="{Binding Onboarding.RouteBlockedOnly}" Content="Только заблокированное (рекомендуется) — остальное работает как без VPN" />
             <RadioButton GroupName="onbRoute" IsChecked="{Binding !Onboarding.RouteBlockedOnly}" Content="Всё, кроме российского" />
-            <CheckBox IsChecked="{Binding Onboarding.Autostart}" Content="Запускать вместе с Windows и сразу подключаться" Margin="0,6,0,0" />
+            <CheckBox IsChecked="{Binding Onboarding.Autostart}" Content="{Binding Onboarding.AutostartText}" Margin="0,6,0,0" />
             <Button Classes="primary" Content="Дальше" Command="{Binding Onboarding.NextCommand}" HorizontalAlignment="Right" />
           </StackPanel>
 

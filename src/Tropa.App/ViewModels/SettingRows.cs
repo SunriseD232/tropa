@@ -21,6 +21,9 @@ internal abstract partial class SettingRow(string title, string infoKey, string?
 
     public string? Hint { get; } = hint;
 
+    /// <summary>Пункт недоступен не по правилам совместимости, а по условиям запуска (например, нет прав администратора).</summary>
+    public string? ForcedDisabledReason { get; init; }
+
     /// <summary>Сохранить изменение: передаётся разделом, чтобы строка не знала о движке.</summary>
     public Action<Func<AppSettings, AppSettings>>? Commit { get; set; }
 
@@ -48,7 +51,7 @@ internal abstract partial class SettingRow(string title, string infoKey, string?
         Loading = true;
         try
         {
-            DisabledReason = compat.Disabled.TryGetValue(CompatKey, out var reason) ? reason : null;
+            DisabledReason = ForcedDisabledReason ?? (compat.Disabled.TryGetValue(CompatKey, out var reason) ? reason : null);
             OnLoad(settings);
             Error = null;
             OnPropertyChanged(nameof(NoteIsWarning));

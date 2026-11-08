@@ -210,7 +210,7 @@ internal sealed partial class App : Application
     /// </summary>
     private void SyncAutostart()
     {
-        if (_engine is null)
+        if (_engine is null || !SettingsViewModel.AutostartAllowed)
             return;
         var enabled = _engine.State.Settings.General.Autostart;
         // Портативной Тропе нужен schtasks.exe — не задерживаем открытие окна.

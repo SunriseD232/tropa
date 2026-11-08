@@ -56,6 +56,12 @@ internal sealed partial class OnboardingViewModel : ObservableObject
     [ObservableProperty]
     public partial bool Autostart { get; set; }
 
+    /// <summary>Портативная Тропа без прав администратора автозапуск не меняет (ADR-063).</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Привязка из XAML через экземпляр")]
+    public string AutostartText => SettingsViewModel.AutostartAllowed
+        ? "Запускать вместе с Windows и сразу подключаться"
+        : "Сразу подключаться при запуске (автозапуск — в Тропе, запущенной от имени администратора)";
+
     /// <summary>Маршрут на шаге 2: по умолчанию «Только заблокированное».</summary>
     [ObservableProperty]
     public partial bool RouteBlockedOnly { get; set; } = true;
@@ -79,10 +85,11 @@ internal sealed partial class OnboardingViewModel : ObservableObject
         Auto = true;
         _engine.UpdateSettings(s =>
         {
-            var r = RecommendedSettings.Apply(s);
+            var r = SettingsViewModel.KeepAutostartIfNotAllowed(s, RecommendedSettings.Apply(s));
             return r with { General = r.General with { AutoSetupAsked = true } };
         });
-        SettingsViewModel.SyncAutostart(true);
+        if (SettingsViewModel.AutostartAllowed)
+            SettingsViewModel.SyncAutostart(true);
         if (_engine.State.Profiles.Count > 0)
         {
             Message = null;
@@ -169,10 +176,15 @@ internal sealed partial class OnboardingViewModel : ObservableObject
         _engine.UpdateSettings(s => s with
         {
             Connection = s.Connection with { Mode = mode },
-            General = s.General with { Autostart = Autostart, Autoconnect = Autostart },
+            General = s.General with
+            {
+                Autostart = SettingsViewModel.AutostartAllowed ? Autostart : s.General.Autostart,
+                Autoconnect = Autostart,
+            },
             Routing = s.Routing with { Preset = RouteBlockedOnly ? RoutePreset.BlockedOnly : RoutePreset.ExceptRu },
         });
-        SettingsViewModel.SyncAutostart(Autostart);
+        if (SettingsViewModel.AutostartAllowed)
+            SettingsViewModel.SyncAutostart(Autostart);
         Step = 3;
     }
 
