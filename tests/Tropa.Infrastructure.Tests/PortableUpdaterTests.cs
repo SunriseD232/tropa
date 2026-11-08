@@ -99,6 +99,49 @@ public sealed class PortableUpdaterTests : IDisposable
     }
 
     [Fact]
+    public void Legacy_files_are_removed_only_by_list_and_only_if_gone_from_new_version()
+    {
+        var target = Path.Combine(_dir, "Tropa");
+        var source = Path.Combine(_dir, "new");
+        Directory.CreateDirectory(target);
+        Directory.CreateDirectory(source);
+        foreach (var name in new[] { "Avalonia.Base.dll", "Tropa.exe", "mine.txt", PortableMode.MarkerFile })
+            File.WriteAllText(Path.Combine(target, name), "x");
+        File.WriteAllText(Path.Combine(source, "Tropa.exe"), "new");
+
+        PortableUpdater.RemoveLegacyFiles(source, target, ["Avalonia.Base.dll", "Tropa.exe", PortableMode.MarkerFile, @"..\mine.txt", "data/settings.json"]);
+
+        Assert.False(File.Exists(Path.Combine(target, "Avalonia.Base.dll")));
+        Assert.True(File.Exists(Path.Combine(target, "Tropa.exe")));
+        Assert.True(File.Exists(Path.Combine(target, "mine.txt")));
+        Assert.True(File.Exists(Path.Combine(target, PortableMode.MarkerFile)));
+        Assert.Contains("Avalonia.Base.dll", PortableUpdater.LegacyFiles());
+        Assert.DoesNotContain(PortableUpdater.LegacyFiles(), n => n.StartsWith('#'));
+    }
+
+    [Fact]
+    public void Import_copies_installed_settings_and_keeps_previous_ones()
+    {
+        var installed = Path.Combine(_dir, "installed");
+        var portable = Path.Combine(_dir, "portable", "data");
+        Directory.CreateDirectory(Path.Combine(installed, "backups"));
+        Directory.CreateDirectory(portable);
+        File.WriteAllText(Path.Combine(installed, "settings.json"), "installed");
+        File.WriteAllText(Path.Combine(installed, "secrets.bin"), "keys");
+        File.WriteAllText(Path.Combine(installed, "backups", "settings-20261101.json"), "b");
+        File.WriteAllText(Path.Combine(portable, "settings.json"), "portable");
+
+        var message = Tropa.Infrastructure.Storage.PortableImport.Import(installed, portable, new DateTimeOffset(2026, 11, 9, 2, 0, 0, TimeSpan.Zero));
+
+        Assert.Equal("installed", File.ReadAllText(Path.Combine(portable, "settings.json")));
+        Assert.Equal("keys", File.ReadAllText(Path.Combine(portable, "secrets.bin")));
+        Assert.True(File.Exists(Path.Combine(portable, "backups", "settings-20261101.json")));
+        Assert.Equal("portable", File.ReadAllText(Path.Combine(portable, "before-import-20261109-020000", "settings.json")));
+        Assert.Contains("before-import", message, StringComparison.Ordinal);
+        Assert.Throws<InvalidOperationException>(() => Tropa.Infrastructure.Storage.PortableImport.Import(Path.Combine(_dir, "none"), portable, DateTimeOffset.Now));
+    }
+
+    [Fact]
     public void Portable_paths_live_next_to_the_program()
     {
         var paths = PortableMode.Paths(_dir);

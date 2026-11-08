@@ -40,6 +40,21 @@ internal static class Program
         if (!createdNew)
             return 0;
 
+        // Перенос настроек из установленной Тропы в портативную (ADR-063): до открытия настроек этим экземпляром.
+        if (args.Contains(Infrastructure.Storage.PortableImport.Argument, StringComparer.Ordinal)
+            && Infrastructure.Service.PortableMode.Directory is { } portable)
+        {
+            try
+            {
+                App.StartupNotice = Infrastructure.Storage.PortableImport.Import(Infrastructure.Storage.AppPaths.Roaming,
+                    Infrastructure.Service.PortableMode.Paths(portable).Roaming, DateTimeOffset.Now);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                App.StartupNotice = "Перенести настройки из установленной Тропы не удалось: " + ex.Message;
+            }
+        }
+
         App.StartMinimized = args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
         // Перезапуск установщиком после обновления из Тропы (installer/tropa.iss, RelaunchArgs).
         App.AfterUpdate = args.Contains("--after-update", StringComparer.OrdinalIgnoreCase);

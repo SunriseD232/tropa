@@ -19,6 +19,8 @@
     <EmbeddedResource Include="..\..\tools\update.config.json" LogicalName="Tropa.update.config.json" />
     <!-- Адрес и ключ сервера журнала для разработчика (ADR-050). Пустой адрес — журнал выключен. -->
     <EmbeddedResource Include="..\..\tools\telemetry.config.json" LogicalName="Tropa.telemetry.config.json" />
+    <!-- Файлы многофайловой портативной 0.1.28: обновление удаляет их только по этому списку (ADR-063). -->
+    <EmbeddedResource Include="Updates\portable-legacy-files.txt" LogicalName="Tropa.portable-legacy-files.txt" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Tropa.Infrastructure.Tests" />

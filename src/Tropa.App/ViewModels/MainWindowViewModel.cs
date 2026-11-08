@@ -32,7 +32,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Settings = new SettingsViewModel(engine, Info, page => Navigate(page));
         Onboarding = new OnboardingViewModel(engine, Info);
         CurrentPage = Home;
-        Warning = engine.StartupWarning;
+        Warning = App.StartupNotice ?? engine.StartupWarning ?? PortableImportHint(engine);
         engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => FooterStatus = s.State == ConnectionState.Connected ? "Подключено" : "Отключено");
         IsV2rayLayout = engine.State.Settings.General.Layout == WindowLayout.V2rayN;
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(() => IsV2rayLayout = _engine.State.Settings.General.Layout == WindowLayout.V2rayN);
@@ -41,6 +41,13 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         engine.Log += (_, _) => _logDirty = true;
         _logTimer.Start();
     }
+
+    /// <summary>Портативная Тропа без серверов, а на компьютере есть установленная — подсказываем перенос (ADR-063).</summary>
+    private static string? PortableImportHint(TropaEngine engine) =>
+        Infrastructure.Service.PortableMode.IsPortable && engine.State.Profiles.Count == 0
+            && Infrastructure.Storage.PortableImport.InstalledDataExists(Infrastructure.Storage.AppPaths.Roaming)
+            ? "На компьютере есть установленная Тропа. Её серверы, подписки и настройки можно перенести сюда: «Настройки → Общие → Настройки из установленной Тропы»."
+            : null;
 
     private readonly DispatcherTimer _logTimer;
     private volatile bool _logDirty = true;

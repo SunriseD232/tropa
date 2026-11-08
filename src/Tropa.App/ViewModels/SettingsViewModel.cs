@@ -197,6 +197,26 @@ internal sealed partial class SettingsViewModel : ObservableObject
                 if (await App.RestartElevatedAsync() is { } reason)
                     Report(reason, error: true);
             }))),
+        .. (Infrastructure.Service.PortableMode.IsPortable
+            ? new SettingRow[]
+            {
+                new ActionRow("Настройки из установленной Тропы", "portableImport",
+                    Infrastructure.Storage.PortableImport.InstalledDataExists(Infrastructure.Storage.AppPaths.Roaming)
+                        ? "Серверы, подписки, ключи, правила и настройки установленной Тропы заменят здешние (прежние сохранятся в папке data). Тропа перезапустится."
+                        : "Установленная Тропа на этом компьютере не найдена.",
+                    ("Перенести", new AsyncRelayCommand(async () =>
+                    {
+                        if (!Infrastructure.Storage.PortableImport.InstalledDataExists(Infrastructure.Storage.AppPaths.Roaming))
+                        {
+                            Report("Установленная Тропа на этом компьютере не найдена.", error: true);
+                            return;
+                        }
+
+                        if (await App.RestartForImportAsync() is { } reason)
+                            Report(reason, error: true);
+                    }))),
+            }
+            : []),
         new ActionRow("Резервная копия настроек и правил", "backup", "Серверы, подписки и ключи в файл не попадают — им можно поделиться.",
             ("Сохранить в файл…", new RelayCommand(() => ExportRequested?.Invoke(this, EventArgs.Empty))),
             ("Загрузить из файла…", new RelayCommand(() => ImportRequested?.Invoke(this, EventArgs.Empty)))),

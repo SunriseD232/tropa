@@ -59,8 +59,16 @@ $artifacts = @()
 $portableStage = Join-Path $out 'portable'
 if (Test-Path -LiteralPath $portableStage) { Remove-Item -LiteralPath $portableStage -Recurse -Force }
 $portableDir = Join-Path $portableStage 'Tropa'
-New-Item -ItemType Directory -Force -Path $portableStage | Out-Null
-Copy-Item -LiteralPath $publish -Destination $portableDir -Recurse
+New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+# Однофайловые Tropa.exe и Tropa.Service.exe: в корне папки — две программы, три библиотеки графики, cores и geo
+# вместо ~260 файлов. Библиотеки .NET внутри exe; родные библиотеки Avalonia лежат рядом, а не распаковываются в %TEMP%.
+foreach ($project in @('src\Tropa.Service\Tropa.Service.csproj', 'src\Tropa.App\Tropa.App.csproj')) {
+    dotnet publish (Join-Path $repo $project) -c Release -r win-x64 --self-contained true -o $portableDir --nologo `
+        -p:ContinuousIntegrationBuild=true -p:PublishSingleFile=true -p:DebugType=none
+    if ($LASTEXITCODE -ne 0) { throw "Портативная сборка $project не удалась." }
+}
+Get-ChildItem -LiteralPath $portableDir -Filter '*.pdb' -Recurse | Remove-Item -Force
+Get-ChildItem -LiteralPath $portableDir -Filter 'packages.lock.json' | Remove-Item -Force
 Set-Content -LiteralPath (Join-Path $portableDir 'Tropa.portable') -Encoding UTF8 -Value @(
     'Портативная Тропа: ничего не устанавливается, настройки и подписки хранятся в папке data рядом с программой.',
     'Режим «Весь компьютер» — после «Перезапустить от имени администратора». Не удаляйте этот файл.')

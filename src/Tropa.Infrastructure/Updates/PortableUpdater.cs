@@ -85,6 +85,54 @@ public static class PortableUpdater
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             CopyWithRetry(file, destination, lockedFileWait);
         }
+
+        RemoveLegacyFiles(source, target, LegacyFiles(), lockedFileWait);
+    }
+
+    /// <summary>
+    /// Файлы старой многофайловой раскладки (0.1.28), которых нет в новой версии, удаляются — только по явному
+    /// списку, только в корне папки с меткой и только если новая версия их не содержит (docs/02-security.md §3.7).
+    /// </summary>
+    internal static void RemoveLegacyFiles(string source, string target, IEnumerable<string> legacy, TimeSpan lockedFileWait = default)
+    {
+        var pending = legacy
+            .Where(name => name.Length > 0 && name.IndexOfAny(['/', '\\', ':']) < 0 && !name.Contains("..", StringComparison.Ordinal)
+                && !name.Equals(PortableMode.MarkerFile, StringComparison.OrdinalIgnoreCase)
+                && !File.Exists(Path.Combine(source, name)))
+            .Select(name => Path.Combine(target, name))
+            .Where(File.Exists)
+            .ToList();
+        // Антивирус и старая служба держат файлы недолго — повторяем до lockedFileWait; что не удалилось, не мешает работе.
+        var until = DateTime.UtcNow + lockedFileWait;
+        while (true)
+        {
+            pending.RemoveAll(TryDelete);
+            if (pending.Count == 0 || DateTime.UtcNow >= until)
+                return;
+            Thread.Sleep(500);
+        }
+    }
+
+    private static bool TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    internal static IReadOnlyList<string> LegacyFiles()
+    {
+        using var stream = typeof(PortableUpdater).Assembly.GetManifestResourceStream("Tropa.portable-legacy-files.txt");
+        if (stream is null)
+            return [];
+        using var reader = new StreamReader(stream);
+        return [.. reader.ReadToEnd().Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#'))];
     }
 
     /// <summary>Служба старой версии закрывается чуть позже интерфейса: занятый файл пробуем ещё раз.</summary>

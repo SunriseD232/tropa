@@ -30,6 +30,28 @@ internal sealed partial class App : Application
 
     public static bool ReconnectAfterUpdate { get; set; }
 
+    /// <summary>Сообщение для полосы вверху окна после запуска (итог переноса настроек).</summary>
+    public static string? StartupNotice { get; set; }
+
+    /// <summary>
+    /// «Перенести из установленной Тропы» (портативная, ADR-063): копия запускается с --import-installed, ждёт,
+    /// пока этот экземпляр закроется (иначе он перезаписал бы перенесённые настройки), переносит и открывается.
+    /// </summary>
+    public static async Task<string?> RestartForImportAsync()
+    {
+        if (Instance is not { } app || Environment.ProcessPath is not { } exe)
+            return "Тропа ещё не запустилась.";
+        var info = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+        info.ArgumentList.Add(Services.Elevation.WaitInstanceArgument);
+        info.ArgumentList.Add(Infrastructure.Storage.PortableImport.Argument);
+        using (System.Diagnostics.Process.Start(info))
+        {
+        }
+
+        await app.ExitAsync();
+        return null;
+    }
+
     private static App? Instance => Current as App;
 
     /// <summary>Окно Тропы (для буфера обмена, диалогов файлов и сворачивания при поиске QR).</summary>
