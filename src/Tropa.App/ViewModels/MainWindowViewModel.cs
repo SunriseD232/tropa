@@ -28,6 +28,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Servers = new ServersViewModel(engine, Info, () => Import.Open(), Edit);
         GeoEditor = new GeoListEditorViewModel(engine, Info);
         Rules = new RulesViewModel(engine, Info, GeoEditor);
+        Games = new GamesViewModel(engine, Info);
         Diagnostics = new DiagnosticsViewModel(engine, Info);
         Settings = new SettingsViewModel(engine, Info, page => Navigate(page));
         Onboarding = new OnboardingViewModel(engine, Info);
@@ -65,6 +66,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public string PageTitle => CurrentPage switch
     {
         RulesViewModel => "Маршрутизация и правила",
+        GamesViewModel => "Игры",
         DiagnosticsViewModel => "Диагностика",
         SettingsViewModel => "Параметры",
         _ => "",
@@ -121,12 +123,13 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public ServersViewModel Servers { get; }
     public GeoListEditorViewModel GeoEditor { get; }
     public RulesViewModel Rules { get; }
+    public GamesViewModel Games { get; }
     public DiagnosticsViewModel Diagnostics { get; }
     public SettingsViewModel Settings { get; }
     public OnboardingViewModel Onboarding { get; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsHome), nameof(IsServers), nameof(IsRules), nameof(IsDiagnostics), nameof(IsSettings), nameof(ShowsServerTable), nameof(PageTitle), nameof(PageContent))]
+    [NotifyPropertyChangedFor(nameof(IsHome), nameof(IsServers), nameof(IsRules), nameof(IsGames), nameof(IsDiagnostics), nameof(IsSettings), nameof(ShowsServerTable), nameof(PageTitle), nameof(PageContent))]
     public partial object CurrentPage { get; set; }
 
     [ObservableProperty]
@@ -138,6 +141,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public bool IsHome => CurrentPage == Home;
     public bool IsServers => CurrentPage == Servers;
     public bool IsRules => CurrentPage == Rules;
+    public bool IsGames => CurrentPage == Games;
     public bool IsDiagnostics => CurrentPage == Diagnostics;
     public bool IsSettings => CurrentPage == Settings;
 
@@ -148,6 +152,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     {
         "servers" => Servers,
         "rules" => Rules,
+        "games" => ShowGames(),
         "diagnostics" => ShowDiagnostics(),
         "settings" => Settings,
         "settings:cores" => ShowSettings("cores"),
@@ -158,6 +163,12 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     {
         Settings.ShowSection(section);
         return Settings;
+    }
+
+    private GamesViewModel ShowGames()
+    {
+        Games.OnShown();
+        return Games;
     }
 
     private DiagnosticsViewModel ShowDiagnostics()

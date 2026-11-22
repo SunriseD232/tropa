@@ -131,6 +131,7 @@
           <MenuItem Header="_Настройки">
             <MenuItem Header="Параметры…" Command="{Binding NavigateCommand}" CommandParameter="settings" />
             <MenuItem Header="Маршрутизация и правила…" Command="{Binding NavigateCommand}" CommandParameter="rules" />
+            <MenuItem Header="Игры…" Command="{Binding NavigateCommand}" CommandParameter="games" />
             <MenuItem Header="Диагностика…" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" />
             <Separator />
             <MenuItem Header="Проверить обновления" Command="{Binding Home.Updates.CheckCommand}" />

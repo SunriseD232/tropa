@@ -108,6 +108,11 @@ public static class Ev
     public const string LogLine = "8.1";
     public const string LogSuppressed = "8.2";
 
+    // 10 — игры (ADR-065). Имя exe — только если не выключено «Названия игр в журнале».
+    public const string GameFound = "10.1";
+    public const string GameModeChanged = "10.2";
+    public const string Teredo = "10.3";
+
     /// <summary>Расшифровка кодов. Порядок — как в файле для сервера.</summary>
     public static IReadOnlyList<(string Code, string Text)> Catalog { get; } =
     [
@@ -159,5 +164,8 @@ public static class Ev
         (UpdateCheckFailed, "Проверка обновлений не удалась"),
         (LogLine, "Строка журнала"),
         (LogSuppressed, "Пропущены строки журнала (слишком много)"),
+        (GameFound, "Найдена игра"),
+        (GameModeChanged, "Режим игры изменён (автонастройка / как было)"),
+        (Teredo, "Teredo: состояние или действие"),
     ];
 }

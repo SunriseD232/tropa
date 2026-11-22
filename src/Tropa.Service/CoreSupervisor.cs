@@ -184,6 +184,44 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         }
     }
 
+    private readonly SemaphoreSlim _teredoGate = new(1, 1);
+
+    /// <summary>
+    /// Teredo для игр (ADR-065): состояние, включить (прежнее — в журнал, возврат при удалении Тропы)
+    /// или перезапустить iphlpsvc. Подключение не трогает — отдельный замок, не <c>_gate</c>.
+    /// </summary>
+    public async Task<ServerMessage> TeredoAsync(TeredoRequest request)
+    {
+        if (options.TeredoHost is not { } host)
+            return new Reply(request.Id, false, "Управлять Teredo может только служба Тропы с правами администратора.");
+        await _teredoGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            Directory.CreateDirectory(options.DataDirectory);
+            var control = new TeredoControl(host, new ChangeJournal(options.JournalPath));
+            var status = await Task.Run(() => request.Action switch
+            {
+                TeredoAction.Enable => control.Enable(DateTimeOffset.UtcNow),
+                TeredoAction.Restart => control.Restart(),
+                _ => control.Read(),
+            }).ConfigureAwait(false);
+            if (request.Action != TeredoAction.Status)
+                onLog(request.Action == TeredoAction.Enable ? "Teredo включён для игр (сервер Microsoft)." : "Служба IP Helper перезапущена: Teredo проверяется заново.");
+            return status is null
+                ? new Reply(request.Id, false, "Не удалось прочитать состояние Teredo.")
+                : new TeredoReply(request.Id, status.Type, status.Server, status.State, status.Nat, status.Error);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception or IOException or ArgumentException
+            or System.ServiceProcess.TimeoutException)
+        {
+            return new Reply(request.Id, false, "Teredo: " + ex.Message);
+        }
+        finally
+        {
+            _teredoGate.Release();
+        }
+    }
+
     /// <summary>Выбирает уже установленную версию ядра или (null) версию выпуска.</summary>
     public async Task<string?> SelectCoreAsync(SelectCoreRequest request)
     {
@@ -418,6 +456,20 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         {
             await StopCoreAsync(keepKillSwitch: false).ConfigureAwait(false);
             RecoverAfterCrash();
+            // Teredo возвращается только при удалении Тропы (ADR-065): при «красной кнопке» и обновлении
+            // возврат снова сломал бы игры.
+            if (reason == "uninstall" && options.TeredoHost is { } teredo)
+            {
+                try
+                {
+                    new TeredoControl(teredo, new ChangeJournal(options.JournalPath)).Restore();
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception or IOException or ArgumentException)
+                {
+                    onLog("Не удалось вернуть прежнюю настройку Teredo: " + ex.Message);
+                }
+            }
+
             SetStatus(reason switch
             {
                 "update" => new StatusEvent(ServiceState.Idle, "Тропа обновляется: подключение остановлено.", null, StopReason: "update"),

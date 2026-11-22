@@ -16,6 +16,7 @@
           </StackPanel>
           <Button Classes="nav" Classes.on="{Binding IsHome}" Content="Главная" Command="{Binding NavigateCommand}" CommandParameter="home" />
           <Button Classes="nav" Classes.on="{Binding IsServers}" Content="Серверы" Command="{Binding NavigateCommand}" CommandParameter="servers" />
+          <Button Classes="nav" Classes.on="{Binding IsGames}" Content="Игры" Command="{Binding NavigateCommand}" CommandParameter="games" />
           <Button Classes="nav" Classes.on="{Binding IsRules}" Content="Правила" Command="{Binding NavigateCommand}" CommandParameter="rules" />
           <Button Classes="nav" Classes.on="{Binding IsDiagnostics}" Content="Диагностика" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" />
           <Button Classes="nav" Classes.on="{Binding IsSettings}" Content="Настройки" Command="{Binding NavigateCommand}" CommandParameter="settings" />

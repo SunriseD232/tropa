@@ -19,6 +19,7 @@ public enum ServiceState { Idle, Starting, Running, Stopping, Failed }
 [JsonDerivedType(typeof(InstallUpdateRequest), "installUpdate")]
 [JsonDerivedType(typeof(InstallCoreRequest), "installCore")]
 [JsonDerivedType(typeof(SelectCoreRequest), "selectCore")]
+[JsonDerivedType(typeof(TeredoRequest), "teredo")]
 public abstract record Request
 {
     /// <summary>Номер запроса: ответ приходит с тем же номером.</summary>
@@ -78,6 +79,14 @@ public sealed record InstallCoreRequest(string Core, string Version, CoreSourceD
 /// <summary>Выбрать уже установленную версию ядра; Version = null — версия выпуска.</summary>
 public sealed record SelectCoreRequest(string Core, string? Version) : Request;
 
+public enum TeredoAction { Status, Enable, Restart }
+
+/// <summary>
+/// Teredo для игр (ADR-065): состояние, включить с сервером Microsoft (прежнее — в журнал изменений,
+/// возврат при удалении Тропы) или перезапустить службу iphlpsvc. Ответ — <see cref="TeredoReply"/>.
+/// </summary>
+public sealed record TeredoRequest(TeredoAction Action) : Request;
+
 /// <summary>Установленная по выбору пользователя версия ядра.</summary>
 public sealed record CorePickDto(string Core, string Version, CoreSourceDto Source, bool Preview, bool Selected, bool Previous);
 
@@ -86,6 +95,7 @@ public sealed record CorePickDto(string Core, string Version, CoreSourceDto Sour
 [JsonDerivedType(typeof(HelloReply), "helloReply")]
 [JsonDerivedType(typeof(StatusEvent), "statusEvent")]
 [JsonDerivedType(typeof(LogEvent), "logEvent")]
+[JsonDerivedType(typeof(TeredoReply), "teredoReply")]
 public record ServerMessage;
 
 /// <summary>Ответ на запрос: успех или понятная пользователю причина отказа (без секретов).</summary>
@@ -98,6 +108,10 @@ public record Reply(int Id, bool Ok, string? Error) : ServerMessage;
 /// <param name="CorePicks">Установленные по выбору пользователя версии ядер (ADR-058).</param>
 public sealed record HelloReply(int Id, int Protocol, string ServiceVersion, bool TunSupported, string RuleSetDirectory, string? XrayPath = null,
     string? CoreVersions = null, long UpdateSequence = 0, string? ReleaseCoreVersions = null, IReadOnlyList<CorePickDto>? CorePicks = null)
+    : Reply(Id, true, null);
+
+/// <summary>Состояние Teredo после команды (ADR-065); поля — значения netsh как есть, ошибка — на языке Windows.</summary>
+public sealed record TeredoReply(int Id, string TeredoType, string Server, string State, string? Nat, string? TeredoError)
     : Reply(Id, true, null);
 
 /// <param name="Blocking">Kill switch держит блокировку: ядро не работает, но интернет мимо туннеля закрыт.</param>

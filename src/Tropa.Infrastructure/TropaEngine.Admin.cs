@@ -95,7 +95,8 @@ public sealed partial class TropaEngine
         var active = State.ActiveProfile is { SubscriptionId: null } a ? a : null;
         var rules = admin.PublishRules ? State.Settings.Routing.Rules : [];
         return AdminDocument.Build(servers, active, rules, string.IsNullOrWhiteSpace(admin.Title) ? null : admin.Title.Trim(),
-            admin.RefreshMinutes <= 0 ? AdminDocument.MinRefreshMinutes : admin.RefreshMinutes, at);
+            admin.RefreshMinutes <= 0 ? AdminDocument.MinRefreshMinutes : admin.RefreshMinutes, at,
+            admin.PublishRules ? State.Settings.Games.List : null);
     }
 
     /// <summary>Сколько «Моих» серверов уйдёт друзьям.</summary>
@@ -245,6 +246,13 @@ public sealed partial class TropaEngine
 
         return result;
     }
+
+    /// <summary>Параметры игр от администраторов, которым пользователь доверяет (ADR-065), — первая подписка главнее.</summary>
+    public IReadOnlyList<Core.Games.GameTemplate> AdminGameTemplates() =>
+        State.Subscriptions.Where(s => s.TrustAdmin && s.Admin is not null)
+            .SelectMany(s => s.Admin!.Games)
+            .DistinctBy(g => g.Exe, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     /// <summary>Правила администраторов для показа на экране «Правила» (только чтение).</summary>
     public IReadOnlyList<(string Subscription, AdminRule Rule, bool Trusted)> AdminRuleList() =>

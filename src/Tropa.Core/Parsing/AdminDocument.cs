@@ -71,6 +71,13 @@ public static class AdminDocument
         if ((dto.Rules?.Count ?? 0) > rules.Count)
             warnings.Add($"Пропущено правил администратора: {dto.Rules!.Count - rules.Count} (пустые или неверные).");
 
+        var games = new List<Games.GameTemplate>();
+        foreach (var g in (dto.Games ?? []).Take(MaxGames))
+        {
+            if (ToGame(g) is { } game && !games.Any(x => Tropa.Core.Games.GameClassifier.SameExe(x.Exe, game.Exe)))
+                games.Add(game);
+        }
+
         var refresh = dto.RefreshMinutes is { } m ? Math.Clamp(m, MinRefreshMinutes, 24 * 60) : (int?)null;
         var channel = new AdminChannel
         {
@@ -79,6 +86,7 @@ public static class AdminDocument
             ActiveServer = string.IsNullOrWhiteSpace(dto.Active) ? null : NameSanitizer.Sanitize(dto.Active, ""),
             Revision = string.IsNullOrWhiteSpace(dto.Revision) ? null : dto.Revision.Trim()[..Math.Min(dto.Revision.Trim().Length, 64)],
             Rules = rules,
+            Games = games,
         };
         return new Parsed(new SubscriptionParseResult(SubscriptionFormat.LinkList, profiles, errors, 0), channel, warnings);
     }
@@ -87,7 +95,8 @@ public static class AdminDocument
     /// Документ для друзей: серверы (ссылки с ключами — документ секретный, как любая подписка),
     /// выбранный сервер, правила. «Через конкретный сервер» передаётся именем: у друга свои идентификаторы.
     /// </summary>
-    public static string Build(IReadOnlyList<Profile> servers, Profile? active, IEnumerable<Rule> rules, string? title, int refreshMinutes, DateTimeOffset now)
+    public static string Build(IReadOnlyList<Profile> servers, Profile? active, IEnumerable<Rule> rules, string? title, int refreshMinutes, DateTimeOffset now,
+        IEnumerable<GameProfile>? games = null)
     {
         ArgumentNullException.ThrowIfNull(servers);
         ArgumentNullException.ThrowIfNull(rules);
@@ -112,8 +121,36 @@ public static class AdminDocument
                 Tcp = ActionText(r.Tcp, names),
                 Udp = ActionText(r.Udp, names),
             }).Where(r => r.Processes is not null || r.DomainSuffixes is not null || r.Domains is not null || r.IpCidrs is not null).Select(r => (RuleDto?)r).ToList(),
+            // Игры (ADR-065): только на автонастройке и только то, что нужно другу, — без путей и истории.
+            Games = games?.Where(g => g.Mode == GameMode.Auto && g.Exe.Length > 0).Take(MaxGames).Select(g => (GameDto?)new GameDto
+            {
+                Exe = g.Exe,
+                Name = g.Name.Length > 0 ? g.Name : null,
+                Tcp = ActionText(g.Tcp, names),
+                Udp = ActionText(g.Udp, names),
+                Domains = Nullable(g.Domains.Take(MaxValuesPerRule).ToList()),
+                Teredo = g.NeedsTeredo ? true : null,
+            }).ToList() is { Count: > 0 } list ? list : null,
         };
         return JsonSerializer.Serialize(dto, AdminJsonContext.Default.Dto);
+    }
+
+    public const int MaxGames = 100;
+
+    /// <summary>Игра от администратора: exe обязателен, домены — как у правил; «через конкретный сервер» у игр не передаётся.</summary>
+    private static Games.GameTemplate? ToGame(GameDto? g)
+    {
+        if (g is null || RuleInput.NormalizeProcess(g.Exe) is not { } exe)
+            return null;
+        var name = string.IsNullOrWhiteSpace(g.Name) ? "" : NameSanitizer.Sanitize(g.Name, "");
+        static RuleAction Act(string? v) => ParseAction(v).Kind switch
+        {
+            RuleActionKind.Direct => RuleAction.Direct,
+            RuleActionKind.Block => RuleAction.Block,
+            _ => RuleAction.Proxy,
+        };
+        var domains = (g.Domains ?? []).Take(MaxValuesPerRule).Select(GameDefaults.NormalizeDomain).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        return new Games.GameTemplate(exe, name, Act(g.Tcp), Act(g.Udp), domains, g.Teredo == true);
     }
 
     private static List<string?>? Nullable(IReadOnlyList<string> values) => values.Count == 0 ? null : values.Select(v => (string?)v).ToList();
@@ -194,6 +231,17 @@ public static class AdminDocument
         public string? Active { get; init; }
         public List<string?>? Servers { get; init; }
         public List<RuleDto?>? Rules { get; init; }
+        public List<GameDto?>? Games { get; init; }
+    }
+
+    internal sealed record GameDto
+    {
+        public string? Exe { get; init; }
+        public string? Name { get; init; }
+        public string? Tcp { get; init; }
+        public string? Udp { get; init; }
+        public List<string?>? Domains { get; init; }
+        public bool? Teredo { get; init; }
     }
 
     internal sealed record RuleDto

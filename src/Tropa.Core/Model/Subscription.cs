@@ -65,6 +65,11 @@ public sealed record AdminChannel
     public IReadOnlyList<AdminRule> Rules { get => _rules; init => _rules = value ?? []; }
 
     private readonly IReadOnlyList<AdminRule> _rules = [];
+
+    /// <summary>Готовые параметры игр (ADR-065): применяются к найденной у друга игре с тем же exe.</summary>
+    public IReadOnlyList<Games.GameTemplate> Games { get => _games; init => _games = value ?? []; }
+
+    private readonly IReadOnlyList<Games.GameTemplate> _games = [];
 }
 
 /// <summary>Действие правила администратора: «через конкретный сервер» — по имени сервера в этой подписке.</summary>

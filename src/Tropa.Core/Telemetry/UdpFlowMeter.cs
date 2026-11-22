@@ -3,7 +3,14 @@ using System.Globalization;
 namespace Tropa.Core.Telemetry;
 
 /// <summary>Соединение из Clash API ядра: счётчики байт нарастающим итогом.</summary>
-public sealed record CoreConnection(string Id, bool Udp, bool ViaServer, string? Process, int DestinationPort, long Upload, long Download);
+public sealed record CoreConnection(string Id, bool Udp, bool ViaServer, string? Process, int DestinationPort, long Upload, long Download)
+{
+    /// <summary>Домен соединения (FakeIP или определение домена). Только для вкладки «Игры» (ADR-065), в журнал не идёт.</summary>
+    public string? Host { get; init; }
+
+    /// <summary>Адрес назначения. Только для признака «игре мешает FakeIP» (ADR-065), в журнал не идёт.</summary>
+    public string? DestinationIp { get; init; }
+}
 
 /// <summary>
 /// Сводка UDP за минуту для журнала разработчика (событие 3.7): сколько потоков шло через сервер

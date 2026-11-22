@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using Tropa.Core.Compatibility;
 using Tropa.Core.Diagnostics;
+using Tropa.Core.Games;
 using Tropa.Core.Generation;
 using Tropa.Core.Model;
 using Tropa.Core.Security;
@@ -39,13 +40,16 @@ public sealed record DiagnosticsInput
 
     /// <summary>Служба Тропы с правами системы выключит «мёртвый» прокси служб при подключении.</summary>
     public bool ServiceCanFixProxies { get; init; }
+
+    /// <summary>Читать состояние Teredo для шага «Игры» (ADR-065); false — в тестах без netsh.</summary>
+    public bool ProbeTeredo { get; init; }
 }
 
 /// <summary>Ответ провайдера и туннеля для одного домена (инструмент «Проверка домена»).</summary>
 public sealed record DomainCheck(string Domain, DnsAnswer? Provider, DnsAnswer? Tunnel, DnsVerdict Verdict, string? ProviderDns);
 
 /// <summary>
-/// Одиннадцать шагов диагностики (docs/07-testing-diagnostics.md, §2). Шаги независимы: сбой одного
+/// Двенадцать шагов диагностики (docs/07-testing-diagnostics.md, §2). Шаги независимы: сбой одного
 /// не останавливает остальные. В сеть «напрямую» ходит временное ядро мимо туннеля, через сервер —
 /// временный вход через активный сервер; текущее подключение не трогается.
 /// </summary>
@@ -64,6 +68,7 @@ public static class DiagnosticsRunner
         ("leaks", "Утечки"),
         ("otherVpn", "Другой VPN"),
         ("sysProxy", "Системный прокси"),
+        (GamesCheck.Key, "Игры"),
     ];
 
     /// <summary>Домены для проверки подмены DNS: заблокированные в России сервисы.</summary>
@@ -145,6 +150,10 @@ public static class DiagnosticsRunner
                 input.ServiceAccountProxies ?? [], SystemIntegration.ServiceAccountProxies.IsListening, input.ServiceCanFixProxies)
             : new StepResult("sysProxy", StepStatus.Skipped, "Системный прокси не проверялся"));
 
+        // 12: игры (ADR-065) — Teredo, NAT и FakeIP. Состояние Teredo читается без прав.
+        TeredoStatusOrNull(input.ProbeTeredo, out var teredo);
+        Set(GamesCheck.Evaluate(input.Settings.Games, teredo, input.ServiceCanFixProxies));
+
         // Рукопожатие не прошло, а рядом работает другой клиент обхода — почти всегда причина в нём:
         // v2rayN и подобные подменяют адрес соединения, и Reality уходит на настоящий сайт-маску.
         if (foreignAdapters.Count + foreignProcesses.Count > 0)
@@ -164,6 +173,20 @@ public static class DiagnosticsRunner
 
         lock (results)
             return Steps.Select(s => results[s.Key]).ToList();
+    }
+
+    private static void TeredoStatusOrNull(bool probe, out TeredoStatus? status)
+    {
+        status = null;
+        if (!probe)
+            return;
+        try
+        {
+            status = SystemIntegration.TeredoProbe.Read();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or TimeoutException or IOException)
+        {
+        }
     }
 
     private static async Task<bool> DirectAsync(ProbePorts ports, Action<StepResult> set, CancellationToken ct)

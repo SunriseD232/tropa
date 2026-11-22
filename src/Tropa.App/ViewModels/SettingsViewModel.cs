@@ -403,6 +403,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new TextRow("Ваше имя для разработчика", "telemetry", s => s.Telemetry.Name,
             (s, v) => s with { Telemetry = s.Telemetry with { Name = Core.Security.NameSanitizer.Sanitize(v, "") } },
             v => v.Trim().Length <= 40 ? null : "Не длиннее 40 символов.", placeholder: "Необязательно — например, Вася"),
+        new ToggleRow("Названия игр в журнале", "hideGameNames", s => !s.Telemetry.HideGameNames, (s, v) => s with { Telemetry = s.Telemetry with { HideGameNames = !v } },
+            hint: "Какие игры найдены и где включена автонастройка — по названию программы (ADR-065). Выключено — вместо названия «игра»."),
         new LabelRow("Состояние", "telemetry", TelemetryState),
         new ActionRow("Отправка", "telemetry", null,
             ("Отправить сейчас", new AsyncRelayCommand(async () =>

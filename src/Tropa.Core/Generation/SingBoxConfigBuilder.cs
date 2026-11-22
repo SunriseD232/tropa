@@ -283,6 +283,12 @@ public static class SingBoxConfigBuilder
             rules.Push(new JsonObject { ["domain"] = StrArray(hosts.Select(h => h.Domain)), ["server"] = "hosts" });
         }
 
+        // Игры на автонастройке (ADR-065): их домены и серверы Xbox/Teredo получают настоящие адреса,
+        // а не FakeIP — проверка региона, подбор игроков и квалификация Teredo с условными адресами не проходят.
+        var gameDomains = GameDefaults.RealDnsDomains(s.Games);
+        if (gameDomains.Count > 0)
+            rules.Push(new JsonObject { ["domain_suffix"] = StrArray(gameDomains), ["server"] = "local" });
+
         switch (s.Dns.LocalDnsRule)
         {
             case LocalDnsRule.Russian:
@@ -735,6 +741,22 @@ public static class SingBoxConfigBuilder
 
         if (s.General.Ipv6Block)
             rules.Push(new JsonObject { ["ip_version"] = 6, ["action"] = "reject" });
+
+        // Игры на автонастройке (ADR-065) — раньше блокировки QUIC и правил пользователя: вкладка «Игры»
+        // главнее. Teredo (служба Windows, UDP 3544) — всегда напрямую: через сервер он не квалифицируется.
+        if (ctx.Tun)
+        {
+            foreach (var game in s.Games.AutoGames)
+            {
+                var rule = new Rule { Match = new RuleMatch { Processes = [game.Exe] }, Tcp = game.Tcp, Udp = game.Udp };
+                foreach (var expanded in ExpandRule(ctx, rule))
+                    rules.Push(expanded);
+            }
+
+            if (s.Games.AnyAutoNeedsTeredo)
+                rules.Push(new JsonObject { ["network"] = "udp", ["port"] = GameDefaults.TeredoPort, ["outbound"] = DirectTag });
+        }
+
         if (s.Routing.BlockQuic)
             rules.Push(new JsonObject { ["network"] = "udp", ["port"] = 443, ["action"] = "reject" });
 
@@ -803,7 +825,7 @@ public static class SingBoxConfigBuilder
         if (ctx.Tun)
         {
             route["auto_detect_interface"] = true;
-            if (s.Routing.Rules.Any(r => r.Enabled && r.Match.HasProcessCondition))
+            if (s.Routing.Rules.Any(r => r.Enabled && r.Match.HasProcessCondition) || s.Games.AutoGames.Any())
                 route["find_process"] = true;
         }
 

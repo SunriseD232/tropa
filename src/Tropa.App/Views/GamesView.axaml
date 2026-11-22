@@ -1,0 +1,190 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:Tropa.App.Views"
+             xmlns:vm="using:Tropa.App.ViewModels"
+             x:Class="Tropa.App.Views.GamesView"
+             x:DataType="vm:GamesViewModel">
+  <StackPanel Spacing="18">
+    <StackPanel Spacing="8">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <TextBlock Classes="h1" Text="Игры" />
+        <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="games" />
+      </StackPanel>
+      <TextBlock Classes="muted" TextWrapping="Wrap"
+                 Text="Тропа находит запущенные игры сама. Если игра не подключается к другим игрокам, не определяет регион или долго ищет матч — включите для неё «Автонастройку Тропы»." />
+    </StackPanel>
+
+    <Border Background="{DynamicResource WarnBg}" CornerRadius="12" Padding="12" IsVisible="{Binding ModeNote, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding ModeNote}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" />
+    </Border>
+
+    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding NeedsApply}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="primary" Content="Применить сейчас" Command="{Binding ApplyCommand}" />
+        <TextBlock Foreground="{DynamicResource InfoFg}" VerticalAlignment="Center" TextWrapping="Wrap"
+                   Text="Настройки игр изменены. Чтобы они заработали, подключение переподключится на секунду, а запущенную игру лучше перезапустить." />
+      </DockPanel>
+    </Border>
+
+    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Notice, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding Notice}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
+    </Border>
+
+    <!-- Teredo -->
+    <Border Classes="card">
+      <StackPanel Spacing="10">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <Button Content="Проверить" Command="{Binding CheckTeredoCommand}" IsEnabled="{Binding !TeredoBusy}" />
+            <Button Content="Включить" Command="{Binding EnableTeredoCommand}" IsEnabled="{Binding !TeredoBusy}" ToolTip.Tip="Включить Teredo с сервером Microsoft" />
+            <Button Content="Перезапустить" Command="{Binding RestartTeredoCommand}" IsEnabled="{Binding !TeredoBusy}" ToolTip.Tip="Перезапустить службу IP Helper: Teredo проверит связь заново" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <TextBlock Text="Teredo" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="gameTeredo" />
+            <Border Classes="pill" Background="{DynamicResource OkBg}" IsVisible="{Binding TeredoOk}" VerticalAlignment="Center">
+              <TextBlock Text="работает" Foreground="{DynamicResource OkFg}" FontSize="12" />
+            </Border>
+          </StackPanel>
+        </DockPanel>
+        <TextBlock Text="{Binding TeredoText}" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding TeredoHint}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding TeredoHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <DockPanel>
+          <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding TeredoWatch}" OnContent="" OffContent="" />
+          <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="teredoWatch" />
+          <StackPanel>
+            <TextBlock Text="Тропа следит за Teredo" FontSize="15" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="После подключения проверить, включить и при необходимости перезапустить — если хоть одной игре на автонастройке нужен Teredo" />
+          </StackPanel>
+        </DockPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- Добавление -->
+    <Border Classes="card">
+      <StackPanel Spacing="12">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="primary" Content="Найти игры" Command="{Binding ScanCommand}" Margin="8,0,0,0" />
+          <Button DockPanel.Dock="Right" Content="Добавить" Command="{Binding AddGameCommand}" Margin="8,0,0,0" />
+          <Button DockPanel.Dock="Right" Width="40" Command="{Binding RefreshRunningAppsCommand}" ToolTip.Tip="Обновить список запущенных программ" Margin="8,0,0,0" AutomationProperties.Name="Обновить список запущенных программ">
+            <v:Icon Data="{StaticResource IconRefresh}" />
+          </Button>
+          <AutoCompleteBox Text="{Binding NewGame}" ItemsSource="{Binding RunningApps}" FilterMode="Contains"
+                           PlaceholderText="Игры нет в списке? Начните вводить имя программы или выберите из запущенных (game.exe)" MinimumPrefixLength="0" />
+        </DockPanel>
+        <TextBlock Text="{Binding Error}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </Border>
+
+    <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !HasGames}"
+               Text="Игр пока нет. Запустите игру — Тропа заметит её в течение полуминуты — или нажмите «Найти игры»." />
+
+    <!-- Список игр -->
+    <ItemsControl ItemsSource="{Binding Games}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:GameItemViewModel">
+          <Border Classes="card">
+            <StackPanel Spacing="10">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                  <RadioButton GroupName="{Binding Group}" IsChecked="{Binding IsAuto}" Content="Автонастройка Тропы" />
+                  <RadioButton GroupName="{Binding Group}" IsChecked="{Binding IsOriginal}" Content="Как было" />
+                  <Button Content="Настроить" Command="{Binding ToggleExpandedCommand}" />
+                </StackPanel>
+                <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,12,0">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <Border Classes="pill" Background="{DynamicResource Card2}" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding LauncherText}" FontSize="12" />
+                    </Border>
+                  </StackPanel>
+                  <TextBlock Classes="muted" Text="{Binding Exe}" />
+                  <TextBlock Classes="muted" Text="{Binding Summary}" TextWrapping="Wrap" />
+                </StackPanel>
+              </DockPanel>
+
+              <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding FakeIpHint}">
+                <TextBlock Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap"
+                           Text="Игра получала условные адреса FakeIP. Из-за этого бывают ошибки подключения и «регион не определён». Включите «Автонастройку Тропы»." />
+              </Border>
+
+              <!-- Подробные настройки -->
+              <Border IsVisible="{Binding IsExpanded}" Background="{DynamicResource Card2}" CornerRadius="12" Padding="14,12">
+                <StackPanel Spacing="12">
+                  <TextBlock Classes="muted" Text="{Binding SeenText}" />
+                  <Grid ColumnDefinitions="Auto,170,24,Auto,170" RowDefinitions="Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,8,0">
+                      <TextBlock Text="TCP" VerticalAlignment="Center" />
+                      <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding $parent[ItemsControl].((vm:GamesViewModel)DataContext).ShowInfoCommand}" CommandParameter="gameMode" />
+                    </StackPanel>
+                    <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding TcpIndex}" HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Column="3" Text="UDP" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox Grid.Column="4" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding UdpIndex}" HorizontalAlignment="Stretch" />
+                  </Grid>
+                  <DockPanel>
+                    <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding NeedsTeredo}" OnContent="" OffContent="" />
+                    <StackPanel>
+                      <TextBlock Text="Нужен Teredo" />
+                      <TextBlock Classes="muted" TextWrapping="Wrap" Text="Для игр Xbox / Game Pass: связь с другими игроками и серверы Xbox получают настоящие адреса" />
+                    </StackPanel>
+                  </DockPanel>
+                  <DockPanel>
+                    <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding Learn}" OnContent="" OffContent="" />
+                    <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding $parent[ItemsControl].((vm:GamesViewModel)DataContext).ShowInfoCommand}" CommandParameter="gameLearn" />
+                    <StackPanel>
+                      <TextBlock Text="Запоминать адреса игры" />
+                      <TextBlock Classes="muted" TextWrapping="Wrap" Text="Пока игра работает, Тропа записывает, к каким сайтам она обращается, — им будут отдаваться настоящие адреса" />
+                    </StackPanel>
+                  </DockPanel>
+
+                  <StackPanel Spacing="6">
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Content="Очистить" Command="{Binding ClearDomainsCommand}" IsVisible="{Binding !!Domains.Count}" />
+                      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="Адреса с настоящим DNS" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button Classes="info" Command="{Binding $parent[ItemsControl].((vm:GamesViewModel)DataContext).ShowInfoCommand}" CommandParameter="gameDomains" />
+                      </StackPanel>
+                    </DockPanel>
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Content="Добавить" Command="{Binding AddDomainCommand}" Margin="8,0,0,0" />
+                      <TextBox Text="{Binding NewDomain}" PlaceholderText="Адрес: playfabapi.com (действует и на поддомены)" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding Error}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    <ScrollViewer MaxHeight="200" IsVisible="{Binding !!Domains.Count}">
+                      <ItemsControl ItemsSource="{Binding Domains}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <DockPanel Margin="0,1">
+                              <Button DockPanel.Dock="Right" Command="{Binding $parent[Border].((vm:GameItemViewModel)DataContext).RemoveDomainCommand}" CommandParameter="{Binding}"
+                                      ToolTip.Tip="Убрать адрес" AutomationProperties.Name="Убрать адрес" Padding="6,2">
+                                <v:Icon Data="{StaticResource IconClose}" Width="12" Height="12" />
+                              </Button>
+                              <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+                            </DockPanel>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </ScrollViewer>
+                    <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !Domains.Count}"
+                               Text="Пока пусто. Включите автонастройку и поиграйте — адреса запишутся сами." />
+                  </StackPanel>
+
+                  <DockPanel IsVisible="{Binding AdminText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <Button DockPanel.Dock="Right" Content="Взять настройки администратора" Command="{Binding UseAdminCommand}" Margin="8,0,0,0" />
+                    <TextBlock Text="{Binding AdminText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  </DockPanel>
+
+                  <Button Content="Убрать игру из списка" Command="{Binding RemoveCommand}" HorizontalAlignment="Left"
+                          ToolTip.Tip="Тропа больше не будет добавлять её сама. Вернуть — добавить вручную по имени программы." />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </StackPanel>
+</UserControl>

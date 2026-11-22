@@ -210,6 +210,23 @@ public sealed class SingBoxGoldenTests
         ["11-blocked-only-resolve"] = () => Input(
             Defaults with { Routing = Defaults.Routing with { Preset = RoutePreset.BlockedOnly } },
             Reality),
+
+        // Вкладка «Игры» (ADR-065): игра Xbox на автонастройке (домены Xbox/Teredo + свои → настоящие адреса,
+        // UDP 3544 напрямую), игра Steam с TCP через сервер и UDP напрямую, игра «как было» — без правил.
+        ["17-games"] = () => Input(
+            Defaults with
+            {
+                Games = new GamesSettings
+                {
+                    List =
+                    [
+                        new GameProfile { Exe = "ForzaHorizon6.exe", Launcher = GameLauncher.Xbox, Mode = GameMode.Auto, NeedsTeredo = true, Domains = ["forza.net", "api.forza.net"] },
+                        new GameProfile { Exe = "cs2.exe", Launcher = GameLauncher.Steam, Mode = GameMode.Auto, Tcp = RuleAction.Proxy, Udp = RuleAction.Direct, Domains = ["valve.net"] },
+                        new GameProfile { Exe = "other.exe", Mode = GameMode.Original, Domains = ["other.example"] },
+                    ],
+                },
+            },
+            Reality),
     };
 
 

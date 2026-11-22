@@ -37,6 +37,9 @@ internal sealed record ServiceOptions
     /// <summary>Прокси служебных учётных записей Windows (ADR-064); null — недоступен (нет прав).</summary>
     public IServiceAccountProxyStore? ServiceAccountProxyStore { get; init; }
 
+    /// <summary>Teredo для игр (ADR-065); null — недоступен (нет прав).</summary>
+    public ITeredoHost? TeredoHost { get; init; }
+
     /// <summary>Создаёт kill switch: (разрешённые программы, пускать ли локальную сеть). null — недоступен.</summary>
     public Func<IReadOnlyList<string>, bool, IKillSwitch>? KillSwitchFactory { get; init; }
 
@@ -88,8 +91,26 @@ internal sealed record ServiceOptions
         DnsRegistry = new DnsClientPolicyRegistry(),
         LoopbackStore = new FirewallLoopbackStore(),
         ServiceAccountProxyStore = new RegistryServiceAccountProxyStore(),
+        TeredoHost = new NetshTeredoHost(RestartIpHelper),
         KillSwitchFactory = (apps, lan) => new KillSwitch(apps, lan),
     };
+
+    /// <summary>
+    /// Перезапуск «Вспомогательной службы IP» (iphlpsvc): в ней живёт Teredo (ADR-065). Затрагивает только
+    /// Teredo, 6to4 и IP-HTTPS — обычный интернет и туннель Тропы не прерываются.
+    /// </summary>
+    private static void RestartIpHelper()
+    {
+        using var sc = new System.ServiceProcess.ServiceController("iphlpsvc");
+        if (sc.Status != System.ServiceProcess.ServiceControllerStatus.Stopped)
+        {
+            sc.Stop();
+            sc.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+        }
+
+        sc.Start();
+        sc.WaitForStatus(System.ServiceProcess.ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+    }
 
     public static ServiceOptions Production()
     {
@@ -115,6 +136,7 @@ internal sealed record ServiceOptions
             DnsRegistry = privileged ? new DnsClientPolicyRegistry() : null,
             LoopbackStore = privileged ? new FirewallLoopbackStore() : null,
             ServiceAccountProxyStore = privileged ? new RegistryServiceAccountProxyStore() : null,
+            TeredoHost = privileged ? new NetshTeredoHost(RestartIpHelper) : null,
             KillSwitchFactory = privileged ? (apps, lan) => new KillSwitch(apps, lan) : null,
         };
     }

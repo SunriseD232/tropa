@@ -184,6 +184,12 @@ internal sealed partial class PipeServer(ServiceOptions options, ILogger<PipeSer
                 var selectError = await _supervisor!.SelectCoreAsync(selectCore).ConfigureAwait(false);
                 return new Reply(selectCore.Id, selectError is null, selectError);
 
+            case TeredoRequest teredo:
+                // Состояние может узнать любой; включать и перезапускать — тот, кто управляет подключением (или никто).
+                if (teredo.Action != TeredoAction.Status && _controller is not null && !ReferenceEquals(_controller, session))
+                    return new Reply(teredo.Id, false, "Тропой управляет другой пользователь этого компьютера.");
+                return await _supervisor!.TeredoAsync(teredo).ConfigureAwait(false);
+
             case RollbackAllRequest rollback:
                 // Аварийный откат доступен любому проверенному клиенту: это «красная кнопка».
                 await _supervisor!.RollbackAllAsync(rollback.Reason).ConfigureAwait(false);

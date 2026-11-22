@@ -20,6 +20,8 @@ public static class SettingsFlattener
         "schemaVersion",
         "cores.lastManifestSequence",
         "cores.lastUpdateCheck",
+        // Игры (ADR-065) меняются сами (найдена игра, выучены домены) — у них свои события 10.x.
+        "games.list",
     };
 
     /// <summary>Текст, который может быть личным: в журнал — длина и отпечаток.</summary>

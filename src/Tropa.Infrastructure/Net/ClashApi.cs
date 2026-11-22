@@ -50,8 +50,9 @@ public sealed class ClashApi(int port, string secret) : IDisposable
     }
 
     /// <summary>
-    /// Текущие соединения ядра (для сводки UDP, событие 3.7). Через сервер — всё, что ушло не в
-    /// «direct» и не отклонено. Адреса не читаем: в журнал идут только имя программы и счётчики.
+    /// Текущие соединения ядра (для сводки UDP, событие 3.7, и вкладки «Игры», ADR-065). Через сервер — всё,
+    /// что ушло не в «direct» и не отклонено. В журнал идут только имя программы и счётчики; домен и адрес
+    /// читаются лишь для игр из списка и остаются в settings.json.
     /// </summary>
     public async Task<IReadOnlyList<Tropa.Core.Telemetry.CoreConnection>> ConnectionsAsync(CancellationToken ct)
     {
@@ -80,7 +81,11 @@ public sealed class ClashApi(int port, string secret) : IDisposable
                 Process: process,
                 DestinationPort: port,
                 Upload: c.TryGetProperty("upload", out var up) && up.TryGetInt64(out var u) ? u : 0,
-                Download: c.TryGetProperty("download", out var down) && down.TryGetInt64(out var d) ? d : 0));
+                Download: c.TryGetProperty("download", out var down) && down.TryGetInt64(out var d) ? d : 0)
+            {
+                Host = m.TryGetProperty("host", out var host) && host.GetString() is { Length: > 0 } h ? h : null,
+                DestinationIp = m.TryGetProperty("destinationIP", out var dip) && dip.GetString() is { Length: > 0 } ip ? ip : null,
+            });
         }
 
         return list;

@@ -95,6 +95,7 @@ internal sealed partial class App : Application
             _hotkey = new Services.GlobalHotkey(_window, () => Dispatcher.UIThread.Post(() => _ = ToggleAsync()));
             _hotkey.Register(_engine.State.Settings.General.Hotkey);
             _engine.StartNetworkWatch();
+            _engine.StartGameWatch();
             // Журнал для разработчика (ADR-050): необработанные ошибки тоже попадают в него.
             _engine.StartTelemetry(AfterUpdate ? "after-update" : FromAutostart ? "autostart" : "manual");
             // Своя ссылка на движок: при выходе из Windows ShutdownEngine обнуляет _engine раньше, чем

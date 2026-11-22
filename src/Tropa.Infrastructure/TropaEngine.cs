@@ -821,6 +821,8 @@ public sealed partial class TropaEngine : IAsyncDisposable
             if (note is not null)
                 RecordEnvironment("connected-with-note");
             RefreshActiveSubscriptionSoon();
+            if (_trafficCts is { } gamesCts)
+                _ = EnsureTeredoAsync(gamesCts.Token);
         }
         catch (Exception ex) when (ex is CoreStartException or IntegrityException or UnsupportedProfileException or InvalidOperationException or IOException or ServiceException or TimeoutException)
         {
@@ -1138,6 +1140,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         MixedPort = _mixedPort != 0 ? _mixedPort : State.Settings.Connection.SocksPort,
         ServiceAccountProxies = new ServiceAccountProxies(new RegistryServiceAccountProxyStore()).Snapshot(),
         ServiceCanFixProxies = TunAvailable,
+        ProbeTeredo = true,
     };
 
     /// <summary>Десять шагов диагностики; текущее подключение не трогается.</summary>
@@ -1404,6 +1407,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         _ = PumpTrafficAsync(new ClashApi(clashPort, clashSecret), _trafficCts.Token);
         _ = MonitorAsync(active.Id, _trafficCts.Token);
         _ = MeasureUdpAsync(new ClashApi(clashPort, clashSecret), active.Protocol, _trafficCts.Token);
+        _ = LearnGamesAsync(new ClashApi(clashPort, clashSecret), _trafficCts.Token);
         if (exitProbePort is { } probe)
             _ = WatchExitRegionAsync(probe, _trafficCts.Token);
     }
@@ -1751,6 +1755,8 @@ public sealed partial class TropaEngine : IAsyncDisposable
     {
         if (_watchTimer is not null)
             await _watchTimer.DisposeAsync().ConfigureAwait(false);
+        if (_gamesTimer is not null)
+            await _gamesTimer.DisposeAsync().ConfigureAwait(false);
         await StopTelemetryAsync().ConfigureAwait(false);
         await _gate.WaitAsync().ConfigureAwait(false);
         try

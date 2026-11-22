@@ -47,6 +47,11 @@ internal sealed partial class RulesView : UserControl
     public RulesView() => InitializeComponent();
 }
 
+internal sealed partial class GamesView : UserControl
+{
+    public GamesView() => InitializeComponent();
+}
+
 internal sealed partial class EditServerView : UserControl
 {
     public EditServerView() => InitializeComponent();

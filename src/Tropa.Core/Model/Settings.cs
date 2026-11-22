@@ -228,6 +228,11 @@ public sealed record AppSettings
     public TelemetrySettings Telemetry { get => _telemetry; init => _telemetry = value ?? new(); }
 
     private readonly TelemetrySettings _telemetry = new();
+
+    /// <summary>Вкладка «Игры» (ADR-065). null из старого settings.json — значения по умолчанию.</summary>
+    public GamesSettings Games { get => _games; init => _games = value ?? new(); }
+
+    private readonly GamesSettings _games = new();
 }
 
 /// <summary>
@@ -242,6 +247,9 @@ public sealed record TelemetrySettings
     public string Name { get => _name; init => _name = value ?? ""; }
 
     private readonly string _name = "";
+
+    /// <summary>Не писать названия игр (ADR-065): вместо имени exe — «игра». По умолчанию названия пишутся.</summary>
+    public bool HideGameNames { get; init; }
 }
 
 /// <summary>
