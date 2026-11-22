@@ -33,6 +33,12 @@ public sealed record DiagnosticsInput
 
     /// <summary>Порт входа Тропы (mixed), чтобы узнать в системном прокси свой старый.</summary>
     public int MixedPort { get; init; }
+
+    /// <summary>Прокси служебных учётных записей Windows (ADR-064); null — не проверять.</summary>
+    public IReadOnlyList<ServiceAccountProxy>? ServiceAccountProxies { get; init; }
+
+    /// <summary>Служба Тропы с правами системы выключит «мёртвый» прокси служб при подключении.</summary>
+    public bool ServiceCanFixProxies { get; init; }
 }
 
 /// <summary>Ответ провайдера и туннеля для одного домена (инструмент «Проверка домена»).</summary>
@@ -135,7 +141,8 @@ public static class DiagnosticsRunner
 
         // 10: системный прокси Windows — не уводит ли он браузеры и Discord мимо туннеля.
         Set(input.SystemProxy is { } proxy
-            ? Diagnosis.SystemProxy(proxy, effective.Connection.Mode, input.Connected, input.MixedPort)
+            ? Diagnosis.SystemProxy(proxy, effective.Connection.Mode, input.Connected, input.MixedPort,
+                input.ServiceAccountProxies ?? [], SystemIntegration.ServiceAccountProxies.IsListening, input.ServiceCanFixProxies)
             : new StepResult("sysProxy", StepStatus.Skipped, "Системный прокси не проверялся"));
 
         // Рукопожатие не прошло, а рядом работает другой клиент обхода — почти всегда причина в нём:

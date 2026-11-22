@@ -1136,6 +1136,8 @@ public sealed partial class TropaEngine : IAsyncDisposable
         Log = line => Log?.Invoke(this, line),
         SystemProxy = _systemProxy.Snapshot(),
         MixedPort = _mixedPort != 0 ? _mixedPort : State.Settings.Connection.SocksPort,
+        ServiceAccountProxies = new ServiceAccountProxies(new RegistryServiceAccountProxyStore()).Snapshot(),
+        ServiceCanFixProxies = TunAvailable,
     };
 
     /// <summary>Десять шагов диагностики; текущее подключение не трогается.</summary>

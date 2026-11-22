@@ -6,8 +6,60 @@ namespace Tropa.Core.Diagnostics;
 /// <summary>Системный прокси Windows (WinINet, HKCU), как его видит диагностика.</summary>
 public sealed record ProxySnapshot(bool Enabled, string? Server, string? AutoConfigUrl, bool AppliedByUs);
 
+/// <summary>
+/// Прокси WinINet служебной учётной записи Windows (LocalSystem, LocalService, NetworkService). От них
+/// работают службы — например, «Службы игр» Xbox. Пользователь этот прокси в параметрах Windows не видит.
+/// </summary>
+public sealed record ServiceAccountProxy(string Account, bool Enabled, string? Server);
+
 public static partial class Diagnosis
 {
+    /// <summary>
+    /// Прокси служебной учётной записи включён и указывает только на порты этого компьютера, где никто не
+    /// слушает: остался от закрытого клиента (NekoBox, Hiddify и др. по умолчанию — 127.0.0.1:2080). Службы с ним
+    /// висят на каждом соединении — приложение Xbox бесконечно показывает «Запуск XBOX» (2026-11-21).
+    /// </summary>
+    public static bool IsDeadServiceProxy(ServiceAccountProxy proxy, Func<int, bool> isListening)
+    {
+        ArgumentNullException.ThrowIfNull(proxy);
+        ArgumentNullException.ThrowIfNull(isListening);
+        if (!proxy.Enabled)
+            return false;
+        var ports = LoopbackProxyPorts(proxy.Server);
+        return ports.Count > 0 && LoopbackOnly(proxy.Server) && !ports.Any(isListening);
+    }
+
+    /// <summary>Все части строки ProxyServer указывают на этот компьютер (внешний прокси не трогаем).</summary>
+    private static bool LoopbackOnly(string? server)
+    {
+        if (string.IsNullOrWhiteSpace(server))
+            return false;
+        return server.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .All(part => LoopbackProxyPorts(part).Count > 0);
+    }
+
+    /// <summary>Шаг «Системный прокси», дополненный прокси служебных учётных записей.</summary>
+    public static StepResult SystemProxy(ProxySnapshot proxy, CaptureMode mode, bool connected, int ownPort,
+        IReadOnlyList<ServiceAccountProxy> serviceProxies, Func<int, bool> isListening, bool serviceCanFix)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProxies);
+        var user = SystemProxy(proxy, mode, connected, ownPort);
+        var dead = serviceProxies.Where(p => IsDeadServiceProxy(p, isListening)).ToList();
+        if (dead.Count == 0)
+            return user;
+
+        var list = string.Join(", ", dead.Select(p => $"{p.Account} → {p.Server}"));
+        var details = $"Прокси служб Windows указывает на программу, которой уже нет ({list}). Службы с ним (например, «Службы игр» Xbox) "
+            + "висят на каждом соединении: приложение Xbox бесконечно запускается, Microsoft Store не обновляет. Обычно остаётся после NekoBox, Hiddify и похожих клиентов.";
+        var action = serviceCanFix
+            ? "Переподключитесь — служба Тропы выключит этот прокси. Затем перезапустите приложение Xbox (или перезагрузите компьютер)."
+            : "Установите службу Тропы (или запустите Тропу от имени администратора) и переподключитесь — она выключит этот прокси.";
+        if (user.Status != StepStatus.Ok)
+            details = (user.Details is null ? "" : user.Details + " ") + details;
+        return new StepResult("sysProxy", StepStatus.Bad, user.Status == StepStatus.Ok ? "Остался прокси служб Windows: " + dead[0].Server : user.Title,
+            details, user.Status == StepStatus.Ok || user.Action is null ? action : user.Action + " " + action);
+    }
+
     /// <summary>
     /// Порты на этом компьютере, куда указывает строка ProxyServer: «127.0.0.1:10880»,
     /// «http=127.0.0.1:10880;https=localhost:10880;socks=[::1]:10881», «http://127.0.0.1:10880».

@@ -271,6 +271,26 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         }
     }
 
+    /// <summary>
+    /// Прокси LocalSystem/LocalService/NetworkService, оставшийся от закрытого клиента обхода (ADR-064): службы
+    /// Windows с ним висят на каждом соединении. Ошибка здесь подключению не мешает.
+    /// </summary>
+    private void DisableDeadServiceAccountProxies()
+    {
+        if (options.ServiceAccountProxyStore is not { } store)
+            return;
+        try
+        {
+            foreach (var item in new ServiceAccountProxies(store).DisableDead(ServiceAccountProxies.IsListening))
+                onLog($"Выключен оставшийся прокси служб Windows ({item}): на этом порту никто не слушает, службы вроде «Служб игр» Xbox с ним не работали.");
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException
+            or System.Net.NetworkInformation.NetworkInformationException)
+        {
+            onLog("Не удалось проверить прокси служб Windows: " + ex.Message);
+        }
+    }
+
     /// <summary>null — ядро запущено; иначе понятная причина отказа.</summary>
     public async Task<string?> StartAsync(StartRequest request, CancellationToken ct)
     {
@@ -342,6 +362,8 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
                 _loopback = new LoopbackExemption(store, new ChangeJournal(options.JournalPath));
                 _loopback.Apply(loopbackSids, DateTimeOffset.Now);
             }
+
+            DisableDeadServiceAccountProxies();
 
             SetStatus(new StatusEvent(ServiceState.Running, null, DateTimeOffset.Now));
             return null;

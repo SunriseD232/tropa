@@ -34,6 +34,9 @@ internal sealed record ServiceOptions
     /// <summary>Список loopback-исключений Store; null — недоступен (нет прав).</summary>
     public ILoopbackStore? LoopbackStore { get; init; }
 
+    /// <summary>Прокси служебных учётных записей Windows (ADR-064); null — недоступен (нет прав).</summary>
+    public IServiceAccountProxyStore? ServiceAccountProxyStore { get; init; }
+
     /// <summary>Создаёт kill switch: (разрешённые программы, пускать ли локальную сеть). null — недоступен.</summary>
     public Func<IReadOnlyList<string>, bool, IKillSwitch>? KillSwitchFactory { get; init; }
 
@@ -84,6 +87,7 @@ internal sealed record ServiceOptions
         AdminsOnlyPipe = true,
         DnsRegistry = new DnsClientPolicyRegistry(),
         LoopbackStore = new FirewallLoopbackStore(),
+        ServiceAccountProxyStore = new RegistryServiceAccountProxyStore(),
         KillSwitchFactory = (apps, lan) => new KillSwitch(apps, lan),
     };
 
@@ -110,6 +114,7 @@ internal sealed record ServiceOptions
             SecureDataDirectory = privileged,
             DnsRegistry = privileged ? new DnsClientPolicyRegistry() : null,
             LoopbackStore = privileged ? new FirewallLoopbackStore() : null,
+            ServiceAccountProxyStore = privileged ? new RegistryServiceAccountProxyStore() : null,
             KillSwitchFactory = privileged ? (apps, lan) => new KillSwitch(apps, lan) : null,
         };
     }
