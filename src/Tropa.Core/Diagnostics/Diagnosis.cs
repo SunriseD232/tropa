@@ -11,7 +11,12 @@ public enum StepStatus { Pending, Running, Ok, Warn, Bad, Skipped }
 public sealed record StepResult(string Key, StepStatus Status, string Title, string? Details = null, string? Action = null);
 
 /// <summary>Сетевой адаптер, как его видит диагностика.</summary>
-public sealed record AdapterInfo(string Name, string Description, bool IsUp, IReadOnlyList<IPAddress> Addresses, bool HasDefaultGateway);
+public sealed record AdapterInfo(string Name, string Description, bool IsUp, IReadOnlyList<IPAddress> Addresses, bool HasDefaultGateway)
+{
+    /// <summary>Есть настоящий (глобальный) IPv6-адрес — не link-local, не ULA и не site-local.</summary>
+    public bool HasGlobalIpv6 => Addresses.Any(x => x.AddressFamily == AddressFamily.InterNetworkV6
+        && !x.IsIPv6LinkLocal && !x.IsIPv6UniqueLocal && !x.IsIPv6SiteLocal);
+}
 
 /// <summary>
 /// Решения диагностики без ввода-вывода: что считать подменой DNS, расхождением часов,
@@ -156,8 +161,7 @@ public static partial class Diagnosis
         if (!connected)
             return new StepResult("leaks", StepStatus.Skipped, "Утечки проверяются при подключении");
 
-        var hasIpv6 = adapters.Any(a => a.IsUp && a.HasDefaultGateway && !a.Addresses.Contains(OwnTunAddress)
-            && a.Addresses.Any(x => x.AddressFamily == AddressFamily.InterNetworkV6 && !x.IsIPv6LinkLocal && !x.IsIPv6UniqueLocal && !x.IsIPv6SiteLocal));
+        var hasIpv6 = adapters.Any(a => a.IsUp && a.HasDefaultGateway && !a.Addresses.Contains(OwnTunAddress) && a.HasGlobalIpv6);
         var notes = new List<string>();
         var status = StepStatus.Ok;
 

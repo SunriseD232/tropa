@@ -303,6 +303,39 @@ public sealed class SingBoxGoldenTests
         Assert.DoesNotContain("find_process", json, StringComparison.Ordinal);
     }
 
+    // Журнал разработчика, 2026-11-23: без блокировки IPv6 yandex.ru получал настоящий IPv6-адрес
+    // от локального DNS и не открывался у пользователя без IPv6 у провайдера.
+    [Theory]
+    [InlineData(LocalDnsRule.Russian)]
+    [InlineData(LocalDnsRule.DirectRules)]
+    public void Local_dns_answers_are_ipv4_only_even_without_ipv6_block(LocalDnsRule localRule)
+    {
+        var settings = Defaults with
+        {
+            General = Defaults.General with { Ipv6Block = false },
+            Dns = Defaults.Dns with { LocalDnsRule = localRule },
+        };
+        var dns = System.Text.Json.Nodes.JsonNode.Parse(SingBoxConfigBuilder.Build(Input(settings, Reality)))!["dns"]!;
+        Assert.Null(dns["strategy"]);
+        var rules = dns["rules"]!.AsArray().Select(r => r!.AsObject()).ToList();
+        var local = rules.Select((r, i) => (r, i)).Where(x => (string?)x.r["server"] == "local").ToList();
+        Assert.NotEmpty(local);
+        foreach (var (rule, i) in local)
+        {
+            // Прямо перед правилом «local» — то же условие для AAAA с пустым ответом.
+            var aaaa = rules[i - 1];
+            Assert.Equal("predefined", (string?)aaaa["action"]);
+            Assert.Equal("NOERROR", (string?)aaaa["rcode"]);
+            Assert.Equal("AAAA", (string?)aaaa["query_type"]![0]);
+            aaaa.Remove("action");
+            aaaa.Remove("rcode");
+            aaaa.Remove("query_type");
+            var match = rule.DeepClone().AsObject();
+            match.Remove("server");
+            Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(match, aaaa));
+        }
+    }
+
     [Theory]
     [InlineData("/ws?ed=2048", "/ws", 2048)]
     [InlineData("/ws?ed=2048&x=1", "/ws?x=1", 2048)]

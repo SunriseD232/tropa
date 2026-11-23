@@ -26,6 +26,50 @@
     "rules": [
       {
         "type": "logical",
+        "mode": "and",
+        "rules": [
+          {
+            "type": "logical",
+            "mode": "or",
+            "rules": [
+              {
+                "rule_set": [
+                  "ru-services",
+                  "geosite-category-gov-ru",
+                  "geosite-ru-available-only-inside",
+                  "geosite-category-ru"
+                ]
+              },
+              {
+                "type": "logical",
+                "mode": "and",
+                "rules": [
+                  {
+                    "rule_set": [
+                      "geosite-category-bank-ru"
+                    ]
+                  },
+                  {
+                    "rule_set": [
+                      "geosite-category-bank-ru\u002Bremoved"
+                    ],
+                    "invert": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "query_type": [
+              "AAAA"
+            ]
+          }
+        ],
+        "action": "predefined",
+        "rcode": "NOERROR"
+      },
+      {
+        "type": "logical",
         "mode": "or",
         "rules": [
           {
@@ -55,6 +99,18 @@
           }
         ],
         "server": "local"
+      },
+      {
+        "domain_suffix": [
+          "ru",
+          "su",
+          "xn--p1ai"
+        ],
+        "query_type": [
+          "AAAA"
+        ],
+        "action": "predefined",
+        "rcode": "NOERROR"
       },
       {
         "domain_suffix": [

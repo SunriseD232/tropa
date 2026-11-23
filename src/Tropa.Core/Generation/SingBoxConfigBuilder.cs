@@ -289,14 +289,33 @@ public static class SingBoxConfigBuilder
         if (gameDomains.Count > 0)
             rules.Push(new JsonObject { ["domain_suffix"] = StrArray(gameDomains), ["server"] = "local" });
 
+        // Домены, которые спрашиваем у локального DNS, почти всегда идут напрямую — через физический
+        // адаптер. Без блокировки IPv6 им приходили настоящие IPv6-адреса; Windows видит IPv6 на
+        // адаптере Тропы и выбирает их, а у провайдера IPv6 часто нет — «сеть недоступна», yandex.ru
+        // не открывается (журнал разработчика, 2026-11-23). Им — только IPv4: он работает у всех.
+        // `strategy` в правиле DNS устарел в sing-box 1.14, поэтому AAAA отвечаем пустым NOERROR
+        // отдельным правилом перед основным — программа сама берёт A-запись.
+        void LocalIpv4Only(Func<JsonObject> match)
+        {
+            var aaaa = match();
+            if (aaaa["type"] is null)
+                aaaa["query_type"] = StrArray(["AAAA"]);
+            else // логическое правило (правки гео-баз): тип запроса — отдельным условием
+                aaaa = Logical("and", aaaa, new JsonObject { ["query_type"] = StrArray(["AAAA"]) });
+            aaaa["action"] = "predefined";
+            aaaa["rcode"] = "NOERROR";
+            rules.Push(aaaa);
+            rules.Push(With(match(), "server", "local"));
+        }
+
         switch (s.Dns.LocalDnsRule)
         {
             case LocalDnsRule.Russian:
-                rules.Push(With(SetsMatch(ctx, [.. RuleSets.AlwaysDirect, RuleSets.GeositeCategoryRu]), "server", "local"));
-                rules.Push(new JsonObject { ["domain_suffix"] = StrArray(["ru", "su", "xn--p1ai"]), ["server"] = "local" });
+                LocalIpv4Only(() => SetsMatch(ctx, [.. RuleSets.AlwaysDirect, RuleSets.GeositeCategoryRu]));
+                LocalIpv4Only(() => new JsonObject { ["domain_suffix"] = StrArray(["ru", "su", "xn--p1ai"]) });
                 break;
             case LocalDnsRule.DirectRules:
-                rules.Push(With(SetsMatch(ctx, RuleSets.AlwaysDirect), "server", "local"));
+                LocalIpv4Only(() => SetsMatch(ctx, RuleSets.AlwaysDirect));
                 break;
             case LocalDnsRule.None:
                 break;

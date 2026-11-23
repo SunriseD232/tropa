@@ -42,7 +42,33 @@
           "geosite-ru-available-only-inside",
           "geosite-category-ru"
         ],
+        "query_type": [
+          "AAAA"
+        ],
+        "action": "predefined",
+        "rcode": "NOERROR"
+      },
+      {
+        "rule_set": [
+          "ru-services",
+          "geosite-category-gov-ru",
+          "geosite-category-bank-ru",
+          "geosite-ru-available-only-inside",
+          "geosite-category-ru"
+        ],
         "server": "local"
+      },
+      {
+        "domain_suffix": [
+          "ru",
+          "su",
+          "xn--p1ai"
+        ],
+        "query_type": [
+          "AAAA"
+        ],
+        "action": "predefined",
+        "rcode": "NOERROR"
       },
       {
         "domain_suffix": [

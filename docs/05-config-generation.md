@@ -27,6 +27,8 @@
       { "type": "fakeip","tag": "fake",   "inet4_range": "198.18.0.0/15" }
     ],
     "rules": [
+      { "rule_set": ["ru-services", "geosite-category-ru"], "query_type": ["AAAA"],
+        "action": "predefined", "rcode": "NOERROR" },      // прямым доменам — только IPv4 (ADR-066)
       { "rule_set": ["ru-services", "geosite-category-ru"], "server": "local" },
       { "query_type": ["A", "AAAA"], "server": "fake" }   // только при fakeip и mode=tun
     ],

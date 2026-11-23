@@ -92,7 +92,7 @@ public sealed partial class TropaEngine
             Rec(Ev.Adapters,
                 ("when", when),
                 ("list", string.Join("; ", adapters.Select(a =>
-                    $"{a.Name} ({a.Description}){(a.HasDefaultGateway ? " gw" : "")}{(foreign.Contains(a.Name) ? " vpn" : "")}"))));
+                    $"{a.Name} ({a.Description}){(a.HasDefaultGateway ? " gw" : "")}{(a.HasGlobalIpv6 ? " ipv6" : "")}{(foreign.Contains(a.Name) ? " vpn" : "")}"))));
             var processes = LocalNetwork.ForeignProcesses(_locations);
             if (foreign.Count > 0 || processes.Count > 0)
                 Rec(Ev.ForeignVpn, ("when", when), ("adapters", string.Join(", ", foreign)), ("processes", string.Join(", ", processes)));
