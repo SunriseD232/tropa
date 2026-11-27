@@ -31,11 +31,15 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Routes = new RoutesViewModel(engine, Info, GeoEditor, Rules);
         Games = new GamesViewModel(engine, Info);
         Diagnostics = new DiagnosticsViewModel(engine, Info);
-        Settings = new SettingsViewModel(engine, Info, page => Navigate(page));
+        Settings = new SettingsViewModel(engine, Info, page => Navigate(page), Home.Updates);
         Onboarding = new OnboardingViewModel(engine, Info);
         CurrentPage = Home;
         Warning = App.StartupNotice ?? engine.StartupWarning ?? PortableImportHint(engine);
-        engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => FooterStatus = s.State != ConnectionState.Connected ? "Отключено" : _engine.NoNetwork ? "Подключено · нет сети" : "Подключено");
+        engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() =>
+        {
+            FooterStatus = s.State != ConnectionState.Connected ? "Отключено" : _engine.NoNetwork ? "Подключено · нет сети" : "Подключено";
+            FooterConnected = s.State == ConnectionState.Connected && !_engine.NoNetwork;
+        });
         IsV2rayLayout = engine.State.Settings.General.Layout == WindowLayout.V2rayN;
         engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(() =>
         {
@@ -144,6 +148,9 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public partial string FooterStatus { get; set; } = "Отключено";
 
     [ObservableProperty]
+    public partial bool FooterConnected { get; set; }
+
+    [ObservableProperty]
     public partial string? Warning { get; set; }
 
     public bool IsHome => CurrentPage == Home;
@@ -172,10 +179,17 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         "rules" => ShowRoutes(),
         "games" => ShowGames(),
         "diagnostics" => ShowDiagnostics(),
-        "settings" => Settings,
+        "settings" => ShowSettingsHome(),
         "settings:cores" => ShowSettings("cores"),
         _ => Home,
     };
+
+    private SettingsViewModel ShowSettingsHome()
+    {
+        // Вход в «Настройки» — всегда плитки разделов (ADR-072).
+        Settings.ShowOverviewCommand.Execute(null);
+        return Settings;
+    }
 
     private SettingsViewModel ShowSettings(string section)
     {

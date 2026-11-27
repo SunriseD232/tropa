@@ -373,38 +373,6 @@
         "outbound": "direct"
       },
       {
-        "type": "logical",
-        "mode": "or",
-        "rules": [
-          {
-            "rule_set": [
-              "ru-services",
-              "geosite-category-gov-ru",
-              "geosite-ru-available-only-inside"
-            ]
-          },
-          {
-            "type": "logical",
-            "mode": "and",
-            "rules": [
-              {
-                "rule_set": [
-                  "geosite-category-bank-ru"
-                ]
-              },
-              {
-                "rule_set": [
-                  "geosite-category-bank-ru\u002Bremoved"
-                ],
-                "invert": true
-              }
-            ]
-          }
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
         "action": "resolve",
         "server": "local"
       },

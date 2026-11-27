@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Tropa.App.ViewModels"
+             xmlns:v="using:Tropa.App.Views"
              xmlns:infra="using:Tropa.Infrastructure"
              x:Class="Tropa.App.Views.SettingsView"
              x:DataType="vm:SettingsViewModel">
@@ -13,20 +14,8 @@
     <Style Selector="TextBlock.note.warn">
       <Setter Property="Foreground" Value="{DynamicResource WarnFg}" />
     </Style>
-    <Style Selector="Button.tab">
-      <Setter Property="Background" Value="{DynamicResource Card}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="Foreground" Value="{DynamicResource NavFg}" />
-      <Setter Property="CornerRadius" Value="999" />
-      <Setter Property="Height" Value="36" />
-      <Setter Property="MinHeight" Value="36" />
-      <Setter Property="Padding" Value="14,0" />
-    </Style>
-    <Style Selector="Button.tab.on">
-      <Setter Property="Background" Value="{DynamicResource NavOnBg}" />
-      <Setter Property="Foreground" Value="{DynamicResource Text}" />
-    </Style>
+    <Style Selector="Button.expert"><Setter Property="Opacity" Value="0.7" /></Style>
+    <Style Selector="Button.nav.expert"><Setter Property="Margin" Value="0,10,0,0" /></Style>
   </UserControl.Styles>
 
   <UserControl.DataTemplates>
@@ -142,12 +131,11 @@
     </DataTemplate>
   </UserControl.DataTemplates>
 
-  <StackPanel Spacing="18">
-    <TextBlock Classes="h1" Text="Настройки" />
-
-    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding NeedsApply}">
+  <!-- «Настройки» (ADR-072, B → C): при входе — плитки разделов и поиск; раздел — список разделов слева, пункты справа. -->
+  <StackPanel Spacing="16">
+    <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12,8" IsVisible="{Binding NeedsApply}">
       <DockPanel>
-        <Button DockPanel.Dock="Right" Classes="primary" Content="Применить сейчас" Command="{Binding ApplyCommand}" />
+        <Button DockPanel.Dock="Right" Classes="primary" Content="Применить" Command="{Binding ApplyCommand}" />
         <TextBlock Foreground="{DynamicResource InfoFg}" VerticalAlignment="Center" TextWrapping="Wrap"
                    Text="Настройки сохранены. Чтобы они заработали, подключение переподключится на секунду." />
       </DockPanel>
@@ -161,33 +149,74 @@
       <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
     </Border>
 
-    <StackPanel Spacing="14">
-      <!-- Разделы — строкой сверху: колонка слева съедала ширину, и на узком окне строки налезали друг на друга. -->
-      <ItemsControl ItemsSource="{Binding Sections}">
+    <!-- ================= Плитки разделов ================= -->
+    <StackPanel Spacing="16" IsVisible="{Binding IsOverview}">
+      <DockPanel>
+        <TextBox DockPanel.Dock="Right" Width="320" Text="{Binding SearchText}" PlaceholderText="Найти настройку…"
+                 AutomationProperties.Name="Найти настройку" VerticalAlignment="Center">
+          <TextBox.InnerLeftContent>
+            <v:Icon Data="{StaticResource IconSearch}" Width="16" Height="16" Margin="10,0,0,0" Foreground="{DynamicResource Muted}" />
+          </TextBox.InnerLeftContent>
+        </TextBox>
+        <TextBlock Classes="h1" Text="Настройки" VerticalAlignment="Center" />
+      </DockPanel>
+
+      <ItemsControl ItemsSource="{Binding Sections}" IsVisible="{Binding !IsSearching}" Margin="0,0,-12,-12">
         <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+          <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:SettingsSection">
-            <Button Classes="tab" Classes.on="{Binding IsCurrent}" Content="{Binding Title}" Margin="0,0,8,8"
-                    Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).SelectCommand}" CommandParameter="{Binding}" />
+            <Button Classes="tile" Classes.expert="{Binding IsExpert}" Margin="0,0,12,12" MinHeight="88" AutomationProperties.Name="{Binding Title}"
+                    Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).SelectCommand}" CommandParameter="{Binding}">
+              <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Classes="hint" Text="{Binding Summary}" MaxLines="2" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Button>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <StackPanel Spacing="14">
+      <!-- Результаты поиска -->
+      <Border Classes="card" Padding="20,10" IsVisible="{Binding IsSearching}">
+        <StackPanel>
+          <TextBlock Classes="muted" Text="Ничего не нашлось. Попробуйте другое слово." IsVisible="{Binding !SearchResults.Count}" Margin="0,8" />
+          <ItemsControl ItemsSource="{Binding SearchResults}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <!-- ================= Раздел: список слева, пункты справа ================= -->
+    <Grid ColumnDefinitions="220,24,*" IsVisible="{Binding IsSection}">
+      <StackPanel Grid.Column="0" Spacing="2">
+        <Button Classes="link" Command="{Binding ShowOverviewCommand}" Margin="8,4,0,12" HorizontalAlignment="Left">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <v:Icon Data="{StaticResource IconBack}" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Text="Все настройки" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <ItemsControl ItemsSource="{Binding Sections}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SettingsSection">
+              <Button Classes="nav" Classes.on="{Binding IsCurrent}" Classes.expert="{Binding IsExpert}" Height="38" FontSize="14"
+                      Content="{Binding Title}" Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).SelectCommand}" CommandParameter="{Binding}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <StackPanel Grid.Column="2" Spacing="14">
         <Border Classes="card" IsVisible="{Binding SiteImportOpen}">
           <StackPanel Spacing="10">
             <StackPanel Orientation="Horizontal" Spacing="10">
               <TextBlock Text="Импорт списка сайтов" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
               <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="siteImport" />
             </StackPanel>
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Вставьте список или выберите файл: домены по строке, файл hosts, правила v2rayN (JSON) или Clash. Всё станет одним пунктом встроенных маршрутов на экране «Маршруты»." />
+            <TextBlock Classes="hint" Text="Домены по строке, файл hosts, правила v2rayN (JSON) или Clash. Всё станет одним пунктом встроенных маршрутов." />
             <TextBox Text="{Binding SiteImportText}" AcceptsReturn="True" TextWrapping="NoWrap" Height="180"
                      FontFamily="{StaticResource Mono}" FontSize="12" PlaceholderText="discord.com&#10;DOMAIN-SUFFIX,x.com,PROXY&#10;domain:youtube.com" />
-            <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding SiteImportPreview}"
-                       IsVisible="{Binding SiteImportPreview, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <TextBlock Classes="hint" Text="{Binding SiteImportPreview}" IsVisible="{Binding SiteImportPreview, Converter={x:Static ObjectConverters.IsNotNull}}" />
             <DockPanel>
               <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
                 <Button Content="Из файла…" Command="{Binding PickSiteFileCommand}" />
@@ -205,7 +234,7 @@
         <Border Classes="card" Padding="20,10">
           <StackPanel>
             <TextBlock Text="{Binding Current.Title}" FontSize="20" FontWeight="SemiBold" Margin="0,8,0,4" />
-            <TextBlock Classes="muted" Text="{Binding Current.Description}" Margin="0,0,0,6"
+            <TextBlock Classes="hint" Text="{Binding Current.Description}" Margin="0,0,0,6"
                        IsVisible="{Binding Current.Description, Converter={x:Static ObjectConverters.IsNotNull}}" />
             <ItemsControl ItemsSource="{Binding Current.Rows}" />
           </StackPanel>
@@ -215,6 +244,6 @@
                    FontFamily="{StaticResource Mono}" FontSize="11" />
         </Border>
       </StackPanel>
-    </StackPanel>
+    </Grid>
   </StackPanel>
 </UserControl>

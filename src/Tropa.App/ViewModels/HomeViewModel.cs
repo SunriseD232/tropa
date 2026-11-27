@@ -179,6 +179,51 @@ internal sealed partial class HomeViewModel : ObservableObject
     [ObservableProperty]
     public partial string RouteDescription { get; set; } = "";
 
+    /// <summary>Маршруты чипами на главной (ADR-072): короткие названия без пометок.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<string> RouteChips { get; set; } = [];
+
+    /// <summary>Строка режима под сервером: для кого работает Тропа.</summary>
+    public string ModeLine => _engine.State.Settings.Connection.Mode switch
+    {
+        CaptureMode.Tun when !_engine.TunAvailable => "Только браузеры (TUN недоступен)",
+        CaptureMode.Tun => "Весь компьютер",
+        CaptureMode.SystemProxy => "Только браузеры",
+        _ => "Только порты, система не меняется",
+    };
+
+    public bool ModeIsTun => _engine.State.Settings.Connection.Mode == CaptureMode.Tun;
+    public bool ModeIsBrowsers => _engine.State.Settings.Connection.Mode == CaptureMode.SystemProxy;
+    public bool ModeIsPorts => !ModeIsTun && !ModeIsBrowsers;
+
+    /// <summary>
+    /// Выбор режима в окне «изменить» на главной (ADR-072): одно решение вместо переключателя TUN и
+    /// списка «Системный прокси». При подключении — переподключение с новым режимом.
+    /// </summary>
+    [RelayCommand]
+    private async Task ChooseModeAsync(string mode)
+    {
+        var (m, proxy) = mode switch
+        {
+            "tun" => (CaptureMode.Tun, (SystemProxyChoice?)null),
+            "browsers" => (CaptureMode.SystemProxy, SystemProxyChoice.Set),
+            _ => (CaptureMode.PortsOnly, SystemProxyChoice.Keep),
+        };
+        try
+        {
+            _engine.UpdateSettings(s => s with
+            {
+                Connection = s.Connection with { Mode = m, SystemProxy = proxy ?? s.Connection.SystemProxy },
+            });
+            if (_engine.Status.State == ConnectionState.Connected)
+                await _engine.ApplyIfConnectedAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Infrastructure.Service.ServiceException or TimeoutException)
+        {
+            Message = _engine.Scrubber.Scrub(ex.Message);
+        }
+    }
+
     public bool TunAvailable => _engine.TunAvailable;
 
     /// <summary>Служба держит аварийную блокировку — показываем плашку с кнопкой «Снять блокировку».</summary>
@@ -371,6 +416,10 @@ internal sealed partial class HomeViewModel : ObservableObject
         UpdateFlag();
 
         ModeTun = s.Settings.Connection.Mode == CaptureMode.Tun;
+        OnPropertyChanged(nameof(ModeLine));
+        OnPropertyChanged(nameof(ModeIsTun));
+        OnPropertyChanged(nameof(ModeIsBrowsers));
+        OnPropertyChanged(nameof(ModeIsPorts));
         OnPropertyChanged(nameof(ProxyIndex));
         OnPropertyChanged(nameof(TunToggle));
         FillServers();
@@ -404,6 +453,9 @@ internal sealed partial class HomeViewModel : ObservableObject
             _routeChoices = choices;
             if (!names.SequenceEqual(RouteNames))
                 RouteNames = names;
+            var chips = choices.Select(c => c.Name).ToList();
+            if (!chips.SequenceEqual(RouteChips))
+                RouteChips = chips;
             var active = RouteBook.Active(settings);
             RouteIndex = Math.Max(0, choices.ToList().FindIndex(c => c.Key == active.Key));
             RouteDescription = RouteText(settings, active);

@@ -23,14 +23,6 @@
           <Border Background="{DynamicResource BadBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}">
             <TextBlock Text="{Binding Error}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" />
           </Border>
-          <DockPanel>
-            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" Margin="0,0,10,0" VerticalAlignment="Center">
-              <TextBlock Classes="lbl" Text="ССЫЛКА" VerticalAlignment="Center" />
-              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="link" />
-            </StackPanel>
-            <TextBox Text="{Binding Link}" IsReadOnly="True" FontFamily="{StaticResource Mono}" Foreground="{DynamicResource Muted}"
-                     PasswordChar="•" RevealPassword="{Binding ShowCredential}" />
-          </DockPanel>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
             <Button Content="Отмена" Command="{Binding CloseCommand}" />
             <Button Classes="primary" Content="Сохранить" Command="{Binding SaveCommand}" />
@@ -39,15 +31,60 @@
       </Border>
 
       <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <Grid ColumnDefinitions="*,*" Margin="24,8,24,8">
+        <StackPanel Margin="24,8,24,8" Spacing="14">
+          <!-- Ссылка и название (ADR-072): поля ниже — по кнопке «Изменить вручную» -->
+          <Grid ColumnDefinitions="3*,16,2*">
+            <StackPanel Grid.Column="0" Spacing="4">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Classes="lbl" Text="ССЫЛКА" VerticalAlignment="Center" />
+                <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="link" />
+              </StackPanel>
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding ToggleCredentialCommand}" Margin="6,0,0,0"
+                        ToolTip.Tip="Показать или скрыть ключ" AutomationProperties.Name="Показать или скрыть ключ">
+                  <v:Icon Data="{StaticResource IconEye}" Width="16" Height="16" />
+                </Button>
+                <TextBox Text="{Binding Link}" FontFamily="{StaticResource Mono}" PasswordChar="•" RevealPassword="{Binding ShowCredential}"
+                         PlaceholderText="Вставьте ссылку: vless://, vmess://, trojan://, ss://, hy2://" AutomationProperties.Name="Ссылка сервера" />
+              </DockPanel>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="4">
+              <TextBlock Classes="lbl" Text="НАЗВАНИЕ" Margin="0,4,0,4" />
+              <TextBox Text="{Binding Name}" AutomationProperties.Name="Название" />
+            </StackPanel>
+          </Grid>
+
+          <StackPanel Spacing="6" IsVisible="{Binding HasSummary}">
+            <TextBlock Classes="lbl" Text="ТРОПА ПОНЯЛА ССЫЛКУ ТАК" />
+            <WrapPanel>
+              <ItemsControl ItemsSource="{Binding SummaryChips}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <Border Classes="pill" Background="{DynamicResource Chip}" Margin="0,0,6,6"><TextBlock Text="{Binding}" FontSize="12" /></Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Border Classes="pill" Background="{DynamicResource OkBg}" Margin="0,0,6,6" IsVisible="{Binding SecurityOk}">
+                <TextBlock Text="{Binding SecurityChip}" FontSize="12" Foreground="{DynamicResource OkFg}" />
+              </Border>
+              <Border Classes="pill" Background="{DynamicResource BadBg}" Margin="0,0,6,6" IsVisible="{Binding !SecurityOk}"
+                      ToolTip.Tip="Трафик может прочитать посредник: провайдер или любой узел по пути">
+                <TextBlock Text="{Binding SecurityChip}" FontSize="12" Foreground="{DynamicResource BadFg}" />
+              </Border>
+            </WrapPanel>
+          </StackPanel>
+
+          <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8"
+                  IsVisible="{Binding SubscriptionNote, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{Binding SubscriptionNote}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" />
+          </Border>
+
+          <Expander Header="Изменить вручную: адрес, транспорт, безопасность" IsExpanded="{Binding ManualOpen}" HorizontalAlignment="Stretch">
+        <Grid ColumnDefinitions="*,*" Margin="0,8,0,0">
           <!-- Основное -->
           <StackPanel Grid.Column="0" Margin="0,0,16,0">
             <TextBlock Classes="lbl" Text="ОСНОВНОЕ" Margin="0,0,0,10" />
-            <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8" Margin="0,0,0,12"
-                    IsVisible="{Binding SubscriptionNote, Converter={x:Static ObjectConverters.IsNotNull}}">
-              <TextBlock Text="{Binding SubscriptionNote}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" />
-            </Border>
-            <StackPanel Classes="field"><TextBlock Classes="f" Text="Название" /><TextBox Text="{Binding Name}" /></StackPanel>
             <StackPanel Classes="field">
               <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Classes="f" Text="Протокол" /><Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="protocol" /></StackPanel>
               <ItemsControl ItemsSource="{Binding Protocols}">
@@ -177,12 +214,7 @@
                 <CheckBox Content="Не проверять сертификат" IsChecked="{Binding AllowInsecure}" />
                 <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="allowInsecure" />
               </StackPanel>
-              <TextBlock Classes="muted" Foreground="{DynamicResource BadFg}" IsVisible="{Binding AllowInsecure}"
-                         Text="Трафик сможет прочитать любой посредник." />
-            </StackPanel>
-            <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8" Margin="0,0,0,12" IsVisible="{Binding ShowPlainWarning}">
-              <TextBlock Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" Text="Транспорт не шифруется: VLESS в таком виде ничего не скрывает от провайдера, VMess легко распознаётся." />
-            </Border>
+                          </StackPanel>
             <StackPanel Classes="field" IsVisible="{Binding HasTransport}">
               <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Classes="f" Text="Ядро для этого сервера" /><Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="coreChoice" /></StackPanel>
               <ComboBox ItemsSource="{Binding CoreOptions}" SelectedIndex="{Binding CoreIndex}" HorizontalAlignment="Stretch" />
@@ -195,6 +227,8 @@
             </Border>
           </StackPanel>
         </Grid>
+          </Expander>
+        </StackPanel>
       </ScrollViewer>
     </DockPanel>
   </Border>

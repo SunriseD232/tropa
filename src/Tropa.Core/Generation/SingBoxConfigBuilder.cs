@@ -314,11 +314,13 @@ public static class SingBoxConfigBuilder
         switch (s.Dns.LocalDnsRule)
         {
             case LocalDnsRule.Russian:
-                LocalIpv4Only(() => SetsMatch(ctx, [.. RuleSets.AlwaysDirect, RuleSets.GeositeCategoryRu]));
+                LocalIpv4Only(() => SetsMatch(ctx, [.. RuleSets.RussianDirect, RuleSets.GeositeCategoryRu]));
                 LocalIpv4Only(() => new JsonObject { ["domain_suffix"] = StrArray(["ru", "su", "xn--p1ai"]) });
                 break;
             case LocalDnsRule.DirectRules:
-                LocalIpv4Only(() => SetsMatch(ctx, RuleSets.AlwaysDirect));
+                // Локальный DNS — только там, где эти сайты и так идут напрямую (ADR-072).
+                if (s.Routing.Preset == RoutePreset.ExceptRu)
+                    LocalIpv4Only(() => SetsMatch(ctx, RuleSets.RussianDirect));
                 break;
             case LocalDnsRule.None:
                 break;
@@ -782,8 +784,8 @@ public static class SingBoxConfigBuilder
 
         rules.Push(new JsonObject { ["ip_is_private"] = true, ["outbound"] = DirectTag });
 
-        // Госуслуги, банки и сайты, доступные только из России, — напрямую раньше всего остального.
-        rules.Push(Route(ctx, SetsMatch(ctx, RuleSets.AlwaysDirect), RuleAction.Direct));
+        // Жёсткого правила «госуслуги и банки всегда напрямую» больше нет (ADR-072): маршрут делает
+        // ровно то, что в нём написано. В «Всё, кроме российского» эти наборы — часть российского.
 
         // «Только заблокированное» и свой маршрут «только пункты» (ADR-067): не подошло ни одно правило — напрямую.
         var final = s.Routing.Preset is RoutePreset.BlockedOnly or RoutePreset.ItemsOnly ? DirectTag : ProxyTag;
@@ -878,6 +880,7 @@ public static class SingBoxConfigBuilder
             case RoutePreset.ExceptRu:
                 // Заблокированное — через сервер, даже если это .ru; остальное российское — напрямую.
                 Blocked(ipPart: false);
+                rules.Push(Route(ctx, SetsMatch(ctx, RuleSets.RussianDirect), RuleAction.Direct));
                 AddRuleSetRule(ctx, rules, RuleSets.GeositeCategoryRu, RuleAction.Direct);
                 rules.Push(Route(ctx, new JsonObject { ["domain_suffix"] = StrArray(["ru", "su", "xn--p1ai"]) }, RuleAction.Direct));
                 resolve();

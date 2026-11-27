@@ -216,6 +216,30 @@ internal sealed partial class DiagnosticsViewModel : ObservableObject
     [RelayCommand]
     private void CloseReport() => ReportOpen = false;
 
+    /// <summary>Фильтры журнала чипами в окне «Для поддержки» (ADR-072): все, ошибки, DNS, подключение.</summary>
+    public static IReadOnlyList<string> LogFilters { get; } = ["Все", "Ошибки", "DNS", "Подключение"];
+
+    private static readonly string?[] LogFilterWords = [null, "error", "dns", "connect"];
+
+    [ObservableProperty]
+    public partial int LogFilterIndex { get; set; }
+
+    partial void OnLogFilterIndexChanged(int value)
+    {
+        if (value >= 0 && value < LogFilterWords.Length)
+            LogFilter = LogFilterWords[value];
+    }
+
+    /// <summary>Окно «Для поддержки» просит открыть себя; его создаёт окно приложения.</summary>
+    public event EventHandler? SupportRequested;
+
+    [RelayCommand]
+    private void OpenSupport()
+    {
+        RefreshLog();
+        SupportRequested?.Invoke(this, EventArgs.Empty);
+    }
+
     [RelayCommand]
     private void RefreshLog()
     {

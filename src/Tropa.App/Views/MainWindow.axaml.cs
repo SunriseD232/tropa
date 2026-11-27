@@ -17,9 +17,14 @@ internal sealed partial class MainWindow : Window
         base.OnDataContextChanged(e);
         if (_vm is not null)
             _vm.PropertyChanged -= OnViewModelChanged;
+        if (_vm is not null)
+            _vm.Diagnostics.SupportRequested -= OnSupportRequested;
         _vm = DataContext as MainWindowViewModel;
         if (_vm is not null)
+        {
             _vm.PropertyChanged += OnViewModelChanged;
+            _vm.Diagnostics.SupportRequested += OnSupportRequested;
+        }
         ApplyLayout();
     }
 
@@ -35,6 +40,24 @@ internal sealed partial class MainWindow : Window
         if (LayoutHost.Content is Control current && current is V2rayLayoutView == v2ray)
             return;
         LayoutHost.Content = v2ray ? new V2rayLayoutView() : new TropaLayoutView();
+    }
+
+    private SupportWindow? _support;
+
+    // «Для поддержки…» (ADR-072): одно окно журнала и отчёта рядом с главным.
+    private void OnSupportRequested(object? sender, EventArgs e)
+    {
+        if (_vm is null)
+            return;
+        if (_support is { } open)
+        {
+            open.Activate();
+            return;
+        }
+
+        _support = new SupportWindow { DataContext = _vm.Diagnostics };
+        _support.Closed += (_, _) => _support = null;
+        _support.Show(this);
     }
 
     /// <summary>true — окно закрывается по-настоящему (выход из трея), иначе прячется в трей.</summary>

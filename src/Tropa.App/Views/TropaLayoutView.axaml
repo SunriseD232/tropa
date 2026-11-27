@@ -2,34 +2,46 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Tropa.App.ViewModels"
              xmlns:svc="using:Tropa.App.Services"
+             xmlns:v="using:Tropa.App.Views"
              x:Class="Tropa.App.Views.TropaLayoutView"
              x:DataType="vm:MainWindowViewModel">
   <!-- Вид «Тропа»: боковое меню и экраны -->
-  <Grid ColumnDefinitions="232,*">
-    <!-- Боковое меню -->
-    <Border Grid.Column="0" Background="{DynamicResource Side}" BorderBrush="{DynamicResource SideLine}" BorderThickness="0,0,1,0" Padding="14,20">
+  <Grid ColumnDefinitions="72,*">
+    <!-- Узкое меню значков (ADR-072): подпись — во всплывающей подсказке -->
+    <Border Grid.Column="0" Background="{DynamicResource Side}" BorderBrush="{DynamicResource SideLine}" BorderThickness="0,0,1,0" Padding="0,16">
       <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Spacing="4">
-          <StackPanel Orientation="Horizontal" Spacing="10" Margin="10,4,10,20">
-            <Image Source="/Assets/logo.png" Width="28" Height="28" />
-            <TextBlock Text="Тропа" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
-          </StackPanel>
-          <Button Classes="nav" Classes.on="{Binding IsHome}" Content="Главная" Command="{Binding NavigateCommand}" CommandParameter="home" />
-          <Button Classes="nav" Classes.on="{Binding IsServers}" Content="Серверы" Command="{Binding NavigateCommand}" CommandParameter="servers" />
-          <Button Classes="nav" Classes.on="{Binding IsGames}" Content="Игры" Command="{Binding NavigateCommand}" CommandParameter="games" />
-          <Button Classes="nav" Classes.on="{Binding IsRules}" Content="Маршруты" Command="{Binding NavigateCommand}" CommandParameter="rules" />
-          <Button Classes="nav" Classes.on="{Binding IsDiagnostics}" Content="Диагностика" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" />
-          <Button Classes="nav" Classes.on="{Binding IsSettings}" Content="Настройки" Command="{Binding NavigateCommand}" CommandParameter="settings" />
+        <StackPanel DockPanel.Dock="Top" Spacing="6">
+          <Image Source="/Assets/logo.png" Width="30" Height="30" Margin="0,0,0,14" HorizontalAlignment="Center" ToolTip.Tip="{Binding CoreVersions}" />
+          <Button Classes="rail" Classes.on="{Binding IsHome}" Command="{Binding NavigateCommand}" CommandParameter="home" ToolTip.Tip="Главная" ToolTip.Placement="Right" AutomationProperties.Name="Главная">
+            <v:Icon Data="{StaticResource IconHome}" Width="22" Height="22" />
+          </Button>
+          <Button Classes="rail" Classes.on="{Binding IsServers}" Command="{Binding NavigateCommand}" CommandParameter="servers" ToolTip.Tip="Серверы" ToolTip.Placement="Right" AutomationProperties.Name="Серверы">
+            <v:Icon Data="{StaticResource IconServers}" Width="22" Height="22" />
+          </Button>
+          <Button Classes="rail" Classes.on="{Binding IsRules}" Command="{Binding NavigateCommand}" CommandParameter="rules" ToolTip.Tip="Маршруты" ToolTip.Placement="Right" AutomationProperties.Name="Маршруты">
+            <v:Icon Data="{StaticResource IconRoute}" Width="22" Height="22" />
+          </Button>
+          <Button Classes="rail" Classes.on="{Binding IsGames}" Command="{Binding NavigateCommand}" CommandParameter="games" ToolTip.Tip="Игры" ToolTip.Placement="Right" AutomationProperties.Name="Игры">
+            <v:Icon Data="{StaticResource IconGamepad}" Width="22" Height="22" />
+          </Button>
         </StackPanel>
-        <Border DockPanel.Dock="Bottom" VerticalAlignment="Bottom" Background="{DynamicResource SideFooter}" CornerRadius="12" Padding="12">
-          <StackPanel Spacing="4">
-            <TextBlock Text="{Binding FooterStatus}" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding CoreVersions}" Classes="muted" />
-          </StackPanel>
-        </Border>
+        <StackPanel DockPanel.Dock="Bottom" VerticalAlignment="Bottom" Spacing="6">
+          <Ellipse Width="8" Height="8" HorizontalAlignment="Center" Margin="0,0,0,8" ToolTip.Tip="{Binding FooterStatus}"
+                   Fill="{DynamicResource Line}" Classes.on="{Binding FooterConnected}">
+            <Ellipse.Styles>
+              <Style Selector="Ellipse.on"><Setter Property="Fill" Value="{DynamicResource Accent}" /></Style>
+            </Ellipse.Styles>
+          </Ellipse>
+          <Button Classes="rail" Classes.on="{Binding IsDiagnostics}" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" ToolTip.Tip="Диагностика" ToolTip.Placement="Right" AutomationProperties.Name="Диагностика">
+            <v:Icon Data="{StaticResource IconPulse}" Width="22" Height="22" />
+          </Button>
+          <Button Classes="rail" Classes.on="{Binding IsSettings}" Command="{Binding NavigateCommand}" CommandParameter="settings" ToolTip.Tip="Настройки" ToolTip.Placement="Right" AutomationProperties.Name="Настройки">
+            <v:Icon Data="{StaticResource IconGear}" Width="22" Height="22" />
+          </Button>
+        </StackPanel>
       </DockPanel>
     </Border>
-  
+
     <!-- Содержимое -->
     <DockPanel Grid.Column="1">
       <Border DockPanel.Dock="Top" IsVisible="{Binding Warning, Converter={x:Static ObjectConverters.IsNotNull}}"

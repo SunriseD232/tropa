@@ -72,9 +72,9 @@ public static partial class GeoEdits
         new(RuleSets.GeositeRuBlocked, "Заблокированные сайты", "Сайты, заблокированные в России. Всегда идут через сервер."),
         new(RuleSets.GeositeAiNonCn, "ИИ-сервисы", "ChatGPT, Claude, Gemini и другие сервисы, закрытые для России. Через сервер."),
         new(RuleSets.GeositeCategoryRu, "Российские сайты", "В маршруте «Всё, кроме российского» идут напрямую."),
-        new(RuleSets.GeositeGovRu, "Госсайты", "Госуслуги и другие государственные сайты. Всегда напрямую."),
-        new(RuleSets.GeositeBankRu, "Банки", "Сайты и приложения банков. Всегда напрямую."),
-        new(RuleSets.GeositeRuOnlyInside, "Доступные только из России", "Сайты, которые не открываются из-за границы. Всегда напрямую."),
+        new(RuleSets.GeositeGovRu, "Госсайты", "Госуслуги и другие государственные сайты."),
+        new(RuleSets.GeositeBankRu, "Банки", "Сайты и приложения банков."),
+        new(RuleSets.GeositeRuOnlyInside, "Доступные только из России", "Сайты, которые не открываются из-за границы."),
     ];
 
     public static GeoListInfo? Find(string tag) => Catalog.FirstOrDefault(c => c.Tag == tag);

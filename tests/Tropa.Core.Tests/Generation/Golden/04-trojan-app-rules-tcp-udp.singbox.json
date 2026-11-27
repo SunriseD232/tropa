@@ -298,16 +298,6 @@
         "outbound": "direct"
       },
       {
-        "rule_set": [
-          "ru-services",
-          "geosite-category-gov-ru",
-          "geosite-category-bank-ru",
-          "geosite-ru-available-only-inside"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
         "process_path_regex": [
           "(?i)(^|[\\\\/])VALORANT\\.exe$"
         ],
@@ -359,6 +349,16 @@
         ],
         "action": "route",
         "outbound": "proxy"
+      },
+      {
+        "rule_set": [
+          "ru-services",
+          "geosite-category-gov-ru",
+          "geosite-category-bank-ru",
+          "geosite-ru-available-only-inside"
+        ],
+        "action": "route",
+        "outbound": "direct"
       },
       {
         "rule_set": [

@@ -176,4 +176,39 @@ internal sealed partial class SettingsSection(string key, string title, string? 
     public string? Description { get; } = description;
 
     public IReadOnlyList<SettingRow> Rows { get; } = rows;
+
+    /// <summary>Раздел для опытных: в списке слева отделён и написан серым (ADR-072).</summary>
+    public bool IsExpert => Key == "expert";
+
+    /// <summary>Строка на плитке раздела: что выбрано сейчас в первых пунктах (ADR-072).</summary>
+    [ObservableProperty]
+    public partial string Summary { get; set; } = "";
+
+    public void UpdateSummary()
+    {
+        var parts = new List<string>();
+        foreach (var row in Rows)
+        {
+            var text = row switch
+            {
+                ChoiceRow c when c.Index >= 0 && c.Index < c.Options.Count => c.Options[c.Index],
+                ToggleRow t => Short(t.Title) + (t.Value ? ": вкл" : ": выкл"),
+                _ => null,
+            };
+            if (text is null)
+                continue;
+            parts.Add(text);
+            if (parts.Count == 2)
+                break;
+        }
+
+        Summary = parts.Count > 0 ? string.Join(" · ", parts) : Description ?? string.Join(", ", Rows.Take(3).Select(r => Short(r.Title)));
+    }
+
+    // «Аварийная блокировка (kill switch)» → «Аварийная блокировка»
+    private static string Short(string title)
+    {
+        var cut = title.IndexOf(" (", StringComparison.Ordinal);
+        return cut > 0 ? title[..cut] : title;
+    }
 }

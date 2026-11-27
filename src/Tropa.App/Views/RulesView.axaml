@@ -13,7 +13,7 @@
       <DockPanel>
         <Button DockPanel.Dock="Right" Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="finalRule" ToolTip.Tip="Что, если ни одно правило не подошло" Margin="8,0,0,0" />
         <Button DockPanel.Dock="Right" Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruServices" Margin="8,0,0,0" />
-        <TextBlock Classes="muted" Text="Пункты проверяются сверху вниз, срабатывает первый подходящий. Госуслуги и банки всегда идут напрямую." TextWrapping="Wrap" VerticalAlignment="Center" />
+        <TextBlock Classes="muted" Text="Пункты проверяются сверху вниз, срабатывает первый подходящий." TextWrapping="Wrap" VerticalAlignment="Center" />
       </DockPanel>
       <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
         <TextBlock Classes="muted" Text="Основа" VerticalAlignment="Center" />

@@ -1,0 +1,825 @@
+<title>Тропа: упрощение окон</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap">
+<style>
+/* Layout: page = tab strip of 7 app windows; each window shows 3 variants stacked (mock left, notes right). Mocks always use the app's own dark palette. */
+:root{
+  --bg:#F3F5F4; --fg:#15191C; --muted:#5D6872; --line:#D8DEDB; --panel:#FFFFFF; --accent:#0E7148; --accent-soft:#DDF3E9;
+  --font-display:"Manrope",system-ui,sans-serif; --font-body:"Inter",system-ui,sans-serif;
+  /* app palette (Tropa dark) — fixed, mocks look like the real app */
+  --a-bg:#0F1215; --a-side:#14181C; --a-card:#171B20; --a-line:#242A31; --a-text:#E6EAEE; --a-muted:#9AA4AE;
+  --a-acc:#3DDC97; --a-acc-dk:#0B1A13; --a-navon:#1E2A25; --a-field:#2C333B; --a-chip:#2A323A;
+  --a-okbg:#173A2B; --a-okfg:#7BE8B5; --a-warnbg:#3A2E14; --a-warnfg:#F5C76A; --a-badbg:#3D1C1F; --a-badfg:#FF9C9C; --a-infobg:#152233; --a-infofg:#9CC4FF;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0B0E10;--fg:#E4E9EC;--muted:#8E99A3;--line:#20262B;--panel:#12161A;--accent:#3DDC97;--accent-soft:#132A20;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0B0E10;--fg:#E4E9EC;--muted:#8E99A3;--line:#20262B;--panel:#12161A;--accent:#3DDC97;--accent-soft:#132A20;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1280px;margin:0 auto;padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-family:var(--font-display);font-size:clamp(26px,4vw,38px);line-height:1.15;margin:0 0 10px;text-wrap:balance;letter-spacing:-.01em}
+h2{font-family:var(--font-display);font-size:24px;margin:0 0 6px;text-wrap:balance}
+h3{font-family:var(--font-display);font-size:18px;margin:0}
+p{margin:0}
+.lead{color:var(--muted);max-width:70ch}
+.dirs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:24px 0 8px}
+.dir{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.dir b{font-family:var(--font-display);font-size:16px;display:block;margin-bottom:4px}
+.dir .k{display:inline-block;font:700 12px var(--font-display);color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 7px;margin-right:6px}
+.dir p{color:var(--muted);font-size:14px}
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:6px;overflow-x:auto;padding:14px 0;margin-top:20px;border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.tab{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:500 14px var(--font-body);padding:7px 14px;border-radius:999px;cursor:pointer;display:flex;gap:8px;align-items:center}
+.tab small{color:var(--muted);font-variant-numeric:tabular-nums}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.tab[aria-selected="true"] small{color:var(--bg)}
+.tab:focus-visible,.pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.screen-head{display:flex;flex-wrap:wrap;gap:12px 32px;align-items:flex-end;justify-content:space-between;margin:28px 0 18px}
+.now{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:14px;max-width:560px}
+.now b{font-weight:600}
+.now .cnt{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;font-variant-numeric:tabular-nums}
+.now .cnt span{color:var(--muted)} .now .cnt strong{color:var(--fg)}
+.variant{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);gap:24px;padding:22px 0;border-top:1px solid var(--line);align-items:start}
+@media (max-width:900px){.variant{grid-template-columns:1fr}}
+.notes .tag{font:700 12px var(--font-display);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.notes h3{margin:2px 0 8px}
+.notes ul{margin:0;padding-left:18px;display:grid;gap:6px;font-size:14px}
+.notes li::marker{color:var(--muted)}
+.notes .gone{margin-top:12px;font-size:13px;color:var(--muted)}
+.notes .gone b{color:var(--fg);font-weight:600}
+.pick{margin-top:14px;border:1px solid var(--line);background:transparent;color:var(--fg);font:500 13px var(--font-body);padding:6px 12px;border-radius:8px;cursor:pointer}
+.pick[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#06130D}
+.foot{margin-top:28px;color:var(--muted);font-size:14px}
+.foot code{font-size:13px}
+
+/* ---------- mock primitives (app look) ---------- */
+.mockbox{overflow-x:auto;border-radius:12px}
+.m{min-width:620px;background:var(--a-bg);color:var(--a-text);font:12px/1.4 var(--font-body);border:1px solid #2a3036;border-radius:12px;overflow:hidden;display:grid;grid-template-columns:auto 1fr;min-height:400px}
+.m.norail{grid-template-columns:1fr}
+.m *{box-sizing:border-box}
+.side{background:var(--a-side);border-right:1px solid var(--a-line);padding:12px 8px;display:flex;flex-direction:column;gap:2px;width:118px}
+.side.rail{width:52px;align-items:center}
+.logo{display:flex;gap:6px;align-items:center;font-weight:700;font-size:13px;padding:2px 6px 10px}
+.logo i{width:16px;height:16px;border-radius:5px;background:var(--a-acc);display:block}
+.nv{padding:5px 8px;border-radius:7px;color:var(--a-muted);font-size:11.5px;white-space:nowrap}
+.nv.on{background:var(--a-navon);color:var(--a-text);font-weight:600}
+.side.rail .nv{width:34px;height:30px;padding:0;display:grid;place-items:center;font-size:13px}
+.ic{display:inline-block;width:14px;height:14px;border:1.6px solid currentColor;border-radius:4px;opacity:.85}
+.ic.c{border-radius:50%}
+.nv-sp{flex:1}
+.body{padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.ttl{font-size:17px;font-weight:700}
+.mu{color:var(--a-muted)}
+.sm{font-size:11px}
+.lbl{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--a-muted);font-weight:600}
+.card{background:var(--a-card);border:1px solid var(--a-line);border-radius:10px;padding:12px}
+.row{display:flex;gap:8px;align-items:center;min-width:0}
+.row.sb{justify-content:space-between}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.grow{flex:1;min-width:0}
+.btn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--a-field);background:#1c2127;color:var(--a-text);border-radius:7px;padding:4px 10px;font-size:11.5px;white-space:nowrap}
+.btn.pri{background:var(--a-acc);border-color:var(--a-acc);color:var(--a-acc-dk);font-weight:600}
+.btn.gh{background:transparent;border-color:transparent;color:var(--a-muted)}
+.btn.big{padding:8px 16px;font-size:13px}
+.dots{border:1px solid var(--a-field);border-radius:7px;padding:2px 8px;color:var(--a-muted);font-weight:700;letter-spacing:1px}
+.inp{border:1px solid var(--a-field);background:#12161a;border-radius:7px;padding:5px 9px;color:var(--a-muted);font-size:11.5px;flex:1;min-width:0}
+.dd::after{content:" ▾";color:var(--a-muted)}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--a-chip);border-radius:999px;padding:2px 9px;font-size:11px;white-space:nowrap}
+.chip.ok{background:var(--a-okbg);color:var(--a-okfg)} .chip.warn{background:var(--a-warnbg);color:var(--a-warnfg)} .chip.bad{background:var(--a-badbg);color:var(--a-badfg)} .chip.info{background:var(--a-infobg);color:var(--a-infofg)}
+.chip.on{background:var(--a-acc);color:var(--a-acc-dk);font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--a-acc);display:inline-block;flex:none}
+.dot.w{background:var(--a-warnfg)} .dot.b{background:var(--a-badfg)} .dot.n{background:#4a535c}
+.sw{width:28px;height:16px;border-radius:999px;background:#39414a;position:relative;flex:none}
+.sw::after{content:"";position:absolute;width:12px;height:12px;border-radius:50%;background:#cfd6dc;top:2px;left:2px}
+.sw.on{background:var(--a-acc)} .sw.on::after{left:14px;background:var(--a-acc-dk)}
+.seg{display:flex;background:#12161a;border:1px solid var(--a-field);border-radius:8px;padding:2px;gap:2px}
+.seg span{flex:1;text-align:center;padding:4px 8px;border-radius:6px;color:var(--a-muted);font-size:11px;white-space:nowrap}
+.seg span.on{background:var(--a-navon);color:var(--a-text);font-weight:600}
+.power{width:118px;height:118px;border-radius:50%;background:#2E7D5B;color:#E8F5EE;display:grid;place-items:center;font-weight:700;font-size:13px;margin:0 auto;box-shadow:0 0 0 10px rgba(61,220,151,.08)}
+.power.sm{width:58px;height:58px;font-size:10px;margin:0;box-shadow:0 0 0 5px rgba(61,220,151,.08)}
+.list{display:flex;flex-direction:column}
+.li{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--a-line);min-width:0}
+.li:last-child{border-bottom:0}
+.li.sel{background:var(--a-navon);border-radius:7px;border-bottom-color:transparent}
+.flag{width:18px;height:12px;border-radius:2px;flex:none;background:linear-gradient(#000 33%,#d22 33% 66%,#fc0 66%)}
+.flag.nl{background:linear-gradient(#ae1c28 33%,#fff 33% 66%,#21468b 66%)}
+.flag.fi{background:linear-gradient(90deg,transparent 30%,#003580 30% 42%,transparent 42%),linear-gradient(#fff 42%,#003580 42% 58%,#fff 58%)}
+.flag.pl{background:linear-gradient(#fff 50%,#dc143c 50%)}
+.flag.us{background:repeating-linear-gradient(#b22234 0 2px,#fff 2px 4px)}
+.flag.tr{background:#e30a17}
+.ping{font-variant-numeric:tabular-nums;color:var(--a-okfg);font-size:11px;width:44px;text-align:right}
+.ping.w{color:var(--a-warnfg)} .ping.b{color:var(--a-badfg)}
+.bar{height:4px;border-radius:2px;background:var(--a-acc);opacity:.8}
+.th{display:grid;gap:8px;padding:4px 8px;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--a-muted);font-weight:600;border-bottom:1px solid var(--a-line)}
+.tr{display:grid;gap:8px;padding:6px 8px;border-bottom:1px solid var(--a-line);align-items:center;font-size:11.5px}
+.tr.sel{background:var(--a-navon)}
+.hint{font-size:10.5px;color:var(--a-muted)}
+.spark{height:34px;width:100%;display:block}
+.bigq{font-size:15px;font-weight:700}
+.opt{border:1px solid var(--a-field);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:3px}
+.opt.on{border-color:var(--a-acc);background:#13241c}
+.opt b{font-size:12px}
+.radio{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--a-muted);flex:none}
+.opt.on .radio{border:4px solid var(--a-acc)}
+.disc{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px dashed var(--a-field);border-radius:8px;color:var(--a-muted);font-size:11.5px}
+.drawer{border-left:1px solid var(--a-line);background:var(--a-side);padding:14px;display:flex;flex-direction:column;gap:10px;width:220px;flex:none}
+.split{display:flex;min-height:100%;margin:-16px -18px;}
+.split>.body{flex:1}
+.tile{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:13px;flex:none}
+.kbd{border:1px solid var(--a-field);border-radius:4px;padding:0 4px;font-size:10px;color:var(--a-muted)}
+.step{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--a-muted)}
+.step i{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--a-field);display:grid;place-items:center;font-style:normal;font-size:10px}
+.step.on{color:var(--a-text);font-weight:600} .step.on i{background:var(--a-acc);border-color:var(--a-acc);color:var(--a-acc-dk)}
+.step.done i{border-color:var(--a-acc);color:var(--a-acc)}
+.sticky{margin-top:auto;display:flex;justify-content:space-between;align-items:center;background:var(--a-warnbg);color:var(--a-warnfg);border-radius:8px;padding:7px 10px;font-size:11.5px}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:10.5px}
+.log{background:#0b0e10;border:1px solid var(--a-line);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:3px}
+.check{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--a-line)}
+.check:last-child{border-bottom:0}
+.menu{position:absolute;background:#1d2329;border:1px solid var(--a-field);border-radius:8px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45);display:flex;flex-direction:column;min-width:150px;z-index:2}
+.menu span{padding:4px 8px;border-radius:5px;font-size:11px}
+.menu span:first-child{background:var(--a-navon)}
+.menu hr{border:0;border-top:1px solid var(--a-line);margin:3px 0}
+.rel{position:relative}
+.cmdk{border:1px solid var(--a-field);background:#12161a;border-radius:8px;padding:5px 9px;display:flex;justify-content:space-between;color:var(--a-muted);font-size:11px}
+@media (prefers-reduced-motion:no-preference){.tab,.pick{transition:background .15s,color .15s}}
+</style>
+
+<div class="wrap">
+  <h1>Тропа проще: по три варианта на каждое окно</h1>
+  <p class="lead">Сейчас почти каждое окно показывает всё сразу: все режимы, все действия над строкой и значок «i» у каждого поля. Ниже 7 крупных окон и по три способа их разгрузить. Варианты одной буквы держатся одного подхода, но их можно смешивать: например, главную взять из A, а серверы из C. Цвета и шрифты остались как в приложении, поменялись состав, расстановка и вид кнопок.</p>
+
+  <div class="dirs">
+    <div class="dir"><b><span class="k">A</span>Одна кнопка</b><p>На виду только главное действие. Всё остальное спрятано в меню «⋯» и в раскрывающийся блок «Дополнительно». Меню слева сжимается до узкой полосы с 4 значками.</p></div>
+    <div class="dir"><b><span class="k">B</span>Сценарии</b><p>Вместо технических переключателей пользователь выбирает, что ему нужно: «весь компьютер или только браузер», «что пускать через сервер». Настройки показаны крупными карточками.</p></div>
+    <div class="dir"><b><span class="k">C</span>Аккуратный профи</b><p>Все возможности остаются, но действия собраны в одну панель команд с меню. Справа от списка появляется панель выбранного элемента, а значки «i» заменены строкой подсказки.</p></div>
+  </div>
+
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <div id="screens"></div>
+
+  <p class="foot">Счётчики «сейчас» посчитаны по разметке <code>src/Tropa.App/Views/*.axaml</code> на 27.11.2026 (элементы &lt;Button&gt;, переключатели, списки и значки «i» в файле, включая скрытые состояния). Отметки «Нравится» хранятся только в этом браузере, чтобы было удобно сравнивать.</p>
+</div>
+
+<template id="t-home">
+  <section data-key="home" data-name="Главная" data-count="11 кн.">
+    <div class="screen-head"><div><h2>Главная</h2><p class="lead">Экран, который открывают чаще всего. Сейчас на нём вперемешку живут подключение, режимы, трафик, проверка безопасности и обновления.</p></div>
+      <div class="now"><b>Сейчас:</b> кнопка питания, список серверов, TUN, список маршрутов, список «Системный прокси» из трёх пунктов, kill switch, трафик, «Как это работает сейчас», «Версии и обновления».<div class="cnt"><span>кнопок <strong>11</strong></span><span>списков <strong>6</strong></span><span>переключателей <strong>2</strong></span><span>значков «i» <strong>5</strong></span></div></div></div>
+
+    <div class="variant" data-v="A"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv on"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv"><span class="ic c"></span></div></div>
+      <div class="body" style="align-items:center;justify-content:center;gap:16px">
+        <div class="power">Подключено</div>
+        <div class="mu">00:42:17 · ↓ 3,2 МБ/с ↑ 140 КБ/с</div>
+        <div class="btn big dd" style="gap:8px"><span class="flag nl"></span>Нидерланды · 38 мс</div>
+        <div class="row mu sm" style="gap:6px"><span>Весь компьютер</span>·<span>Только заблокированное</span>·<span style="color:var(--a-text);text-decoration:underline">изменить</span></div>
+        <div class="chip info" style="margin-top:8px">Есть обновление 0.1.33 · Установить</div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант A</span><h3>Одна кнопка и одна строка</h3><ul>
+        <li>На экране остаются кнопка, выбор сервера и одна строка режима. По «изменить» открывается маленькое окно с режимом и маршрутом.</li>
+        <li>Трафик стал строкой под кнопкой и виден только при подключении.</li>
+        <li>Обновления показываются полоской, только когда они есть.</li>
+        <li>Меню слева сжато до значков: Главная, Серверы, Маршруты и внизу Настройки. Игры и Диагностика переехали в «Ещё».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> список «Системный прокси», kill switch (теперь в Настройках → Подключение), «Как это работает сейчас», 5 значков «i».</p></div></div>
+
+    <div class="variant" data-v="B"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv on">Главная</div><div class="nv">Серверы</div><div class="nv">Маршруты</div><div class="nv">Игры</div><div class="nv-sp"></div><div class="nv">Настройки</div></div>
+      <div class="body">
+        <div class="row" style="gap:16px"><div class="power sm">Вкл</div><div class="col grow" style="gap:2px"><div class="bigq">Подключено к Нидерландам</div><div class="mu sm">38 мс · 00:42:17 · <span style="text-decoration:underline">сменить сервер</span></div></div></div>
+        <div class="lbl">Для каких программ</div>
+        <div class="g3">
+          <div class="opt on"><div class="row"><span class="radio"></span><b>Весь компьютер</b></div><span class="hint">Игры, Discord, всё. Режим TUN</span></div>
+          <div class="opt"><div class="row"><span class="radio"></span><b>Только браузеры</b></div><span class="hint">Через прокси Windows</span></div>
+          <div class="opt"><div class="row"><span class="radio"></span><b>Вручную</b></div><span class="hint">Прокси Windows не трогаем</span></div>
+        </div>
+        <div class="lbl">Что пускать через сервер</div>
+        <div class="row" style="flex-wrap:wrap"><span class="chip on">Только заблокированное</span><span class="chip">Всё, кроме российского</span><span class="chip">Всё</span><span class="chip">Свой: «Только Discord»</span></div>
+        <div class="card row sb"><div class="col" style="gap:2px"><span class="lbl">Трафик</span><span>↓ 3,2 МБ/с · ↑ 140 КБ/с</span></div><svg class="spark" style="width:55%" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0 28 L20 24 L40 26 L60 15 L80 18 L100 9 L120 14 L140 6 L160 12 L180 8 L200 10" fill="none" stroke="#3DDC97" stroke-width="1.5"/></svg></div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант B</span><h3>Выбор вместо переключателей</h3><ul>
+        <li>Переключатель TUN и список «Системный прокси» объединены в один вопрос с тремя ответами: «Весь компьютер», «Только браузеры», «Вручную». Это одно решение, и комбинации «TUN включён и прокси очищен» больше не путают.</li>
+        <li>Маршрут выбирается чипами в одно нажатие, а не через выпадающий список.</li>
+        <li>Подсказка написана прямо в карточке, поэтому значок «i» не нужен.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> kill switch (в Настройки), «Как это работает сейчас» (в Диагностику), блок версий (в Настройки → Ядра).</p></div></div>
+
+    <div class="variant" data-v="C"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv on">Главная</div><div class="nv">Серверы</div><div class="nv">Маршруты</div><div class="nv">Игры</div><div class="nv">Диагностика</div><div class="nv-sp"></div><div class="nv">Настройки</div></div>
+      <div class="body">
+        <div class="card row" style="gap:10px;flex-wrap:wrap"><span class="dot"></span><b>Подключено</b><span class="mu">00:42:17</span><span class="grow"></span><span class="btn dd"><span class="flag nl"></span>Нидерланды 38 мс</span><span class="btn dd">Заблокированное</span><span class="btn dd">TUN</span><span class="btn">Отключить</span></div>
+        <div class="g2">
+          <div class="card col"><div class="row sb"><span class="lbl">Трафик за сеанс</span><span class="mu sm">↓ 1,4 ГБ ↑ 61 МБ</span></div><svg class="spark" style="height:70px" viewBox="0 0 200 70" preserveAspectRatio="none"><path d="M0 60 L20 52 L40 55 L60 34 L80 40 L100 22 L120 30 L140 12 L160 25 L180 16 L200 20 L200 70 L0 70Z" fill="rgba(61,220,151,.15)"/><path d="M0 60 L20 52 L40 55 L60 34 L80 40 L100 22 L120 30 L140 12 L160 25 L180 16 L200 20" fill="none" stroke="#3DDC97" stroke-width="1.5"/></svg></div>
+          <div class="card col"><span class="lbl">Защита</span><div class="row sb"><span>Аварийная блокировка</span><span class="sw on"></span></div><span class="hint">Если связь оборвётся, интернет не пойдёт мимо сервера.</span><div class="row sb"><span>Ядра проверены</span><span class="chip ok">SHA-256 ✓</span></div></div>
+        </div>
+        <div class="hint">Подсказки появляются при наведении на любой элемент. Значки «i» убраны.</div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант C</span><h3>Строка состояния и плитки</h3><ul>
+        <li>Всё управление собрано в одну строку сверху: сервер, маршрут, режим и «Отключить». Каждое — компактный выпадающий список.</li>
+        <li>Огромная круглая кнопка не нужна: состояние показывает цветная точка и текст.</li>
+        <li>Под строкой две плитки: трафик с графиком и «Защита» (kill switch + проверка ядер в одной карточке).</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> отдельный блок «Версии и обновления» (теперь значок в меню слева), 5 значков «i».</p></div></div>
+  </section>
+</template>
+
+<template id="t-servers">
+  <section data-key="servers" data-name="Серверы" data-count="39 кн.">
+    <div class="screen-head"><div><h2>Серверы</h2><p class="lead">Самое перегруженное окно: у строки сервера восемь действий, у вкладки подписки шесть, и ещё панель проверок с пятью тестами.</p></div>
+      <div class="now"><b>Сейчас:</b> «Обновить подписки», «Тест всех», «Вручную», «Добавить»; вкладки подписок с «Левее/Правее/Переименовать/Удалить»; фильтры; у строки «Выше/Ниже/Изменить/Удалить/Копия/Ссылка/QR/Конфиг».<div class="cnt"><span>кнопок <strong>39</strong></span><span>списков <strong>3</strong></span><span>значков «i» <strong>8</strong></span></div></div></div>
+
+    <div class="variant" data-v="A"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv on"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv"><span class="ic c"></span></div></div>
+      <div class="body">
+        <div class="row sb"><span class="ttl">Серверы</span><div class="row"><span class="btn dd">Все подписки</span><span class="btn">Проверить</span><span class="btn pri">+ Добавить</span></div></div>
+        <div class="list card" style="padding:4px">
+          <div class="li sel"><span class="flag nl"></span><span class="grow">Нидерланды · Амстердам</span><span class="chip ok">используется</span><span class="ping">38 мс</span></div>
+          <div class="li"><span class="flag"></span><span class="grow">Германия · Франкфурт</span><span class="ping">44 мс</span></div>
+          <div class="li rel"><span class="flag fi"></span><span class="grow">Финляндия · Хельсинки</span><span class="ping">51 мс</span><span class="dots">⋯</span>
+            <div class="menu" style="right:6px;top:26px"><span>Использовать</span><span>Изменить</span><span>Поделиться ссылкой</span><hr><span style="color:var(--a-badfg)">Удалить</span></div></div>
+          <div class="li"><span class="flag pl"></span><span class="grow">Польша · Варшава</span><span class="ping w">112 мс</span></div>
+          <div class="li"><span class="flag us"></span><span class="grow">США · Нью-Йорк</span><span class="ping b">нет ответа</span></div>
+        </div>
+        <div class="hint">Двойной щелчок — подключиться. Скопированную ссылку можно вставить в любом месте окна (Ctrl+V).</div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант A</span><h3>Просто список</h3><ul>
+        <li>В строке только флаг, название и задержка. Все действия спрятаны в «⋯», и это меню видно только при наведении на строку.</li>
+        <li>Вкладки подписок заменены одним фильтром «Все подписки ▾». Переименование и порядок подписок перенесены в Настройки → Подписки.</li>
+        <li>«Обновить подписки» и «Тест всех» объединены в одну кнопку «Проверить»: она обновляет подписки и измеряет задержку.</li>
+        <li>QR, выгрузка конфига и копирование ссылки собраны в одном пункте меню «Поделиться».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> 7 кнопок у строки, «Левее/Правее», панель с пятью тестами (запускается из меню, когда нужна).</p></div></div>
+
+    <div class="variant" data-v="B"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv on">Серверы</div><div class="nv">Маршруты</div><div class="nv">Игры</div><div class="nv-sp"></div><div class="nv">Настройки</div></div>
+      <div class="body">
+        <div class="row sb"><span class="ttl">Серверы</span><div class="seg" style="width:200px"><span class="on">Серверы</span><span>Подписки · 2</span></div></div>
+        <div class="card row" style="background:#13241c;border-color:#24563f"><div class="col grow" style="gap:2px"><span class="lbl" style="color:var(--a-okfg)">Тропа выбирает сама</span><b style="font-size:13px">Сейчас лучший: Нидерланды, 38 мс</b><span class="hint">Если сервер перестанет отвечать, Тропа переключится на следующий по скорости.</span></div><span class="sw on"></span></div>
+        <div class="col" style="gap:4px">
+          <div class="row sb" style="padding:2px 4px"><span class="row"><span class="flag nl"></span><b>Нидерланды</b><span class="mu sm">3 сервера</span></span><span class="ping">38 мс</span></div>
+          <div class="row sb" style="padding:2px 4px"><span class="row"><span class="flag"></span><b>Германия</b><span class="mu sm">4 сервера</span></span><span class="ping">44 мс</span></div>
+          <div class="card col" style="padding:6px 8px;gap:0"><div class="li" style="padding:4px 2px"><span class="grow">Франкфурт 1</span><span class="ping">44 мс</span></div><div class="li" style="padding:4px 2px"><span class="grow">Франкфурт 2</span><span class="ping">47 мс</span></div><div class="li" style="padding:4px 2px"><span class="grow">Берлин</span><span class="ping w">96 мс</span></div></div>
+          <div class="row sb" style="padding:2px 4px"><span class="row"><span class="flag fi"></span><b>Финляндия</b><span class="mu sm">2 сервера</span></span><span class="ping">51 мс</span></div>
+          <div class="row sb" style="padding:2px 4px"><span class="row"><span class="flag us"></span><b>США</b><span class="mu sm">2 сервера</span></span><span class="ping b">нет ответа</span></div>
+        </div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант B</span><h3>Автовыбор и страны</h3><ul>
+        <li>Главная карточка отвечает на вопрос пользователя «куда подключаться?». По умолчанию Тропа сама выбирает лучший сервер и переключается при сбое.</li>
+        <li>Серверы сгруппированы по странам и свёрнуты. У страны показана лучшая задержка.</li>
+        <li>Подписки вынесены на соседнюю вкладку и показаны карточками: сколько серверов, когда обновлялась, до какого числа оплачена, кнопка «Обновить».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> фильтры, ручная сортировка «Выше/Ниже», массовые «Удалить дубликаты/нерабочие» (теперь это настройка подписки «Скрывать нерабочие»).</p></div></div>
+
+    <div class="variant" data-v="C"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv on">Серверы</div><div class="nv">Маршруты</div><div class="nv">Игры</div><div class="nv">Диагностика</div><div class="nv-sp"></div><div class="nv">Настройки</div></div>
+      <div class="body" style="padding:0">
+        <div class="split" style="margin:0">
+          <div class="body">
+            <div class="row"><span class="btn pri dd">Добавить</span><span class="btn dd">Проверить</span><span class="btn dd">Очистить</span><span class="grow"></span><span class="inp" style="max-width:150px">Поиск…</span></div>
+            <div class="row" style="gap:4px"><span class="chip on">Все · 11</span><span class="chip">Подписка «Друзья» · 8</span><span class="chip">Вручную · 3</span></div>
+            <div>
+              <div class="th" style="grid-template-columns:1fr 60px 60px"><span>Сервер</span><span>Задержка</span><span>Протокол</span></div>
+              <div class="tr sel" style="grid-template-columns:1fr 60px 60px"><span class="row"><span class="flag nl"></span>Амстердам</span><span class="ping" style="text-align:left">38 мс</span><span class="mu">VLESS</span></div>
+              <div class="tr" style="grid-template-columns:1fr 60px 60px"><span class="row"><span class="flag"></span>Франкфурт 1</span><span class="ping" style="text-align:left">44 мс</span><span class="mu">VLESS</span></div>
+              <div class="tr" style="grid-template-columns:1fr 60px 60px"><span class="row"><span class="flag fi"></span>Хельсинки</span><span class="ping" style="text-align:left">51 мс</span><span class="mu">Trojan</span></div>
+              <div class="tr" style="grid-template-columns:1fr 60px 60px"><span class="row"><span class="flag pl"></span>Варшава</span><span class="ping w" style="text-align:left">112 мс</span><span class="mu">VMess</span></div>
+            </div>
+          </div>
+          <div class="drawer">
+            <div class="row"><span class="flag nl"></span><b>Амстердам</b></div>
+            <span class="mu sm">VLESS · Reality · XHTTP</span>
+            <span class="btn pri" style="justify-content:center">Использовать</span>
+            <div class="lbl">Проверки</div>
+            <div class="row sb sm"><span>Задержка</span><span class="ping">38 мс</span></div>
+            <div class="row sb sm"><span>Скорость</span><span>87 Мбит/с</span></div>
+            <div class="row sb sm"><span>UDP</span><span class="chip ok">работает</span></div>
+            <span class="btn" style="justify-content:center">Проверить подробно</span>
+            <div class="row" style="margin-top:auto"><span class="btn grow" style="justify-content:center">Изменить</span><span class="btn dd">Поделиться</span><span class="dots">⋯</span></div>
+          </div>
+        </div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант C</span><h3>Таблица и панель справа</h3><ul>
+        <li>Над таблицей три кнопки с меню. «Проверить ▾» содержит тест всех, TCP-пинг и скорость. «Очистить ▾» удаляет дубликаты и нерабочие серверы.</li>
+        <li>Вкладки подписок заменены чипами-фильтрами со счётчиками. Действия над подпиской открываются правым щелчком по чипу.</li>
+        <li>Все действия над сервером живут в правой панели: одна главная кнопка «Использовать», остальное в «Поделиться ▾» и «⋯».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> кнопки внутри каждой строки, текст про шифрование ключа (переехал в подсказку у «Поделиться»).</p></div></div>
+  </section>
+</template>
+
+<template id="t-routes">
+  <section data-key="routes" data-name="Маршруты" data-count="33 кн.">
+    <div class="screen-head"><div><h2>Маршруты</h2><p class="lead">Здесь больше всего справки: в окне два уровня (список маршрутов и редактор), общие опции, приложения Store, гео-базы и свои списки.</p></div>
+      <div class="now"><b>Сейчас:</b> список маршрутов с «⋯», «Для всех маршрутов» (QUIC, UDP), «Приложения из Store», «Гео-базы», редактор с «Основа», «Сайты и приложения», «Из гео-баз», «Списки».<div class="cnt"><span>кнопок <strong>33</strong></span><span>списков <strong>5</strong></span><span>переключателей <strong>4</strong></span><span>значков «i» <strong>13</strong></span></div></div></div>
+
+    <div class="variant" data-v="A"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv on"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv"><span class="ic c"></span></div></div>
+      <div class="body">
+        <span class="bigq">Что пускать через сервер?</span>
+        <div class="col" style="gap:6px">
+          <div class="opt on"><div class="row"><span class="radio"></span><b>Только заблокированное</b><span class="chip ok" style="margin-left:auto">рекомендуется</span></div></div>
+          <div class="opt"><div class="row"><span class="radio"></span><b>Всё, кроме российских сайтов</b></div></div>
+          <div class="opt"><div class="row"><span class="radio"></span><b>Всё</b></div></div>
+        </div>
+        <div class="lbl">Исключения</div>
+        <div class="row"><span class="inp">Сайт, программа или IP: например, 2ip.io или Discord.exe</span><span class="btn pri">Добавить</span></div>
+        <div class="list card" style="padding:2px 6px">
+          <div class="li"><span class="grow">Discord.exe</span><span class="btn dd">Через сервер</span></div>
+          <div class="li"><span class="grow">2ip.io</span><span class="btn dd">Напрямую</span></div>
+        </div>
+        <div class="disc"><span>Дополнительно: гео-базы, свои списки, QUIC, UDP, приложения Store</span><span>▸</span></div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант A</span><h3>Один вопрос и исключения</h3><ul>
+        <li>Пользователь видит один маршрут. Несколько маршрутов, гео-базы и списки уходят в раскрывающийся блок «Дополнительно».</li>
+        <li>Одно поле ввода понимает и сайт, и программу, и IP. Отдельные блоки «Приложения» и «Сайты» не нужны.</li>
+        <li>У пункта один выпадающий список действия. Раздельные TCP и UDP появляются внутри него пунктом «Настроить TCP и UDP отдельно…».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> 13 значков «i», абзацы с примерами, второй уровень «← Все маршруты».</p></div></div>
+
+    <div class="variant" data-v="B"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv">Серверы</div><div class="nv on">Маршруты</div><div class="nv">Игры</div><div class="nv-sp"></div><div class="nv">Настройки</div></div>
+      <div class="body" style="padding:0"><div class="split" style="margin:0">
+        <div class="body">
+          <div class="row sb"><span class="ttl">Маршруты</span><span class="btn">+ Новый</span></div>
+          <div class="g2">
+            <div class="opt on"><div class="row sb"><b>Обычный</b><span class="chip on">действует</span></div><span class="hint">Только заблокированное · 4 исключения</span></div>
+            <div class="opt"><div class="row sb"><b>Только Discord</b><span class="btn">Включить</span></div><span class="hint">Напрямую всё, кроме Discord</span></div>
+            <div class="opt"><div class="row sb"><b>Всё через сервер</b><span class="btn">Включить</span></div><span class="hint">Кроме Госуслуг и банков</span></div>
+            <div class="opt"><div class="row sb"><b>Игры</b><span class="btn">Включить</span></div><span class="hint">TCP через сервер, UDP напрямую</span></div>
+          </div>
+          <div class="hint">Госуслуги и банки всегда идут напрямую, в любом маршруте.</div>
+        </div>
+        <div class="drawer" style="width:230px">
+          <div class="row sb"><b>Обычный</b><span class="mu">✕</span></div>
+          <div class="seg"><span class="on">Сайты и программы</span><span>Ещё</span></div>
+          <div class="row"><span class="inp">Добавить…</span></div>
+          <div class="li" style="padding:4px 0"><span class="grow">Discord.exe</span><span class="chip">сервер</span></div>
+          <div class="li" style="padding:4px 0"><span class="grow">2ip.io</span><span class="chip">напрямую</span></div>
+          <div class="li" style="padding:4px 0"><span class="grow">geosite: youtube</span><span class="chip">сервер</span></div>
+          <div class="li" style="padding:4px 0"><span class="grow">Торрент.exe</span><span class="chip bad">блок</span></div>
+        </div>
+      </div></div></div></div>
+      <div class="notes"><span class="tag">Вариант B</span><h3>Маршруты как готовые наборы</h3><ul>
+        <li>Маршрут показан карточкой с понятным описанием. Включается одним нажатием, как плейлист.</li>
+        <li>Редактор открывается справа и не уводит с экрана, поэтому кнопка «← Все маршруты» не нужна.</li>
+        <li>У редактора две вкладки. На «Сайты и программы» только список. На «Ещё» гео-базы, свои списки, QUIC, UDP и приложения Store.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> «Применить сейчас» как постоянная полоса (изменения применяются сами, сообщение показывается на 3 секунды), «Для всех маршрутов» (в Настройки → Подключение).</p></div></div>
+
+    <div class="variant" data-v="C"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv">Серверы</div><div class="nv on">Маршруты</div><div class="nv">Игры</div><div class="nv">Диагностика</div><div class="nv-sp"></div><div class="nv">Настройки</div></div>
+      <div class="body">
+        <div class="row"><span class="btn dd">Маршрут: Обычный</span><span class="btn pri dd">+ Правило</span><span class="grow"></span><span class="chip">QUIC: блок</span><span class="chip ok">UDP: через сервер</span></div>
+        <div>
+          <div class="th" style="grid-template-columns:14px 1fr 70px 70px 90px"><span></span><span>Что</span><span>TCP</span><span>UDP</span><span>Сервер</span></div>
+          <div class="tr" style="grid-template-columns:14px 1fr 70px 70px 90px"><span class="mu">⋮⋮</span><span>Discord.exe</span><span class="chip ok">сервер</span><span class="chip ok">сервер</span><span class="mu">любой</span></div>
+          <div class="tr sel" style="grid-template-columns:14px 1fr 70px 70px 90px"><span class="mu">⋮⋮</span><span>2ip.io <span class="mu sm">+ поддомены</span></span><span class="chip ok">сервер</span><span class="chip ok">сервер</span><span class="btn dd" style="padding:1px 6px">Германия</span></div>
+          <div class="tr" style="grid-template-columns:14px 1fr 70px 70px 90px"><span class="mu">⋮⋮</span><span>ForzaHorizon6.exe</span><span class="chip ok">сервер</span><span class="chip">напрямую</span><span class="mu">любой</span></div>
+          <div class="tr" style="grid-template-columns:14px 1fr 70px 70px 90px"><span class="mu">⋮⋮</span><span>geosite: ru-blocked</span><span class="chip ok">сервер</span><span class="chip ok">сервер</span><span class="mu">любой</span></div>
+          <div class="tr" style="grid-template-columns:14px 1fr 70px 70px 90px"><span class="mu">⋮⋮</span><span class="mu">Всё остальное</span><span class="chip">напрямую</span><span class="chip">напрямую</span><span class="mu">—</span></div>
+        </div>
+        <div class="hint">Правила проверяются сверху вниз. Порядок меняется перетаскиванием за ⋮⋮.</div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант C</span><h3>Одна таблица правил</h3><ul>
+        <li>Сайты, программы, гео-базы и списки идут одной таблицей в порядке срабатывания. Последней строкой видно, что происходит со всем остальным.</li>
+        <li>TCP и UDP — две колонки, поэтому отдельный режим «TCP и UDP отдельно» не нужен.</li>
+        <li>«+ Правило ▾» предлагает тип: сайт, программа, гео-база, список. Маршрут переключается выпадающим списком в начале строки.</li>
+        <li>Общие опции QUIC и UDP показаны чипами: щелчок переключает.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> три отдельных блока добавления, стрелки порядка у списков, все абзацы-объяснения.</p></div></div>
+  </section>
+</template>
+
+<template id="t-games">
+  <section data-key="games" data-name="Игры" data-count="19 кн.">
+    <div class="screen-head"><div><h2>Игры</h2><p class="lead">Сейчас для каждой игры видна внутренняя механика: FakeIP, Teredo, запоминание адресов, список DNS-адресов. Игроку нужно знать одно: работает ли игра.</p></div>
+      <div class="now"><b>Сейчас:</b> блок Teredo с тремя кнопками, «Найти игры», поле добавления, у игры «Автонастройка / Как было / Настроить», TCP, UDP, Teredo, «Запоминать адреса», список адресов.<div class="cnt"><span>кнопок <strong>19</strong></span><span>переключателей <strong>3</strong></span><span>значков «i» <strong>6</strong></span></div></div></div>
+
+    <div class="variant" data-v="A"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv on"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv"><span class="ic c"></span></div></div>
+      <div class="body">
+        <div class="row sb"><span class="ttl">Игры</span><span class="btn">+ Добавить игру</span></div>
+        <div class="list card" style="padding:2px 8px">
+          <div class="li" style="padding:9px 2px"><div class="col grow" style="gap:1px"><b>Forza Horizon 6</b><span class="hint">Игра запущена · настроена Тропой</span></div><span class="sw on"></span></div>
+          <div class="li" style="padding:9px 2px"><div class="col grow" style="gap:1px"><b>Counter-Strike 2</b><span class="hint">Работает без настройки</span></div><span class="sw"></span></div>
+          <div class="li" style="padding:9px 2px"><div class="col grow" style="gap:1px"><b>Deadlock</b><span class="hint" style="color:var(--a-warnfg)">Были ошибки подключения. Включите настройку</span></div><span class="sw"></span></div>
+          <div class="li" style="padding:9px 2px"><div class="col grow" style="gap:1px"><b>Dota 2</b><span class="hint">Работает без настройки</span></div><span class="sw"></span></div>
+        </div>
+        <div class="hint">Переключатель включает «Автонастройку Тропы». Teredo для игр Xbox Тропа проверяет и включает сама.</div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант A</span><h3>Один переключатель на игру</h3><ul>
+        <li>У игры одна строка и один переключатель «настроить». Всё остальное Тропа решает сама.</li>
+        <li>Статус под названием объясняет, нужна ли настройка. Слово FakeIP пользователь не видит.</li>
+        <li>Блок Teredo убран полностью. Если Teredo не удалось включить, появляется предупреждение с одной кнопкой «Исправить».</li>
+        <li>TCP, UDP и список адресов открываются по щелчку на названии игры.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> блок Teredo (3 кнопки), «Найти игры» (поиск идёт постоянно), «Как было/Настроить», 6 значков «i».</p></div></div>
+
+    <div class="variant" data-v="B"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv">Серверы</div><div class="nv">Маршруты</div><div class="nv on">Игры</div><div class="nv-sp"></div><div class="nv">Настройки</div></div>
+      <div class="body">
+        <div class="card row" style="background:var(--a-warnbg);border-color:#5a4720"><div class="tile" style="background:#5a4720;color:var(--a-warnfg)">D</div><div class="col grow" style="gap:1px"><b style="color:var(--a-warnfg)">Deadlock запущен и не может найти матч</b><span class="hint" style="color:var(--a-warnfg)">Тропа может настроить сеть для этой игры</span></div><span class="btn pri">Исправить</span></div>
+        <div class="g3">
+          <div class="card col" style="gap:6px"><div class="tile" style="background:#1d3a5c;color:#9CC4FF">F</div><b>Forza Horizon 6</b><span class="chip ok">Настроена</span></div>
+          <div class="card col" style="gap:6px"><div class="tile" style="background:#4a2d1a;color:#f5b37a">CS</div><b>Counter-Strike 2</b><span class="chip">Без настройки</span></div>
+          <div class="card col" style="gap:6px"><div class="tile" style="background:#3d1c1f;color:#ff9c9c">D2</div><b>Dota 2</b><span class="chip">Без настройки</span></div>
+        </div>
+        <div class="row mu sm"><span class="dot"></span>Связь для игр Xbox (Teredo) работает</div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант B</span><h3>Тропа сама предлагает помощь</h3><ul>
+        <li>Если с запущенной игрой проблема, сверху появляется карточка с одной кнопкой «Исправить». Это главный сценарий экрана.</li>
+        <li>Остальные игры показаны плитками со статусом. Щелчок по плитке открывает её настройки.</li>
+        <li>Teredo сведён к строке состояния внизу экрана.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> поле «Добавить» (оно в «⋯» над плитками), абзацы про FakeIP, список «Адреса с настоящим DNS» (он в настройках игры).</p></div></div>
+
+    <div class="variant" data-v="C"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv">Серверы</div><div class="nv">Маршруты</div><div class="nv on">Игры</div><div class="nv">Диагностика</div><div class="nv-sp"></div><div class="nv">Настройки</div></div>
+      <div class="body">
+        <div class="row"><span class="btn pri dd">+ Игра</span><span class="grow"></span><span class="chip ok">Teredo: работает</span></div>
+        <div>
+          <div class="th" style="grid-template-columns:1fr 110px 60px 60px 56px"><span>Игра</span><span>Режим</span><span>TCP</span><span>UDP</span><span>Xbox</span></div>
+          <div class="tr sel" style="grid-template-columns:1fr 110px 60px 60px 56px"><span class="row"><span class="dot"></span>ForzaHorizon6.exe</span><span class="btn dd" style="padding:1px 6px">Автонастройка</span><span class="chip ok">сервер</span><span class="chip">прямо</span><span class="chip ok">да</span></div>
+          <div class="tr" style="grid-template-columns:1fr 110px 60px 60px 56px"><span class="row"><span class="dot n"></span>cs2.exe</span><span class="btn dd" style="padding:1px 6px">Как было</span><span class="mu">—</span><span class="mu">—</span><span class="mu">—</span></div>
+          <div class="tr" style="grid-template-columns:1fr 110px 60px 60px 56px"><span class="row"><span class="dot w"></span>deadlock.exe</span><span class="btn dd" style="padding:1px 6px">Как было</span><span class="mu">—</span><span class="mu">—</span><span class="mu">—</span></div>
+        </div>
+        <div class="card col" style="gap:6px"><div class="row sb"><b>ForzaHorizon6.exe · адреса с настоящим DNS</b><span class="row"><span class="mu sm">Запоминать</span><span class="sw on"></span></span></div><div class="row" style="flex-wrap:wrap;gap:4px"><span class="chip">playfabapi.com ✕</span><span class="chip">xboxlive.com ✕</span><span class="chip">microsoft.com ✕</span><span class="chip">+ добавить</span></div></div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант C</span><h3>Таблица для тех, кто разбирается</h3><ul>
+        <li>Каждая игра занимает одну строку. Режим «Автонастройка / Как было / Своё» выбирается списком в строке.</li>
+        <li>Цветная точка у игры: зелёная — запущена, жёлтая — были ошибки.</li>
+        <li>Адреса выбранной игры показаны чипами под таблицей, без отдельного поля и кнопки «Очистить».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> блок Teredo (стал чипом-статусом), «Взять настройки администратора» и «Убрать игру» (в правый щелчок).</p></div></div>
+  </section>
+</template>
+
+<template id="t-diag">
+  <section data-key="diag" data-name="Диагностика" data-count="11 кн.">
+    <div class="screen-head"><div><h2>Диагностика</h2><p class="lead">Окно не перегружено, но не помогает решить проблему: «Проверить всё», проверка домена и журнал стоят рядом и равны по весу.</p></div>
+      <div class="now"><b>Сейчас:</b> «Проверить всё», «Остановить», «Отчёт для помощи», поле «Проверка домена», журнал с фильтром.<div class="cnt"><span>кнопок <strong>11</strong></span><span>значков «i» <strong>3</strong></span></div></div></div>
+
+    <div class="variant" data-v="A"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv on"><span class="ic c"></span></div></div>
+      <div class="body">
+        <div class="row sb"><span class="ttl">Диагностика</span><span class="btn pri big">Найти проблему</span></div>
+        <div class="card" style="padding:4px 12px">
+          <div class="check"><span class="chip ok">✓</span><div class="col grow" style="gap:1px"><b>Интернет есть</b></div></div>
+          <div class="check"><span class="chip ok">✓</span><div class="col grow" style="gap:1px"><b>Сервер отвечает</b><span class="hint">Нидерланды, 38 мс</span></div></div>
+          <div class="check"><span class="chip bad">!</span><div class="col grow" style="gap:1px"><b>DNS провайдера подменяет ответы</b><span class="hint">Сайты могут не открываться даже через сервер.</span></div><span class="btn pri">Исправить</span></div>
+          <div class="check"><span class="chip ok">✓</span><div class="col grow" style="gap:1px"><b>Системный прокси настроен</b></div></div>
+        </div>
+        <div class="disc"><span>Для поддержки: отчёт, журнал, проверка домена</span><span>▸</span></div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант A</span><h3>Одна кнопка и ответ</h3><ul>
+        <li>Результат проверки — список простых фраз. Где проблему можно решить, рядом стоит кнопка «Исправить».</li>
+        <li>Журнал, отчёт и проверка домена нужны для разговора с поддержкой и уходят в нижний раскрывающийся блок.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> журнал и фильтр, три значка «i».</p></div></div>
+
+    <div class="variant" data-v="B"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv">Серверы</div><div class="nv">Маршруты</div><div class="nv">Игры</div><div class="nv-sp"></div><div class="nv on">Помощь</div></div>
+      <div class="body">
+        <span class="bigq">Что не работает?</span>
+        <div class="g2">
+          <div class="opt on"><b>Не открывается сайт</b><div class="row"><span class="inp">discord.com</span><span class="btn pri">Проверить</span></div></div>
+          <div class="opt"><b>Игра не находит матч</b><span class="hint">Проверим UDP, Teredo и DNS игры</span></div>
+          <div class="opt"><b>Нет голоса в Discord</b><span class="hint">Проверим UDP через сервер</span></div>
+          <div class="opt"><b>Всё медленно</b><span class="hint">Сравним задержку и скорость серверов</span></div>
+        </div>
+        <div class="card row sb"><span>Не нашли ответ? Отправьте отчёт тому, кто дал вам подписку.</span><span class="btn">Создать отчёт</span></div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант B</span><h3>Мастер по симптомам</h3><ul>
+        <li>Пользователь начинает с того, что видит сам: сайт, игра, голос, скорость. Тропа запускает только нужные проверки.</li>
+        <li>Проверка домена встроена в первый сценарий и не стоит отдельным блоком.</li>
+        <li>Пункт меню переименован в «Помощь»: так понятнее для друзей, которые не знают слова «диагностика».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> журнал (кнопка «Журнал» есть в отчёте), «Остановить» (проверки короткие, отмена — Esc).</p></div></div>
+
+    <div class="variant" data-v="C"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv">Серверы</div><div class="nv">Маршруты</div><div class="nv">Игры</div><div class="nv on">Диагностика</div><div class="nv-sp"></div><div class="nv">Настройки</div></div>
+      <div class="body">
+        <div class="row"><span class="btn pri">Проверить всё</span><span class="inp" style="max-width:180px">Проверить домен…</span><span class="grow"></span><span class="btn dd">Отчёт</span></div>
+        <div style="display:grid;grid-template-columns:180px 1fr;gap:10px;min-height:230px">
+          <div class="card col" style="gap:6px"><div class="row sb sm"><span>Интернет</span><span class="dot"></span></div><div class="row sb sm"><span>Сервер</span><span class="dot"></span></div><div class="row sb sm"><span>DNS</span><span class="dot b"></span></div><div class="row sb sm"><span>UDP</span><span class="dot"></span></div><div class="row sb sm"><span>Прокси Windows</span><span class="dot"></span></div><div class="row sb sm"><span>Teredo</span><span class="dot w"></span></div></div>
+          <div class="col">
+            <div class="row" style="gap:4px"><span class="chip on">Все</span><span class="chip">Ошибки · 3</span><span class="chip">DNS</span><span class="chip">Подключение</span></div>
+            <div class="log grow mono"><span class="mu">14:02:11 info  core started (sing-box 1.12)</span><span class="mu">14:02:11 info  tun up, mtu 9000</span><span style="color:var(--a-badfg)">14:02:14 error dns: answer mismatch for server-1</span><span class="mu">14:02:15 info  fallback to DoH</span><span style="color:var(--a-warnfg)">14:02:20 warn  teredo qualified=false</span></div>
+          </div>
+        </div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант C</span><h3>Статусы слева, журнал справа</h3><ul>
+        <li>Все действия собраны в одну строку сверху. «Отчёт ▾» содержит «Скопировать» и «Сохранить файл».</li>
+        <li>Слева список проверок с цветными точками. Щелчок по проверке фильтрует журнал.</li>
+        <li>Фильтр журнала — чипы вместо поля, в которое нужно вписывать «error» или «dns».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> отдельное окно отчёта (превращается в меню), текстовое поле фильтра.</p></div></div>
+  </section>
+</template>
+
+<template id="t-settings">
+  <section data-key="settings" data-name="Настройки" data-count="9 разделов">
+    <div class="screen-head"><div><h2>Настройки</h2><p class="lead">Девять разделов на одной длинной странице: обычные пункты стоят рядом с экспертными, у каждого свой значок «i».</p></div>
+      <div class="now"><b>Сейчас:</b> Общие, Подписки, Подключение, DNS, Соединение (DPI), Ядра и обновления, Для друзей, Журнал для разработчика, Для экспертов.<div class="cnt"><span>разделов <strong>9</strong></span><span>статей справки <strong>118</strong></span></div></div></div>
+
+    <div class="variant" data-v="A"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv on"><span class="ic c"></span></div></div>
+      <div class="body">
+        <div class="row sb"><span class="ttl">Настройки</span><span class="row sm mu">Расширенные <span class="sw"></span></span></div>
+        <div class="card col" style="gap:0;padding:4px 12px">
+          <div class="li" style="padding:9px 0"><span class="grow">Запускать вместе с Windows</span><span class="sw on"></span></div>
+          <div class="li" style="padding:9px 0"><span class="grow">Подключаться при запуске</span><span class="sw on"></span></div>
+          <div class="li" style="padding:9px 0"><span class="grow">Обновлять подписки</span><span class="btn dd">Каждые 6 часов</span></div>
+          <div class="li" style="padding:9px 0"><div class="col grow" style="gap:1px"><span>Блокировать интернет при обрыве</span><span class="hint">Трафик не пойдёт мимо сервера</span></div><span class="sw on"></span></div>
+          <div class="li" style="padding:9px 0"><span class="grow">Тема</span><span class="btn dd">Как в Windows</span></div>
+          <div class="li" style="padding:9px 0"><span class="grow">Обновлять Тропу</span><span class="btn dd">Спрашивать</span></div>
+        </div>
+        <div class="hint">Включите «Расширенные», чтобы увидеть DNS, обход блокировок, ядра, журнал и настройки для экспертов.</div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант A</span><h3>Шесть пунктов и «Расширенные»</h3><ul>
+        <li>По умолчанию видно 6 настроек, которые нужны обычному пользователю.</li>
+        <li>Переключатель «Расширенные» показывает остальные разделы и запоминается.</li>
+        <li>Пояснение — одна строка серым под пунктом, а не значок «i» со статьёй.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> 8 из 9 разделов (до включения «Расширенных»), полоса «Применить сейчас» (заменена сообщением на 3 секунды).</p></div></div>
+
+    <div class="variant" data-v="B"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv">Серверы</div><div class="nv">Маршруты</div><div class="nv">Игры</div><div class="nv-sp"></div><div class="nv on">Настройки</div></div>
+      <div class="body">
+        <div class="cmdk"><span>Найти настройку: «DNS», «автозапуск», «фрагментация»…</span><span class="kbd">Ctrl K</span></div>
+        <div class="g3">
+          <div class="card col" style="gap:3px"><b>Общие</b><span class="hint">Автозапуск вкл · тема как в Windows</span></div>
+          <div class="card col" style="gap:3px"><b>Подписки</b><span class="hint">2 подписки · обновление каждые 6 ч</span></div>
+          <div class="card col" style="gap:3px"><b>Подключение</b><span class="hint">TUN · kill switch вкл</span></div>
+          <div class="card col" style="gap:3px"><b>DNS</b><span class="hint">Через сервер (DoH)</span></div>
+          <div class="card col" style="gap:3px"><b>Обход блокировок</b><span class="hint">Фрагментация выкл</span></div>
+          <div class="card col" style="gap:3px"><b>Ядра и обновления</b><span class="hint">sing-box 1.12 · Xray 25.10</span></div>
+          <div class="card col" style="gap:3px"><b>Для друзей</b><span class="hint">Раздача выкл</span></div>
+          <div class="card col" style="gap:3px"><b>Журнал</b><span class="hint">Отправка разработчику вкл</span></div>
+          <div class="card col" style="gap:3px;border-style:dashed"><b class="mu">Для экспертов</b><span class="hint">Порты, MTU, sniffing</span></div>
+        </div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант B</span><h3>Плитки с текущим состоянием</h3><ul>
+        <li>Первый экран — оглавление. На каждой плитке написано, что сейчас выбрано, поэтому часто открывать раздел не нужно.</li>
+        <li>Поиск сверху находит пункт по слову, в том числе по тексту справки.</li>
+        <li>Раздел «Соединение» переименован в «Обход блокировок»: так понятнее, что там лежит.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> длинная прокрутка всех 9 разделов (раздел открывается отдельной страницей с кнопкой «← Настройки»).</p></div></div>
+
+    <div class="variant" data-v="C"><div class="mockbox"><div class="m">
+      <div class="side"><div class="logo"><i></i>Тропа</div><div class="nv">Главная</div><div class="nv">Серверы</div><div class="nv">Маршруты</div><div class="nv">Игры</div><div class="nv">Диагностика</div><div class="nv-sp"></div><div class="nv on">Настройки</div></div>
+      <div class="body" style="padding:0"><div style="display:grid;grid-template-columns:130px 1fr;min-height:400px">
+        <div style="border-right:1px solid var(--a-line);padding:14px 8px;display:flex;flex-direction:column;gap:2px"><div class="nv">Общие</div><div class="nv">Подписки</div><div class="nv on">Подключение</div><div class="nv">DNS</div><div class="nv">Обход блокировок</div><div class="nv">Ядра</div><div class="nv">Для друзей</div><div class="nv">Журнал</div><div class="nv mu" style="margin-top:8px;border-top:1px solid var(--a-line);border-radius:0;padding-top:8px">Для экспертов</div></div>
+        <div class="body">
+          <span class="ttl">Подключение</span>
+          <div class="col" style="gap:10px">
+            <div class="row sb"><div class="col" style="gap:1px"><span>Режим по умолчанию</span><span class="hint">Что включать по кнопке на главной</span></div><span class="btn dd">Весь компьютер (TUN)</span></div>
+            <div class="row sb"><div class="col" style="gap:1px"><span>Блокировать интернет при обрыве</span><span class="hint">Трафик не пойдёт мимо сервера</span></div><span class="sw on"></span></div>
+            <div class="row sb"><div class="col" style="gap:1px"><span>Блокировать QUIC</span><span class="hint">Браузер сразу уходит на TCP</span></div><span class="sw on"></span></div>
+            <div class="row sb"><div class="col" style="gap:1px"><span>UDP через сервер</span><span class="hint">Нужно для голоса Discord</span></div><span class="sw on"></span></div>
+            <div class="row sb"><div class="col" style="gap:1px"><span>Порт прокси</span><span class="hint">Для программ, настроенных вручную</span></div><span class="inp" style="max-width:70px;flex:none">10808</span></div>
+          </div>
+          <div class="sticky"><span>Изменено 2 настройки. Подключение переподключится на секунду.</span><span class="row"><span class="btn gh">Отменить</span><span class="btn pri">Применить</span></span></div>
+        </div>
+      </div></div></div></div>
+      <div class="notes"><span class="tag">Вариант C</span><h3>Список разделов слева</h3><ul>
+        <li>Как в настройках Windows: разделы слева, справа один раздел без прокрутки всего подряд.</li>
+        <li>«Для экспертов» отделён чертой и написан серым, чтобы его не открывали случайно.</li>
+        <li>Полоса «Применить» прилипает снизу и появляется только при несохранённых изменениях. В ней видно, сколько пунктов изменено, и есть «Отменить».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> 7 значков «i» (подсказка — строка под пунктом, полная статья по F1).</p></div></div>
+  </section>
+</template>
+
+<template id="t-edit">
+  <section data-key="edit" data-name="Редактор сервера" data-count="21 «i»">
+    <div class="screen-head"><div><h2>Редактор сервера</h2><p class="lead">Почти никто не заполняет его руками: обычно сервер приходит ссылкой. Сейчас форма показывает до 25 полей и 21 значок «i».</p></div>
+      <div class="now"><b>Сейчас:</b> ссылка, «Основное» (название, протокол, адрес, порт, шифрование, obfs, скорости, flow, транспорт, path, host, режим XHTTP, serviceName, «Подключаться через»), «Безопасность» (тип, SNI, pbk, Short ID, SpiderX, ALPN, uTLS), ядро.<div class="cnt"><span>кнопок <strong>25</strong></span><span>списков <strong>5</strong></span><span>значков «i» <strong>21</strong></span></div></div></div>
+
+    <div class="variant" data-v="A"><div class="mockbox"><div class="m norail">
+      <div class="body">
+        <div class="row sb"><span class="ttl">Сервер</span><div class="row"><span class="btn gh">Отмена</span><span class="btn pri">Сохранить</span></div></div>
+        <div class="col" style="gap:4px"><span class="lbl">Ссылка</span><span class="inp mono">vless://••••••••@nl1.example.net:443?type=xhttp&amp;security=reality…</span></div>
+        <div class="col" style="gap:4px"><span class="lbl">Название</span><span class="inp" style="color:var(--a-text)">Нидерланды · Амстердам</span></div>
+        <div class="card col" style="gap:8px"><span class="lbl">Тропа поняла ссылку так</span><div class="row" style="flex-wrap:wrap;gap:5px"><span class="chip">VLESS</span><span class="chip">nl1.example.net : 443</span><span class="chip">XHTTP</span><span class="chip ok">Reality · защищено</span><span class="chip">uTLS: chrome</span><span class="chip">ядро: Xray</span></div></div>
+        <div class="disc"><span>Изменить вручную: адрес, транспорт, безопасность</span><span>▸</span></div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант A</span><h3>Ссылка и сводка</h3><ul>
+        <li>Окно открывается с двумя полями: ссылка и название. Всё, что Тропа поняла из ссылки, показано чипами.</li>
+        <li>Зелёный чип «защищено» или красный «не шифруется» заменяет два длинных предупреждения.</li>
+        <li>Полная форма открывается кнопкой «Изменить вручную». Для ручного ввода нового сервера она открыта сразу.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> 20+ полей до раскрытия, 21 значок «i».</p></div></div>
+
+    <div class="variant" data-v="B"><div class="mockbox"><div class="m norail">
+      <div class="body">
+        <div class="row sb"><span class="ttl">Новый сервер</span><span class="btn gh">Отмена</span></div>
+        <div class="row" style="gap:14px"><span class="step done"><i>✓</i>Адрес</span><span class="mu">—</span><span class="step on"><i>2</i>Как подключаться</span><span class="mu">—</span><span class="step"><i>3</i>Защита</span></div>
+        <div class="col" style="gap:4px"><span class="lbl">Транспорт</span><div class="seg"><span>TCP</span><span>WS</span><span>gRPC</span><span class="on">XHTTP</span><span>HTTPUpgrade</span></div></div>
+        <div class="g2"><div class="col" style="gap:4px"><span class="lbl">Путь</span><span class="inp" style="color:var(--a-text)">/api/stream</span></div><div class="col" style="gap:4px"><span class="lbl">Режим XHTTP</span><span class="btn dd" style="justify-content:space-between">Авто</span></div></div>
+        <div class="col" style="gap:4px"><span class="lbl">Host <span class="mu" style="text-transform:none;letter-spacing:0">· необязательно</span></span><span class="inp">Пусто — как адрес сервера</span></div>
+        <div class="row" style="justify-content:flex-end;margin-top:auto"><span class="btn">Назад</span><span class="btn pri">Дальше</span></div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Вариант B</span><h3>Три шага</h3><ul>
+        <li>Форма разбита на три шага: адрес, способ подключения, защита. На каждом шаге не больше 4 полей.</li>
+        <li>Показываются только поля выбранного протокола и транспорта: для XHTTP — путь и режим, gRPC-полей не видно.</li>
+        <li>Транспорт выбирается сегментами, все варианты видны сразу.</li>
+        <li>При редактировании существующего сервера шаги становятся вкладками.</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> нерелевантные поля, значки «i» (пометка «необязательно» и подсказка в пустом поле).</p></div></div>
+
+    <div class="variant" data-v="C"><div class="mockbox"><div class="m norail">
+      <div class="body" style="padding:0"><div style="display:grid;grid-template-columns:1fr 220px">
+        <div class="body">
+          <div class="row sb"><span class="ttl">Нидерланды · Амстердам</span><div class="row"><span class="btn gh">Отмена</span><span class="btn pri">Сохранить</span></div></div>
+          <div class="card col" style="gap:8px"><div class="row sb"><b>Основное</b><span class="mu">▾</span></div>
+            <div style="display:grid;grid-template-columns:1fr 2fr 70px;gap:8px"><span class="btn dd" style="justify-content:space-between">VLESS</span><span class="inp" style="color:var(--a-text)">nl1.example.net</span><span class="inp" style="color:var(--a-text)">443</span></div>
+            <div class="g2"><span class="btn dd" style="justify-content:space-between">XHTTP</span><span class="inp" style="color:var(--a-text)">/api/stream</span></div></div>
+          <div class="card row sb"><b>Безопасность</b><span class="row"><span class="chip ok">Reality</span><span class="mu">▸</span></span></div>
+          <div class="card row sb"><b>Дополнительно</b><span class="row"><span class="mu sm">ядро, скорость, цепочка</span><span class="mu">▸</span></span></div>
+        </div>
+        <div class="drawer" style="width:auto">
+          <span class="lbl">Проверка</span>
+          <div class="row sm"><span class="dot"></span>Все поля совместимы</div>
+          <div class="row sm"><span class="dot"></span>Трафик шифруется</div>
+          <div class="row sm"><span class="dot w"></span>Нужен Xray: XHTTP нет в sing-box</div>
+          <span class="lbl" style="margin-top:8px">Ссылка</span>
+          <span class="mono mu" style="word-break:break-all">vless://••••@nl1.example.net:443?type=xhttp&amp;path=%2Fapi%2Fstream&amp;security=reality…</span>
+          <span class="hint">Ключ скрыт. Скопировать ссылку можно в меню сервера.</span>
+        </div>
+      </div></div></div></div>
+      <div class="notes"><span class="tag">Вариант C</span><h3>Свёрнутые группы и живая проверка</h3><ul>
+        <li>Поля разложены по трём группам. Открыта только «Основное», у свёрнутых групп в заголовке видно, что выбрано.</li>
+        <li>Протокол, адрес и порт стоят в одну строку, как в ссылке.</li>
+        <li>Справа панель проверки: что не сочетается, шифруется ли трафик, какое ядро понадобится. Она отвечает на вопросы, которые сейчас разбросаны по 21 значку «i».</li></ul>
+        <p class="gone"><b>Убрано с экрана:</b> длинная прокрутка формы, два абзаца-предупреждения (стали строками в проверке).</p></div></div>
+  </section>
+</template>
+
+<template id="t-final">
+  <section data-key="final" data-name="Выбрано" data-count="итог 27.11">
+    <div class="screen-head"><div><h2>Выбрано владельцем</h2><p class="lead">Итоговый вид каждого окна по решению от 27.11.2026. Остальные вкладки оставлены для истории: в них все 21 исходный вариант.</p></div>
+      <div class="now"><b>Решение:</b> Главная A + маршруты из B · Серверы A + Ctrl/Shift · Маршруты B, правило «Госуслуги всегда напрямую» убрано совсем · Игры B + переключатель из A · Диагностика A, «Для поддержки» — отдельное окно журнала · Настройки B → C · Редактор A с правкой вручную.</div></div>
+
+    <div class="variant"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv on"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv"><span class="ic c"></span></div></div>
+      <div class="body" style="align-items:center;justify-content:center;gap:14px">
+        <div class="power">Подключено</div>
+        <div class="mu">00:42:17 · ↓ 3,2 МБ/с ↑ 140 КБ/с</div>
+        <div class="btn big dd" style="gap:8px"><span class="flag nl"></span>Нидерланды · 38 мс</div>
+        <div class="row" style="flex-wrap:wrap;justify-content:center;gap:5px"><span class="chip on">Обычный</span><span class="chip">Только Discord</span><span class="chip">Всё через сервер</span><span class="chip">Игры</span></div>
+        <div class="row mu sm" style="gap:6px"><span>Весь компьютер</span>·<span style="color:var(--a-text);text-decoration:underline">изменить</span></div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Главная · A + B</span><h3>Одна кнопка и чипы маршрутов</h3><ul>
+        <li>Основа из A: кнопка, сервер, строка режима, трафик под кнопкой, полоска обновления только когда оно есть.</li>
+        <li>Из B: все маршруты (встроенные и свои) чипами, переключение в одно нажатие. Если маршрутов больше 5, последний чип «Ещё ▾».</li>
+        <li>Меню слева узкое: Главная, Серверы, Маршруты, Игры, внизу Настройки. Диагностика открывается из Настроек и из трея.</li></ul></div></div>
+
+    <div class="variant"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv on"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv"><span class="ic c"></span></div></div>
+      <div class="body">
+        <div class="row sb"><span class="ttl">Серверы</span><div class="row"><span class="btn dd">Все подписки</span><span class="btn">Проверить</span><span class="btn pri">+ Добавить</span></div></div>
+        <div class="list card" style="padding:4px">
+          <div class="li"><span class="flag nl"></span><span class="grow">Нидерланды · Амстердам</span><span class="chip ok">используется</span><span class="ping">38 мс</span></div>
+          <div class="li sel"><span class="flag"></span><span class="grow">Германия · Франкфурт</span><span class="ping">44 мс</span></div>
+          <div class="li sel"><span class="flag fi"></span><span class="grow">Финляндия · Хельсинки</span><span class="ping">51 мс</span></div>
+          <div class="li sel"><span class="flag pl"></span><span class="grow">Польша · Варшава</span><span class="ping w">112 мс</span></div>
+          <div class="li"><span class="flag us"></span><span class="grow">США · Нью-Йорк</span><span class="ping b">нет ответа</span></div>
+        </div>
+        <div class="card row" style="background:#1d2329;padding:7px 10px"><b>Выбрано 3</b><span class="grow"></span><span class="btn">Проверить</span><span class="btn">Создать копии</span><span class="btn" style="color:var(--a-badfg)">Удалить</span><span class="btn gh">✕</span></div>
+        <div class="hint"><span class="kbd">Ctrl</span>+щелчок — добавить к выбору · <span class="kbd">Shift</span>+щелчок — диапазон · <span class="kbd">Ctrl</span>+<span class="kbd">A</span> — все · <span class="kbd">Del</span> — удалить · <span class="kbd">Esc</span> — снять выбор</div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Серверы · A + выделение</span><h3>Простой список и выбор нескольких</h3><ul>
+        <li>Строка как в A: флаг, название, задержка, «⋯» при наведении. Двойной щелчок — подключиться.</li>
+        <li>Ctrl и Shift выделяют несколько серверов. Снизу появляется полоса действий для выбранных: проверить, создать копии, удалить.</li>
+        <li>«Поделиться» (ссылка, QR, конфиг с ключами) остаётся только для одного сервера: выдавать ключи пачкой нельзя по правилу 8.</li>
+        <li>Правый щелчок по выделению открывает то же меню, что и полоса.</li></ul></div></div>
+
+    <div class="variant"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv on"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv"><span class="ic c"></span></div></div>
+      <div class="body" style="padding:0"><div class="split" style="margin:0">
+        <div class="body">
+          <div class="row sb"><span class="ttl">Маршруты</span><span class="btn">+ Новый</span></div>
+          <div class="g2">
+            <div class="opt on"><div class="row sb"><b>Обычный</b><span class="chip on">действует</span></div><span class="hint">Только заблокированное · 5 пунктов</span></div>
+            <div class="opt"><div class="row sb"><b>Только Discord</b><span class="btn">Включить</span></div><span class="hint">Напрямую всё, кроме Discord</span></div>
+            <div class="opt"><div class="row sb"><b>Всё через сервер</b><span class="btn">Включить</span></div><span class="hint">Весь трафик через сервер</span></div>
+            <div class="opt"><div class="row sb"><b>Игры</b><span class="btn">Включить</span></div><span class="hint">TCP через сервер, UDP напрямую</span></div>
+          </div>
+        </div>
+        <div class="drawer" style="width:236px">
+          <div class="row sb"><b>Обычный</b><span class="mu">✕</span></div>
+          <div class="seg"><span class="on">Сайты и программы</span><span>Ещё</span></div>
+          <div class="row"><span class="inp">Добавить…</span></div>
+          <div class="li" style="padding:4px 0"><span class="grow">Discord.exe</span><span class="chip">сервер</span></div>
+          <div class="li" style="padding:4px 0"><span class="grow">2ip.io</span><span class="chip">напрямую</span></div>
+          <div class="li" style="padding:4px 0"><span class="grow">geosite: youtube</span><span class="chip">сервер</span></div>
+          <div class="li" style="padding:4px 0"><span class="grow">Торрент.exe</span><span class="chip bad">блок</span></div>
+        </div>
+      </div></div></div></div>
+      <div class="notes"><span class="tag">Маршруты · B</span><h3>Карточки маршрутов, без жёсткого правила</h3><ul>
+        <li>Как в B: карточки, включение одним нажатием, редактор справа с вкладками «Сайты и программы» и «Ещё».</li>
+        <li>Правила «Госуслуги и банки всегда идут напрямую» больше нет ни в тексте, ни в ядре. Маршрут делает ровно то, что в нём написано.</li>
+        <li>Кому нужно, добавляет «Госсайты» или «Банки» пунктом из гео-баз во вкладке «Ещё».</li></ul></div></div>
+
+    <div class="variant"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv on"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv"><span class="ic c"></span></div></div>
+      <div class="body">
+        <div class="card row" style="background:var(--a-warnbg);border-color:#5a4720"><div class="tile" style="background:#5a4720;color:var(--a-warnfg)">D</div><div class="col grow" style="gap:1px"><b style="color:var(--a-warnfg)">Deadlock запущен и не может найти матч</b><span class="hint" style="color:var(--a-warnfg)">Тропа может настроить сеть для этой игры</span></div><span class="btn pri">Исправить</span></div>
+        <div class="g3">
+          <div class="card col" style="gap:6px"><div class="row sb"><div class="tile" style="background:#1d3a5c;color:#9CC4FF">F</div><span class="sw on"></span></div><b>Forza Horizon 6</b><span class="hint">Настроена Тропой</span></div>
+          <div class="card col" style="gap:6px"><div class="row sb"><div class="tile" style="background:#4a2d1a;color:#f5b37a">CS</div><span class="sw"></span></div><b>Counter-Strike 2</b><span class="hint">Работает без настройки</span></div>
+          <div class="card col" style="gap:6px"><div class="row sb"><div class="tile" style="background:#3d1c1f;color:#ff9c9c">D2</div><span class="sw"></span></div><b>Dota 2</b><span class="hint">Работает без настройки</span></div>
+        </div>
+        <div class="row sb"><span class="row mu sm"><span class="dot"></span>Связь для игр Xbox (Teredo) работает</span><span class="btn gh">+ Добавить игру</span></div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Игры · B + A</span><h3>Плитки с переключателем</h3><ul>
+        <li>Плитки и карточка «Исправить» для проблемной игры — из B. «Исправить» просто включает переключатель этой игры.</li>
+        <li>На каждой плитке переключатель из A — «Автонастройка Тропы». Щелчок по плитке открывает TCP, UDP, Teredo и адреса игры.</li>
+        <li>Teredo — строка состояния. Если включить не удалось, строка становится жёлтой с кнопкой «Исправить».</li></ul></div></div>
+
+    <div class="variant"><div class="mockbox"><div class="m" style="position:relative">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv on"><span class="ic c"></span></div></div>
+      <div class="body">
+        <div class="row sb"><span class="ttl">Диагностика</span><span class="btn pri big">Найти проблему</span></div>
+        <div class="card" style="padding:4px 12px">
+          <div class="check"><span class="chip ok">✓</span><b class="grow">Сервер отвечает</b></div>
+          <div class="check"><span class="chip bad">!</span><div class="col grow" style="gap:1px"><b>DNS провайдера подменяет ответы</b><span class="hint">Сайты могут не открываться даже через сервер.</span></div><span class="btn pri">Исправить</span></div>
+        </div>
+        <div class="row"><span class="btn">Для поддержки…</span></div>
+      </div>
+      <div style="position:absolute;right:14px;bottom:14px;width:62%;background:#14181c;border:1px solid #39414a;border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:8px;padding:10px 12px">
+        <div class="row sb"><b>Тропа — журнал и отчёт</b><span class="mu">✕</span></div>
+        <div class="row"><span class="inp">Проверить домен: discord.com</span><span class="grow"></span><span class="btn">Скопировать отчёт</span><span class="btn">Сохранить…</span></div>
+        <div class="row" style="gap:4px"><span class="chip on">Все</span><span class="chip">Ошибки · 3</span><span class="chip">DNS</span></div>
+        <div class="log mono"><span class="mu">14:02:11 info  core started</span><span style="color:var(--a-badfg)">14:02:14 error dns: answer mismatch for server-1</span><span class="mu">14:02:15 info  fallback to DoH</span></div>
+        <span class="hint">Ключи и адреса серверов уже убраны из отчёта.</span>
+      </div>
+      </div></div>
+      <div class="notes"><span class="tag">Диагностика · A</span><h3>Отдельное окно для поддержки</h3><ul>
+        <li>Главный экран как в A: «Найти проблему» и понятный результат с «Исправить».</li>
+        <li>«Для поддержки…» открывает отдельное окно: журнал с фильтрами-чипами, проверка домена, «Скопировать отчёт» и «Сохранить…». Окно можно держать рядом с главным.</li>
+        <li>Из отчёта по-прежнему убраны ключи и адреса серверов (правило 8).</li></ul></div></div>
+
+    <div class="variant"><div class="mockbox"><div class="m">
+      <div class="side rail"><div class="logo"><i></i></div><div class="nv"><span class="ic c"></span></div><div class="nv"><span class="ic"></span></div><div class="nv"><span class="ic"></span></div><div class="nv-sp"></div><div class="nv on"><span class="ic c"></span></div></div>
+      <div class="body" style="padding:0"><div style="display:grid;grid-template-columns:1fr 1.35fr;min-height:400px">
+        <div class="body" style="border-right:1px dashed #39414a">
+          <span class="lbl">1 · Вход в Настройки</span>
+          <div class="cmdk"><span>Найти настройку…</span><span class="kbd">Ctrl K</span></div>
+          <div class="col" style="gap:6px">
+            <div class="card col" style="gap:2px;padding:8px"><b>Общие</b><span class="hint">Автозапуск вкл</span></div>
+            <div class="card col" style="gap:2px;padding:8px;border-color:var(--a-acc)"><b>Подключение</b><span class="hint">TUN · kill switch вкл</span></div>
+            <div class="card col" style="gap:2px;padding:8px"><b>DNS</b><span class="hint">Через сервер (DoH)</span></div>
+            <div class="card col" style="gap:2px;padding:8px"><b>Обход блокировок</b><span class="hint">Фрагментация выкл</span></div>
+            <div class="mu sm">…и ещё 5 разделов</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:96px 1fr">
+          <div style="border-right:1px solid var(--a-line);padding:14px 6px;display:flex;flex-direction:column;gap:2px"><div class="nv sm">← Все</div><div class="nv">Общие</div><div class="nv">Подписки</div><div class="nv on">Подключение</div><div class="nv">DNS</div><div class="nv">Обход</div><div class="nv">Ядра</div><div class="nv">Друзья</div><div class="nv">Журнал</div><div class="nv mu">Эксперт</div></div>
+          <div class="body">
+            <span class="lbl">2 · Раздел</span>
+            <span class="ttl">Подключение</span>
+            <div class="row sb"><div class="col" style="gap:1px"><span>Блокировать интернет при обрыве</span><span class="hint">Трафик не пойдёт мимо сервера</span></div><span class="sw on"></span></div>
+            <div class="row sb"><div class="col" style="gap:1px"><span>Блокировать QUIC</span><span class="hint">Браузер сразу уходит на TCP</span></div><span class="sw on"></span></div>
+            <div class="row sb"><div class="col" style="gap:1px"><span>UDP через сервер</span><span class="hint">Нужно для голоса Discord</span></div><span class="sw on"></span></div>
+            <div class="sticky"><span>Изменено 1</span><span class="row"><span class="btn gh">Отменить</span><span class="btn pri">Применить</span></span></div>
+          </div>
+        </div>
+      </div></div></div></div>
+      <div class="notes"><span class="tag">Настройки · B → C</span><h3>Плитки, потом раздел со списком слева</h3><ul>
+        <li>При входе в Настройки — плитки B с текущими значениями и поиском.</li>
+        <li>Щелчок по плитке открывает раздел в виде C: слева тот же список разделов, что был плитками, справа пункты раздела. «← Все» возвращает к плиткам.</li>
+        <li>Полоса «Применить» снизу появляется только при изменениях. Значков «i» нет, подсказка — строка под пунктом, статья по F1.</li></ul></div></div>
+
+    <div class="variant"><div class="mockbox"><div class="m norail">
+      <div class="body">
+        <div class="row sb"><span class="ttl">Сервер</span><div class="row"><span class="btn gh">Отмена</span><span class="btn pri">Сохранить</span></div></div>
+        <div class="g2"><div class="col" style="gap:4px"><span class="lbl">Ссылка</span><span class="inp mono">vless://••••@nl1.example.net:443?type=xhttp…</span></div><div class="col" style="gap:4px"><span class="lbl">Название</span><span class="inp" style="color:var(--a-text)">Нидерланды · Амстердам</span></div></div>
+        <div class="row" style="flex-wrap:wrap;gap:5px"><span class="chip">VLESS</span><span class="chip">nl1.example.net : 443</span><span class="chip">XHTTP</span><span class="chip ok">Reality · защищено</span><span class="chip">ядро: Xray</span></div>
+        <div class="card col" style="gap:8px">
+          <div class="row sb"><b>Изменить вручную</b><span class="mu">▾</span></div>
+          <div style="display:grid;grid-template-columns:1fr 2fr 70px;gap:8px"><span class="btn dd" style="justify-content:space-between">VLESS</span><span class="inp" style="color:var(--a-text)">nl1.example.net</span><span class="inp" style="color:var(--a-text)">443</span></div>
+          <div class="g3"><span class="btn dd" style="justify-content:space-between">XHTTP</span><span class="inp" style="color:var(--a-text)">/api/stream</span><span class="btn dd" style="justify-content:space-between">Режим: авто</span></div>
+          <div class="g3"><span class="btn dd" style="justify-content:space-between">Reality</span><span class="inp" style="color:var(--a-text)">SNI: www.microsoft.com</span><span class="btn dd" style="justify-content:space-between">uTLS: chrome</span></div>
+          <span class="hint">Показаны только поля выбранного протокола. Ссылка сверху обновляется сама при правке.</span>
+        </div>
+      </div></div></div>
+      <div class="notes"><span class="tag">Редактор · A</span><h3>Ссылка, сводка и правка вручную</h3><ul>
+        <li>Сверху ссылка и название, под ними чипы «что Тропа поняла из ссылки».</li>
+        <li>«Изменить вручную» раскрывает все поля для правки. Видны только поля текущего протокола, транспорта и защиты.</li>
+        <li>Правка полей и ссылка связаны в обе стороны. Для нового сервера без ссылки блок открыт сразу.</li></ul></div></div>
+  </section>
+</template>
+
+<div id="screens-src" hidden></div>
+<script>
+(function(){
+  var ids=['t-final','t-home','t-servers','t-routes','t-games','t-diag','t-settings','t-edit'];
+  var tabs=document.getElementById('tabs'), host=document.getElementById('screens');
+  var likes={}; try{likes=JSON.parse(localStorage.getItem('tropa-simplify-likes')||'{}')}catch(e){}
+  var sections=[];
+  ids.forEach(function(id){
+    var sec=document.getElementById(id).content.firstElementChild.cloneNode(true);
+    sec.id='s-'+sec.dataset.key; sec.setAttribute('role','tabpanel'); sec.hidden=true;
+    sec.querySelectorAll('.variant[data-v]').forEach(function(v){
+      var k=sec.dataset.key+'-'+v.dataset.v, b=document.createElement('button');
+      b.className='pick'; b.type='button';
+      var set=function(){var on=!!likes[k]; b.setAttribute('aria-pressed',on); b.textContent=on?'✓ Нравится':'Нравится';};
+      b.onclick=function(){likes[k]=!likes[k]; try{localStorage.setItem('tropa-simplify-likes',JSON.stringify(likes))}catch(e){} set();};
+      set(); v.querySelector('.notes').appendChild(b);
+    });
+    host.appendChild(sec); sections.push(sec);
+    var t=document.createElement('button'); t.className='tab'; t.type='button'; t.setAttribute('role','tab');
+    t.dataset.key=sec.dataset.key; t.innerHTML=sec.dataset.name+' <small>'+sec.dataset.count+'</small>';
+    t.onclick=function(){location.hash=sec.dataset.key;}; tabs.appendChild(t);
+  });
+  function show(){
+    var k=(location.hash||'').slice(1); if(!sections.some(function(s){return s.dataset.key===k})) k='final';
+    sections.forEach(function(s){s.hidden=s.dataset.key!==k});
+    tabs.querySelectorAll('.tab').forEach(function(t){t.setAttribute('aria-selected',t.dataset.key===k)});
+  }
+  window.addEventListener('hashchange',show); show();
+})();
+</script>

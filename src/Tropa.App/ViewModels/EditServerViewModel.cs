@@ -99,7 +99,7 @@ internal sealed partial class EditServerViewModel : ObservableObject
     [ObservableProperty] public partial string UpMbps { get; set; } = "";
     [ObservableProperty] public partial string DownMbps { get; set; } = "";
     public string BandwidthHint => $"С полосой Hysteria2 включает Brutal и не теряет скорость на потерях. "
-        + $"По умолчанию {Dpi.Hy2UpMbps} / {Dpi.Hy2DownMbps} (меняется в «Настройки → Соединение»). "
+        + $"По умолчанию {Dpi.Hy2UpMbps} / {Dpi.Hy2DownMbps} (меняется в «Настройки → Обход блокировок»). "
         + "Ставьте чуть ниже настоящей скорости своего интернета; 0 — выключить Brutal.";
     private DpiSettings Dpi => _engine.State.Settings.Dpi;
     [ObservableProperty] public partial string Link { get; set; } = "";
@@ -135,6 +135,7 @@ internal sealed partial class EditServerViewModel : ObservableObject
     {
         Load(null);
         Title = "Новый сервер";
+        ManualOpen = true;
         IsOpen = true;
     }
 
@@ -142,7 +143,71 @@ internal sealed partial class EditServerViewModel : ObservableObject
     {
         Load(p);
         Title = "Сервер · " + p.Name;
+        ManualOpen = false;
         IsOpen = true;
+    }
+
+    /// <summary>Блок «Изменить вручную» (ADR-072): у нового сервера открыт сразу, у готового — по кнопке.</summary>
+    [ObservableProperty] public partial bool ManualOpen { get; set; }
+
+    /// <summary>Чипы «как Тропа поняла ссылку»: протокол, адрес, транспорт, ядро.</summary>
+    public IReadOnlyList<string> SummaryChips
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Link))
+                return [];
+            var chips = new List<string>
+            {
+                Protocols.FirstOrDefault(o => o.IsChecked)?.Title ?? Protocol,
+                $"{Address.Trim()} : {Port.Trim()}",
+            };
+            if (HasTransport)
+                chips.Add(Transports.FirstOrDefault(o => o.IsChecked)?.Title ?? Transport);
+            if (ShowFingerprint && !string.IsNullOrEmpty(Fingerprint))
+                chips.Add("uTLS: " + Fingerprint);
+            chips.Add(CoreNote.Replace("Ядро: ", "ядро: ", StringComparison.Ordinal).Split(" (")[0]);
+            return chips;
+        }
+    }
+
+    /// <summary>Защита одним чипом вместо абзацев-предупреждений: зелёный или красный.</summary>
+    public string SecurityChip => ShowPlainWarning ? "не шифруется"
+        : AllowInsecure ? "сертификат не проверяется"
+        : (Securities.FirstOrDefault(o => o.IsChecked)?.Title ?? Security) + " · защищено";
+
+    public bool SecurityOk => !ShowPlainWarning && !AllowInsecure;
+
+    public bool HasSummary => !string.IsNullOrEmpty(Link);
+
+    private bool _applyingLink;
+
+    /// <summary>
+    /// Ссылку вставили или поправили руками (ADR-072): разбираем её теми же строгими проверками, что и
+    /// подписки (ShareLink.Parse), и раскладываем по полям. Сервер остаётся тем же (id, подписка).
+    /// </summary>
+    partial void OnLinkChanged(string value)
+    {
+        if (_loading || _computing || _applyingLink || string.IsNullOrWhiteSpace(value))
+            return;
+        var parsed = ShareLink.Parse(value.Trim());
+        if (!parsed.Success)
+        {
+            Error = parsed.Error;
+            return;
+        }
+
+        _applyingLink = true;
+        try
+        {
+            var (id, sub, title) = (_id, _subscriptionId, Title);
+            Load(parsed.Profile! with { Id = id, SubscriptionId = sub });
+            Title = title;
+        }
+        finally
+        {
+            _applyingLink = false;
+        }
     }
 
     private void Load(Profile? p)
@@ -238,7 +303,8 @@ internal sealed partial class EditServerViewModel : ObservableObject
     {
         base.OnPropertyChanged(e);
         if (!_loading && !_computing && e.PropertyName is not (nameof(Link) or nameof(Error) or nameof(CoreNote) or nameof(VisionEnabled)
-                or nameof(VisionReason) or nameof(IsOpen) or nameof(Title) or nameof(ShowCredential) or nameof(SubscriptionNote) or nameof(DisabledNotes)))
+                or nameof(VisionReason) or nameof(IsOpen) or nameof(Title) or nameof(ShowCredential) or nameof(SubscriptionNote) or nameof(DisabledNotes)
+                or nameof(ManualOpen) or nameof(SummaryChips) or nameof(SecurityChip) or nameof(SecurityOk) or nameof(HasSummary)))
             Recompute();
     }
 
@@ -309,6 +375,10 @@ internal sealed partial class EditServerViewModel : ObservableObject
         var (profile, error) = Build();
         Error = error;
         Link = profile is null ? "" : ShareLink.Build(profile);
+        OnPropertyChanged(nameof(SummaryChips));
+        OnPropertyChanged(nameof(SecurityChip));
+        OnPropertyChanged(nameof(SecurityOk));
+        OnPropertyChanged(nameof(HasSummary));
     }
 
     /// <summary>Профиль только для вычисления недоступных вариантов — без проверки значений.</summary>

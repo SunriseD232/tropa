@@ -61,11 +61,14 @@ internal sealed partial class RoutesViewModel : ObservableObject
     public ObservableCollection<RouteCardViewModel> Routes { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsList))]
+    [NotifyPropertyChangedFor(nameof(IsEditing), nameof(IsList), nameof(CardColumns))]
     public partial RouteEditorViewModel? Editor { get; set; }
 
     public bool IsEditing => Editor is not null;
     public bool IsList => Editor is null;
+
+    /// <summary>Карточки в две колонки, при открытом редакторе справа — в одну (ADR-072).</summary>
+    public int CardColumns => IsEditing ? 1 : 2;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DeleteQuestion))]

@@ -25,28 +25,6 @@
     ],
     "rules": [
       {
-        "rule_set": [
-          "ru-services",
-          "geosite-category-gov-ru",
-          "geosite-category-bank-ru",
-          "geosite-ru-available-only-inside"
-        ],
-        "query_type": [
-          "AAAA"
-        ],
-        "action": "predefined",
-        "rcode": "NOERROR"
-      },
-      {
-        "rule_set": [
-          "ru-services",
-          "geosite-category-gov-ru",
-          "geosite-category-bank-ru",
-          "geosite-ru-available-only-inside"
-        ],
-        "server": "local"
-      },
-      {
         "query_type": [
           "A",
           "AAAA"
@@ -151,75 +129,9 @@
       },
       {
         "type": "local",
-        "tag": "geosite-category-bank-ru",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-category-bank-ru.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-category-gov-ru",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-category-gov-ru.srs"
-      },
-      {
-        "type": "local",
-        "tag": "geosite-ru-available-only-inside",
-        "format": "binary",
-        "path": "C:\\tropa-test-geo\\geosite-ru-available-only-inside.srs"
-      },
-      {
-        "type": "local",
         "tag": "geosite-ru-blocked",
         "format": "binary",
         "path": "C:\\tropa-test-geo\\geosite-ru-blocked.srs"
-      },
-      {
-        "type": "inline",
-        "tag": "ru-services",
-        "rules": [
-          {
-            "domain_suffix": [
-              "gosuslugi.ru",
-              "esia.gosuslugi.ru",
-              "nalog.gov.ru",
-              "nalog.ru",
-              "mos.ru",
-              "pfr.gov.ru",
-              "sfr.gov.ru",
-              "cbr.ru",
-              "kremlin.ru",
-              "government.ru",
-              "fss.ru",
-              "rosreestr.gov.ru",
-              "gibdd.ru",
-              "sberbank.ru",
-              "sber.ru",
-              "tbank.ru",
-              "tinkoff.ru",
-              "vtb.ru",
-              "alfabank.ru",
-              "gazprombank.ru",
-              "raiffeisen.ru",
-              "pochtabank.ru",
-              "sovcombank.ru",
-              "open.ru",
-              "mkb.ru",
-              "psbank.ru",
-              "rshb.ru",
-              "domrf.ru",
-              "rosbank.ru",
-              "nspk.ru",
-              "mironline.ru",
-              "sbp.nspk.ru",
-              "yoomoney.ru",
-              "ozon.ru",
-              "wildberries.ru",
-              "wb.ru",
-              "avito.ru",
-              "market.yandex.ru"
-            ]
-          }
-        ]
       }
     ],
     "rules": [
@@ -245,16 +157,6 @@
       },
       {
         "ip_is_private": true,
-        "outbound": "direct"
-      },
-      {
-        "rule_set": [
-          "ru-services",
-          "geosite-category-gov-ru",
-          "geosite-category-bank-ru",
-          "geosite-ru-available-only-inside"
-        ],
-        "action": "route",
         "outbound": "direct"
       },
       {

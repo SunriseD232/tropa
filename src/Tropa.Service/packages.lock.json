@@ -13,6 +13,12 @@
           "System.ServiceProcess.ServiceController": "10.0.12"
         }
       },
+      "Microsoft.NET.ILLink.Tasks": {
+        "type": "Direct",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "xi+BDjFpW+Sb+MHFHaH6Y/gV9I8BluFwRXc1QyCdoZbIK26eNiBeFuMTe/FMwc33G1wdHCyDg7CVTmb8OdQrMQ=="
+      },
       "Microsoft.Extensions.Configuration": {
         "type": "Transitive",
         "resolved": "10.0.12",
@@ -312,8 +318,8 @@
         "type": "Project",
         "dependencies": {
           "System.Security.Cryptography.ProtectedData": "[10.0.12, )",
-          "Tropa.Core": "[0.1.0, )",
-          "Tropa.Ipc": "[0.1.0, )"
+          "Tropa.Core": "[0.1.33, )",
+          "Tropa.Ipc": "[0.1.33, )"
         }
       },
       "tropa.ipc": {

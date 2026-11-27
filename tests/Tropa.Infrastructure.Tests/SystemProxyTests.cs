@@ -133,7 +133,7 @@ public sealed class PinnedFilesTests : IDisposable
         Assert.Equal("1.14.2", PinnedFiles.Cores.Get("sing-box").Version);
         // Каждый набор правил, на который ссылается генератор, закреплён в lock-файле.
         var pinned = PinnedFiles.Geo.Files.Select(f => f.Name).ToHashSet();
-        var used = Core.Routing.RuleSets.AlwaysDirect.Where(t => t != Core.Routing.RuleSets.RuServices)
+        var used = Core.Routing.RuleSets.RussianDirect.Where(t => t != Core.Routing.RuleSets.RuServices)
             .Concat(Core.Routing.RuleSets.Blocked)
             .Concat([Core.Routing.RuleSets.GeositeCategoryRu, Core.Routing.RuleSets.GeoipRu, Core.Routing.RuleSets.GeositeAiNonCn]);
         Assert.All(used, tag => Assert.Contains(tag, pinned));

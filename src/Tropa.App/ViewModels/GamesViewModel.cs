@@ -60,6 +60,51 @@ internal sealed partial class GameItemViewModel : ObservableObject
     /// <summary>Подсказка: игра «как было» обращалась к условному адресу FakeIP.</summary>
     public bool FakeIpHint => _game.FakeIpSeen && _game.Mode == GameMode.Original;
 
+    /// <summary>Переключатель на плитке (ADR-072): включён — «Автонастройка Тропы», выключен — «Как было».</summary>
+    public bool AutoSwitch
+    {
+        get => IsAuto;
+        set
+        {
+            if (value == IsAuto)
+                return;
+            if (value)
+                IsAuto = true;
+            else
+                IsOriginal = true;
+            // Пара «авто / как было» раньше держалась группой переключателей — теперь снимаем вторую сами.
+            _loading = true;
+            if (value)
+                IsOriginal = false;
+            else
+                IsAuto = false;
+            _loading = false;
+            OnPropertyChanged(nameof(AutoSwitch));
+        }
+    }
+
+    /// <summary>Буквы на плитке: «Forza Horizon 6» → «FH».</summary>
+    public string Initials
+    {
+        get
+        {
+            var words = Title.Split([' ', '-', '_', ':'], StringSplitOptions.RemoveEmptyEntries).Where(w => char.IsLetterOrDigit(w[0])).ToList();
+            return words.Count switch
+            {
+                0 => "?",
+                1 => words[0][..Math.Min(2, words[0].Length)].ToUpperInvariant(),
+                _ => string.Concat(words[0][0], words[1][0]).ToUpperInvariant(),
+            };
+        }
+    }
+
+    /// <summary>Строка состояния на плитке.</summary>
+    public string StatusLine => FakeIpHint ? "Были ошибки подключения"
+        : _game.Mode == GameMode.Auto ? "Настроена Тропой" : "Без настройки";
+
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
+
     public ObservableCollection<string> Domains { get; } = [];
 
     [ObservableProperty]
@@ -118,6 +163,9 @@ internal sealed partial class GameItemViewModel : ObservableObject
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(FakeIpHint));
         OnPropertyChanged(nameof(LauncherText));
+        OnPropertyChanged(nameof(AutoSwitch));
+        OnPropertyChanged(nameof(Initials));
+        OnPropertyChanged(nameof(StatusLine));
         _loading = false;
     }
 
@@ -147,6 +195,7 @@ internal sealed partial class GameItemViewModel : ObservableObject
 
     partial void OnIsAutoChanged(bool value)
     {
+        OnPropertyChanged(nameof(AutoSwitch));
         if (_loading || !value)
             return;
         _engine.SetGameMode(Id, GameMode.Auto);
@@ -283,6 +332,34 @@ internal sealed partial class GamesViewModel : ObservableObject
 
     public bool HasGames => Games.Count > 0;
 
+    /// <summary>Игра, чьи настройки открыты под плитками (ADR-072); null — ни одной.</summary>
+    [ObservableProperty]
+    public partial GameItemViewModel? SelectedGame { get; set; }
+
+    partial void OnSelectedGameChanged(GameItemViewModel? value)
+    {
+        foreach (var g in Games)
+            g.IsSelected = g == value;
+    }
+
+    [RelayCommand]
+    private void SelectGame(GameItemViewModel game) => SelectedGame = SelectedGame == game ? null : game;
+
+    /// <summary>Игра с ошибками подключения «как было» — карточка «Исправить» сверху.</summary>
+    public GameItemViewModel? Problem => Games.FirstOrDefault(g => g.FakeIpHint);
+
+    public string? ProblemTitle => Problem is { } p ? $"{p.Title}: были ошибки подключения" : null;
+
+    /// <summary>«Исправить» включает автонастройку этой игры.</summary>
+    [RelayCommand]
+    private void FixProblem()
+    {
+        if (Problem is { } p)
+            p.AutoSwitch = true;
+        OnPropertyChanged(nameof(Problem));
+        OnPropertyChanged(nameof(ProblemTitle));
+    }
+
     /// <summary>Правила по программам работают только в TUN.</summary>
     public string? ModeNote => _engine.TunAvailable && _engine.State.Settings.Connection.Mode == CaptureMode.Tun
         ? null
@@ -327,13 +404,19 @@ internal sealed partial class GamesViewModel : ObservableObject
                 item.Load(g);
         }
 
+        if (SelectedGame is { } sel && !Games.Contains(sel))
+            SelectedGame = null;
         OnPropertyChanged(nameof(HasGames));
         OnPropertyChanged(nameof(ModeNote));
+        OnPropertyChanged(nameof(Problem));
+        OnPropertyChanged(nameof(ProblemTitle));
         _loading = false;
     }
 
     private void OnItemChanged()
     {
+        OnPropertyChanged(nameof(Problem));
+        OnPropertyChanged(nameof(ProblemTitle));
         if (_engine.Status.State == ConnectionState.Connected)
             NeedsApply = true;
     }

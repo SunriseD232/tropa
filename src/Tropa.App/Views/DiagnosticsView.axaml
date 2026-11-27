@@ -4,6 +4,7 @@
              xmlns:vm="using:Tropa.App.ViewModels"
              x:Class="Tropa.App.Views.DiagnosticsView"
              x:DataType="vm:DiagnosticsViewModel">
+  <!-- «Диагностика» (ADR-072, вариант A): «Найти проблему» и понятный ответ; журнал и отчёт — в окне «Для поддержки». -->
   <UserControl.Styles>
     <Style Selector="Border.step">
       <Setter Property="Width" Value="30" />
@@ -21,43 +22,19 @@
     <Style Selector="Border.step.run"><Setter Property="TextElement.Foreground" Value="{DynamicResource InfoFg}" /></Style>
   </UserControl.Styles>
 
-  <StackPanel Spacing="18">
+  <StackPanel Spacing="16">
     <DockPanel>
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-        <Button Content="Отчёт для помощи" Command="{Binding OpenReportCommand}" />
         <Button Content="Остановить" Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}" />
-        <Button Classes="primary" Content="Проверить всё" Command="{Binding RunCommand}" />
+        <Button Classes="primary" Content="Найти проблему" Command="{Binding RunCommand}" Padding="18,0" />
       </StackPanel>
       <StackPanel Spacing="4">
         <TextBlock Classes="h1" Text="Диагностика" />
-        <TextBlock Classes="muted" Text="{Binding Summary}" TextWrapping="Wrap" />
+        <TextBlock Classes="muted" Text="{Binding Summary}" />
       </StackPanel>
     </DockPanel>
 
-    <!-- Отчёт: предпросмотр перед копированием или сохранением -->
-    <Border Classes="card" IsVisible="{Binding ReportOpen}">
-      <StackPanel Spacing="10">
-        <DockPanel>
-          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
-            <Button Content="Скопировать" Click="OnCopyReport" />
-            <Button Content="Сохранить файл" Click="OnSaveReport" />
-            <Button Content="Закрыть" Command="{Binding CloseReportCommand}" />
-          </StackPanel>
-          <StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <TextBlock Text="Отчёт" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="diagReport" />
-            </StackPanel>
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Ключи, пароли и адреса серверов уже убраны (адреса заменены на server-1, server-2…). Проверьте текст перед тем, как кому-то отправить." />
-          </StackPanel>
-        </DockPanel>
-        <TextBox Text="{Binding ReportText}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" Height="320" FontFamily="{StaticResource Mono}" FontSize="12" />
-        <TextBlock x:Name="ReportNote" Classes="muted" />
-      </StackPanel>
-    </Border>
-
-    <Border Classes="card" Padding="20,8">
+    <Border Classes="card" Padding="20,6">
       <ItemsControl ItemsSource="{Binding Steps}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:StepItemViewModel">
@@ -74,8 +51,14 @@
                       Command="{Binding $parent[ItemsControl].((vm:DiagnosticsViewModel)DataContext).ShowInfoCommand}" CommandParameter="{Binding Key}" />
               <StackPanel Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <TextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" IsVisible="{Binding Details, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                <TextBlock Text="{Binding Action}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" IsVisible="{Binding Action, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <TextBlock Classes="hint" Text="{Binding Details}" IsVisible="{Binding Details, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Border Background="{DynamicResource InfoBg}" CornerRadius="8" Padding="10,6" Margin="0,4,0,0" HorizontalAlignment="Left"
+                        IsVisible="{Binding Action, Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Что сделать:" FontWeight="SemiBold" Foreground="{DynamicResource InfoFg}" VerticalAlignment="Top" />
+                    <TextBlock Text="{Binding Action}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" MaxWidth="560" />
+                  </StackPanel>
+                </Border>
               </StackPanel>
             </DockPanel>
           </DataTemplate>
@@ -83,42 +66,15 @@
       </ItemsControl>
     </Border>
 
-    <Grid ColumnDefinitions="*,20,*">
-      <!-- Проверка домена -->
-      <Border Grid.Column="0" Classes="card">
-        <StackPanel Spacing="10">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="Проверка домена" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="dnsCheck" />
-          </StackPanel>
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Content="Проверить" Command="{Binding CheckDomainCommand}" Margin="8,0,0,0" />
-            <TextBox Text="{Binding Domain}" PlaceholderText="discord.com" />
-          </DockPanel>
-          <Border CornerRadius="10" Padding="12,10" Background="{DynamicResource Card2}" Classes.bad="{Binding DomainSpoofed}"
-                  IsVisible="{Binding DomainResult, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <Border.Styles>
-              <Style Selector="Border.bad"><Setter Property="Background" Value="{DynamicResource WarnBg}" /></Style>
-            </Border.Styles>
-            <TextBlock Text="{Binding DomainResult}" TextWrapping="Wrap" />
-          </Border>
+    <DockPanel>
+      <Button DockPanel.Dock="Left" Command="{Binding OpenSupportCommand}" AutomationProperties.Name="Для поддержки">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <v:Icon Data="{StaticResource IconPulse}" Width="16" Height="16" VerticalAlignment="Center" />
+          <TextBlock Text="Для поддержки…" VerticalAlignment="Center" />
         </StackPanel>
-      </Border>
-
-      <!-- Журнал -->
-      <Border Grid.Column="2" Classes="card">
-        <StackPanel Spacing="10">
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Width="40" Command="{Binding RefreshLogCommand}" ToolTip.Tip="Обновить журнал" AutomationProperties.Name="Обновить журнал">
-<v:Icon Data="{StaticResource IconRefresh}" />
-</Button>
-            <TextBlock Text="Журнал" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-          </DockPanel>
-          <TextBox Text="{Binding LogFilter}" PlaceholderText="Фильтр: например, error или dns" />
-          <TextBox Text="{Binding LogText}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" Height="200"
-                   FontFamily="{StaticResource Mono}" FontSize="11" PlaceholderText="Журнал пуст: ядро ещё ничего не сообщало." />
-        </StackPanel>
-      </Border>
-    </Grid>
+      </Button>
+      <TextBlock Classes="hint" Margin="12,0,0,0" VerticalAlignment="Center"
+                 Text="Журнал, проверка домена и отчёт без ключей и адресов — в отдельном окне." />
+    </DockPanel>
   </StackPanel>
 </UserControl>

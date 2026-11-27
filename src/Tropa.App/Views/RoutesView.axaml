@@ -4,36 +4,57 @@
              xmlns:vm="using:Tropa.App.ViewModels"
              x:Class="Tropa.App.Views.RoutesView"
              x:DataType="vm:RoutesViewModel">
-  <!-- Экран «Маршруты» (ADR-067). Прежний экран «Правила» — RulesView, включается в настройках. -->
+  <!--
+    Экран «Маршруты» (ADR-067, вид — ADR-072 вариант B): карточки маршрутов, включение одним нажатием,
+    редактор справа с вкладками «Сайты и программы» / «Ещё». Прежний экран «Правила» — RulesView.
+  -->
   <UserControl.Styles>
-    <Style Selector="Border.card.active">
-      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
-      <Setter Property="BorderThickness" Value="2" />
+    <Style Selector="Border.route">
+      <Setter Property="Background" Value="{DynamicResource Card}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Padding" Value="16,14" />
+      <Setter Property="Margin" Value="0,0,12,12" />
+      <Setter Property="Cursor" Value="Hand" />
     </Style>
-    <Style Selector="Border.route:pointerover">
+    <Style Selector="Border.route:pointerover"><Setter Property="BorderBrush" Value="{DynamicResource FieldBorder}" /></Style>
+    <Style Selector="Border.route.active">
       <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="Background" Value="{DynamicResource NavOnBg}" />
+    </Style>
+    <Style Selector="Border.route.editing"><Setter Property="BorderBrush" Value="{DynamicResource InfoFg}" /></Style>
+    <Style Selector="Border.row">
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+      <Setter Property="Padding" Value="2,10" />
     </Style>
   </UserControl.Styles>
-  <Panel>
-    <!-- ================= Список маршрутов ================= -->
-    <StackPanel Spacing="18" IsVisible="{Binding IsList}">
+
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Escape" Command="{Binding Editor.CloseCommand, FallbackValue={x:Null}}" />
+  </UserControl.KeyBindings>
+  <Grid ColumnDefinitions="*,Auto">
+    <!-- ================= Карточки маршрутов ================= -->
+    <StackPanel Grid.Column="0" Spacing="14">
       <DockPanel>
-        <Button DockPanel.Dock="Right" Classes="primary" Content="Создать маршрут" Command="{Binding CreateCommand}" VerticalAlignment="Center" />
-        <StackPanel Spacing="6" Margin="0,0,16,0">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Classes="h1" Text="Маршруты" />
-            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="routes" />
+        <Button DockPanel.Dock="Right" Command="{Binding CreateCommand}" VerticalAlignment="Center" AutomationProperties.Name="Новый маршрут">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <v:Icon Data="{StaticResource IconPlus}" Width="14" Height="14" VerticalAlignment="Center" />
+            <TextBlock Text="Новый маршрут" VerticalAlignment="Center" />
           </StackPanel>
-          <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="Маршрут решает, что идёт через сервер, а что напрямую. Действует один маршрут — он отмечен. Двойной щелчок по маршруту или «⋯ → Редактировать» — изменить его сайты и приложения." />
+        </Button>
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <TextBlock Classes="h1" Text="Маршруты" />
+          <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="routes" />
         </StackPanel>
       </DockPanel>
 
-      <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding Shared.NeedsApply}">
+      <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12,8" IsVisible="{Binding Shared.NeedsApply}">
         <DockPanel>
-          <Button DockPanel.Dock="Right" Classes="primary" Content="Применить сейчас" Command="{Binding Shared.ApplyCommand}" />
+          <Button DockPanel.Dock="Right" Classes="primary" Content="Применить" Command="{Binding Shared.ApplyCommand}" />
           <TextBlock Foreground="{DynamicResource InfoFg}" VerticalAlignment="Center" TextWrapping="Wrap"
-                     Text="Маршрут изменён. Чтобы изменения заработали, подключение переподключится на секунду." />
+                     Text="Маршрут изменён. Подключение переподключится на секунду." />
         </DockPanel>
       </Border>
 
@@ -47,45 +68,40 @@
         </DockPanel>
       </Border>
 
-      <ItemsControl ItemsSource="{Binding Routes}">
+      <ItemsControl ItemsSource="{Binding Routes}" Margin="0,0,-12,0">
         <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate>
-            <StackPanel Spacing="10" />
-          </ItemsPanelTemplate>
+          <ItemsPanelTemplate><UniformGrid Columns="{Binding CardColumns}" x:DataType="vm:RoutesViewModel" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:RouteCardViewModel">
-            <Border Classes="card route" Classes.active="{Binding IsActive}" Padding="18,14" Cursor="Hand"
-                    DoubleTapped="OnRouteDoubleTapped" ToolTip.Tip="Двойной щелчок — редактировать">
-              <DockPanel>
-                <Button DockPanel.Dock="Right" Content="⋯" Width="40" FontSize="16" Padding="0" VerticalAlignment="Center" Margin="10,0,0,0"
-                        ToolTip.Tip="Действия с маршрутом" AutomationProperties.Name="Действия с маршрутом">
-                  <Button.Flyout>
-                    <MenuFlyout Placement="BottomEdgeAlignedRight">
-                      <MenuItem Header="Сделать действующим" Command="{Binding ActivateCommand}" IsEnabled="{Binding !IsActive}" />
-                      <MenuItem Header="Редактировать" Command="{Binding EditCommand}" />
-                      <MenuItem Header="Дублировать" Command="{Binding DuplicateCommand}" />
-                      <Separator IsVisible="{Binding IsCustom}" />
-                      <MenuItem Header="Удалить…" Command="{Binding DeleteCommand}" IsVisible="{Binding IsCustom}" />
-                    </MenuFlyout>
-                  </Button.Flyout>
-                </Button>
-                <Button DockPanel.Dock="Right" Content="Включить" Command="{Binding ActivateCommand}" IsVisible="{Binding !IsActive}" VerticalAlignment="Center"
-                        ToolTip.Tip="Сделать этот маршрут действующим" />
-                <Border DockPanel.Dock="Right" Classes="pill" Background="{DynamicResource OkBg}" IsVisible="{Binding IsActive}" VerticalAlignment="Center">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <v:Icon Data="{StaticResource IconCheck}" Width="12" Height="12" Foreground="{DynamicResource OkFg}" />
-                    <TextBlock Text="Действует" Foreground="{DynamicResource OkFg}" FontSize="12" />
-                  </StackPanel>
-                </Border>
-                <StackPanel Spacing="4" VerticalAlignment="Center" Margin="0,0,12,0">
-                  <StackPanel Orientation="Horizontal" Spacing="10">
-                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="16" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding KindLabel}" Classes="lbl" VerticalAlignment="Center" />
-                  </StackPanel>
-                  <TextBlock Classes="muted" Text="{Binding Subtitle}" TextWrapping="Wrap" />
-                </StackPanel>
-              </DockPanel>
+            <Border Classes="route" Classes.active="{Binding IsActive}" Tapped="OnRouteTapped" ToolTip.Tip="Щелчок — открыть редактор">
+              <StackPanel Spacing="6">
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Classes="icon" ToolTip.Tip="Действия с маршрутом" AutomationProperties.Name="Действия с маршрутом">
+                    <v:Icon Data="{StaticResource IconMore}" Width="18" Height="18" Thickness="3" />
+                    <Button.Flyout>
+                      <MenuFlyout Placement="BottomEdgeAlignedRight">
+                        <MenuItem Header="Редактировать" Command="{Binding EditCommand}" />
+                        <MenuItem Header="Дублировать" Command="{Binding DuplicateCommand}" />
+                        <Separator IsVisible="{Binding IsCustom}" />
+                        <MenuItem Header="Удалить…" Command="{Binding DeleteCommand}" IsVisible="{Binding IsCustom}" />
+                      </MenuFlyout>
+                    </Button.Flyout>
+                  </Button>
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="16" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock Classes="hint" Text="{Binding Subtitle}" MaxLines="2" TextTrimming="CharacterEllipsis" />
+                <DockPanel Margin="0,4,0,0">
+                  <Button DockPanel.Dock="Left" Content="Включить" Command="{Binding ActivateCommand}" IsVisible="{Binding !IsActive}" />
+                  <Border DockPanel.Dock="Left" Classes="pill" Background="{DynamicResource Accent}" IsVisible="{Binding IsActive}" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <v:Icon Data="{StaticResource IconCheck}" Width="12" Height="12" Foreground="{DynamicResource AccentDark}" />
+                      <TextBlock Text="Действует" Foreground="{DynamicResource AccentDark}" FontSize="12" FontWeight="SemiBold" />
+                    </StackPanel>
+                  </Border>
+                  <TextBlock Text="{Binding KindLabel}" Classes="lbl" VerticalAlignment="Center" HorizontalAlignment="Right" />
+                </DockPanel>
+              </StackPanel>
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
@@ -95,281 +111,241 @@
         <TextBlock Text="{Binding Error}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" />
       </Border>
 
-      <!-- Общее для всех маршрутов -->
-      <TextBlock Text="Для всех маршрутов" FontSize="18" FontWeight="SemiBold" Margin="0,8,0,0" />
-      <Border Classes="card" Padding="20,8">
-        <UniformGrid Columns="2">
-          <DockPanel Margin="0,10,20,10">
+      <!-- Общее для всех маршрутов: свёрнуто -->
+      <Expander HorizontalAlignment="Stretch" Header="Для всех маршрутов: QUIC, UDP, гео-базы, приложения Store">
+        <StackPanel Spacing="4">
+          <DockPanel Margin="0,6">
             <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding Shared.BlockQuic}" OnContent="" OffContent="" />
             <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="blockQuic" />
             <StackPanel>
-              <TextBlock Text="Блокировать QUIC (UDP 443)" FontSize="15" TextWrapping="Wrap" />
-              <TextBlock Classes="muted" Text="Браузер сразу уходит на TCP, сайты не «думают»" TextWrapping="Wrap" />
+              <TextBlock Text="Блокировать QUIC (UDP 443)" TextWrapping="Wrap" />
+              <TextBlock Classes="hint" Text="Браузер сразу уходит на TCP, сайты не «думают»" />
             </StackPanel>
           </DockPanel>
-          <DockPanel Margin="20,10,0,10">
+          <DockPanel Margin="0,6">
             <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding Shared.UdpProxy}" OnContent="" OffContent="" />
             <Button DockPanel.Dock="Right" Classes="info" Margin="0,0,8,0" Command="{Binding ShowInfoCommand}" CommandParameter="udpProxy" />
             <StackPanel>
-              <TextBlock Text="UDP через сервер" FontSize="15" TextWrapping="Wrap" />
-              <TextBlock Classes="muted" Text="Нужно для голоса Discord и звонков" TextWrapping="Wrap" />
+              <TextBlock Text="UDP через сервер" TextWrapping="Wrap" />
+              <TextBlock Classes="hint" Text="Нужно для голоса Discord и звонков" />
             </StackPanel>
           </DockPanel>
-        </UniformGrid>
-      </Border>
 
-      <!-- Приложения Store: loopback-исключения (только режим «Только браузеры») -->
-      <Border Classes="card" IsVisible="{Binding Shared.StoreAppsVisible}">
-        <StackPanel Spacing="10">
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Content="Показать приложения" Command="{Binding Shared.LoadStoreAppsCommand}" />
-            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-              <TextBlock Text="Приложения из Microsoft Store" FontSize="18" FontWeight="SemiBold" />
-              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="uwpLoopback" />
-            </StackPanel>
-          </DockPanel>
-          <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="Приложения Store (например, «Почта» или «Microsoft Store») не могут подключиться к прокси без разрешения. Отметьте те, которым оно нужно." />
-          <TextBlock Classes="muted" Text="{Binding Shared.StoreAppsSummary}" />
-          <TextBox Text="{Binding Shared.StoreFilter}" PlaceholderText="Поиск по названию" IsVisible="{Binding !!Shared.StoreApps.Count}" />
-          <ScrollViewer MaxHeight="260" IsVisible="{Binding !!Shared.StoreApps.Count}">
-            <ItemsControl ItemsSource="{Binding Shared.StoreApps}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:StoreAppViewModel">
-                  <CheckBox IsChecked="{Binding IsChecked}" Content="{Binding Name}" Margin="0,2" />
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </ScrollViewer>
-        </StackPanel>
-      </Border>
-
-      <!-- От администратора подписки (ADR-048): только чтение -->
-      <Border Classes="card" IsVisible="{Binding Shared.HasAdminRules}">
-        <StackPanel Spacing="10">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="От администратора подписки" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="adminSub" />
-          </StackPanel>
-          <TextBlock Text="{Binding Shared.AdminRulesNote}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" />
-          <ItemsControl ItemsSource="{Binding Shared.AdminRules}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="x:String">
-                <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="4,3" />
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
-      </Border>
-
-      <!-- Гео-базы: правки закреплённых наборов действуют во всех маршрутах -->
-      <Border Classes="card">
-        <StackPanel Spacing="12">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="Гео-базы" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <!-- Гео-базы: правки закреплённых наборов действуют во всех маршрутах -->
+          <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
+            <TextBlock Classes="lbl" Text="ГЕО-БАЗЫ" VerticalAlignment="Center" />
             <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="geoLists" />
           </StackPanel>
-          <TextBlock Classes="muted" TextWrapping="Wrap" Text="Готовые списки адресов и сайтов, на которых стоят маршруты. Правки здесь действуют во всех маршрутах. Добавить набор пунктом своего маршрута — в редакторе маршрута." />
           <ItemsControl ItemsSource="{Binding Shared.GeoLists}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:GeoListRow">
-                <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="4,10">
+                <Border Classes="row">
                   <DockPanel>
                     <Button DockPanel.Dock="Right" Content="Открыть" Command="{Binding OpenCommand}" VerticalAlignment="Center" Margin="12,0,0,0" />
                     <Border DockPanel.Dock="Right" Classes="pill" Background="{DynamicResource InfoBg}" VerticalAlignment="Center" IsVisible="{Binding IsEdited}">
                       <TextBlock Text="{Binding EditSummary}" Foreground="{DynamicResource InfoFg}" FontSize="12" />
                     </Border>
-                    <StackPanel Spacing="2" VerticalAlignment="Center">
-                      <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" />
-                        <TextBlock Text="{Binding Kind}" Classes="lbl" VerticalAlignment="Center" />
-                      </StackPanel>
-                      <TextBlock Classes="muted" Text="{Binding Description}" TextWrapping="Wrap" />
+                    <StackPanel Spacing="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                      <TextBlock Classes="hint" Text="{Binding Description}" />
                     </StackPanel>
                   </DockPanel>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
+
+          <!-- Приложения Store: loopback-исключения (только режим «Только браузеры») -->
+          <StackPanel Spacing="8" IsVisible="{Binding Shared.StoreAppsVisible}" Margin="0,12,0,0">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Показать приложения" Command="{Binding Shared.LoadStoreAppsCommand}" />
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Classes="lbl" Text="ПРИЛОЖЕНИЯ ИЗ MICROSOFT STORE" VerticalAlignment="Center" />
+                <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="uwpLoopback" />
+              </StackPanel>
+            </DockPanel>
+            <TextBlock Classes="hint" Text="Отметьте приложения Store, которым нужен прокси: без разрешения они к нему не подключаются." />
+            <TextBlock Classes="hint" Text="{Binding Shared.StoreAppsSummary}" />
+            <TextBox Text="{Binding Shared.StoreFilter}" PlaceholderText="Поиск по названию" IsVisible="{Binding !!Shared.StoreApps.Count}" />
+            <ScrollViewer MaxHeight="260" IsVisible="{Binding !!Shared.StoreApps.Count}">
+              <ItemsControl ItemsSource="{Binding Shared.StoreApps}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:StoreAppViewModel">
+                    <CheckBox IsChecked="{Binding IsChecked}" Content="{Binding Name}" Margin="0,2" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </StackPanel>
+
+          <!-- От администратора подписки (ADR-048): только чтение -->
+          <StackPanel Spacing="6" IsVisible="{Binding Shared.HasAdminRules}" Margin="0,12,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Classes="lbl" Text="ОТ АДМИНИСТРАТОРА ПОДПИСКИ" VerticalAlignment="Center" />
+              <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="adminSub" />
+            </StackPanel>
+            <TextBlock Classes="hint" Text="{Binding Shared.AdminRulesNote}" />
+            <ItemsControl ItemsSource="{Binding Shared.AdminRules}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="4,3" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
         </StackPanel>
-      </Border>
+      </Expander>
     </StackPanel>
 
-    <!-- ================= Редактор маршрута ================= -->
-    <ContentControl Content="{Binding Editor}" IsVisible="{Binding IsEditing}">
-      <ContentControl.ContentTemplate>
-        <DataTemplate x:DataType="vm:RouteEditorViewModel">
-    <StackPanel Spacing="18">
-      <StackPanel Spacing="8">
-        <Button Content="← Все маршруты" Command="{Binding CloseCommand}" HorizontalAlignment="Left" />
-        <DockPanel>
-          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <Border Classes="pill" Background="{DynamicResource OkBg}" IsVisible="{Binding IsActive}" VerticalAlignment="Center">
-              <TextBlock Text="Действует" Foreground="{DynamicResource OkFg}" FontSize="12" />
-            </Border>
-            <Button Content="Дублировать" Command="{Binding DuplicateCommand}" ToolTip.Tip="Свой маршрут с теми же пунктами — можно менять, не трогая этот" />
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Classes="h1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="routes" />
-          </StackPanel>
-        </DockPanel>
-      </StackPanel>
+    <!-- ================= Редактор маршрута справа ================= -->
+    <Border Grid.Column="1" x:Name="Drawer" IsVisible="{Binding IsEditing}" Width="460" Margin="20,0,0,0" VerticalAlignment="Top"
+            Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="16" Padding="18,16">
+      <ContentControl Content="{Binding Editor}">
+        <ContentControl.ContentTemplate>
+          <DataTemplate x:DataType="vm:RouteEditorViewModel">
+            <StackPanel Spacing="12">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding CloseCommand}" ToolTip.Tip="Закрыть редактор (Esc)" AutomationProperties.Name="Закрыть редактор">
+                  <v:Icon Data="{StaticResource IconClose}" Width="16" Height="16" />
+                </Button>
+                <Button DockPanel.Dock="Right" Classes="icon" ToolTip.Tip="Ещё" AutomationProperties.Name="Ещё действия с маршрутом">
+                  <v:Icon Data="{StaticResource IconMore}" Width="18" Height="18" Thickness="3" />
+                  <Button.Flyout>
+                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                      <MenuItem Header="Дублировать" Command="{Binding DuplicateCommand}" />
+                      <MenuItem Header="Справка: маршруты" Command="{Binding ShowInfoCommand}" CommandParameter="routes" />
+                    </MenuFlyout>
+                  </Button.Flyout>
+                </Button>
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <Border Classes="pill" Background="{DynamicResource OkBg}" IsVisible="{Binding IsActive}" VerticalAlignment="Center">
+                    <TextBlock Text="действует" Foreground="{DynamicResource OkFg}" FontSize="11" />
+                  </Border>
+                </StackPanel>
+              </DockPanel>
 
-      <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding IsBuiltIn}">
-        <TextBlock Text="{x:Static vm:RouteEditorViewModel.BuiltInNote}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
-      </Border>
-      <Border Background="{DynamicResource InfoBg}" CornerRadius="12" Padding="12" IsVisible="{Binding IsNew}">
-        <TextBlock Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap"
-                   Text="Новый маршрут: по умолчанию через сервер идёт только то, что вы добавите ниже, всё остальное — напрямую. Чтобы он заработал, включите его в списке маршрутов, на главной или в трее." />
-      </Border>
+              <TextBlock Classes="hint" Text="{x:Static vm:RouteEditorViewModel.BuiltInNote}" IsVisible="{Binding IsBuiltIn}" />
+              <TextBlock Classes="hint" IsVisible="{Binding IsNew}"
+                         Text="Новый маршрут: через сервер идёт только то, что вы добавите, остальное — напрямую. Включите его в списке, на главной или в трее." />
 
-      <!-- Название и основа -->
-      <Border Classes="card" IsVisible="{Binding IsCustom}">
-        <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto">
-          <TextBlock Grid.Row="0" Grid.Column="0" Classes="lbl" Text="НАЗВАНИЕ" Margin="0,0,0,6" />
-          <TextBox Grid.Row="1" Grid.Column="0" Text="{Binding Name}" MaxLength="48" PlaceholderText="Например, «Только 2ip»" />
-          <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-            <TextBlock Classes="lbl" Text="ОСНОВА" VerticalAlignment="Center" />
-            <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="routeBase" />
-          </StackPanel>
-          <ComboBox Grid.Row="1" Grid.Column="2" ItemsSource="{x:Static vm:RouteEditorViewModel.Bases}" SelectedIndex="{Binding BaseIndex}" HorizontalAlignment="Stretch"
-                    AutomationProperties.Name="Основа маршрута" />
-          <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Classes="muted" Text="{Binding BaseDescription}" TextWrapping="Wrap" Margin="0,8,0,0" />
-        </Grid>
-      </Border>
+              <!-- Название и основа -->
+              <Grid ColumnDefinitions="*,10,*" RowDefinitions="Auto,Auto" IsVisible="{Binding IsCustom}">
+                <TextBlock Grid.Column="0" Classes="lbl" Text="НАЗВАНИЕ" Margin="0,0,0,4" />
+                <TextBox Grid.Row="1" Grid.Column="0" Text="{Binding Name}" MaxLength="48" PlaceholderText="Например, «Только 2ip»" />
+                <TextBlock Grid.Column="2" Classes="lbl" Text="ВСЁ ОСТАЛЬНОЕ" Margin="0,0,0,4" />
+                <ComboBox Grid.Row="1" Grid.Column="2" ItemsSource="{x:Static vm:RouteEditorViewModel.Bases}" SelectedIndex="{Binding BaseIndex}" HorizontalAlignment="Stretch"
+                          AutomationProperties.Name="Основа маршрута" ToolTip.Tip="{Binding BaseDescription}" />
+              </Grid>
 
-      <!-- Сайты и приложения -->
-      <Border Classes="card">
-        <StackPanel Spacing="12">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="Сайты и приложения" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="appRules" />
-          </StackPanel>
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Classes="primary" Content="Добавить" Command="{Binding AddItemCommand}" Margin="8,0,0,0" />
-            <Button DockPanel.Dock="Right" Width="40" Command="{Binding RefreshRunningAppsCommand}" ToolTip.Tip="Обновить список запущенных программ" Margin="8,0,0,0" AutomationProperties.Name="Обновить список запущенных программ">
-              <v:Icon Data="{StaticResource IconRefresh}" />
-            </Button>
-            <AutoCompleteBox Text="{Binding NewItem}" ItemsSource="{Binding RunningApps}" FilterMode="Contains" MinimumPrefixLength="0"
-                             PlaceholderText="Сайт (2ip.io), программа (Discord.exe) или IP-адрес — Тропа поймёт сама" />
-          </DockPanel>
-          <TextBlock Classes="muted" TextWrapping="Wrap"
-                     Text="Сайт действует вместе с поддоменами. «Через сервер» — можно выбрать свой сервер для каждого пункта: например, 2ip.io через один сервер, всё остальное — через другой. Маски, слова и регулярные выражения — списком ниже." />
-          <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding AppRulesNote, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TextBlock Text="{Binding AppRulesNote}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" />
-          </Border>
-          <Border Background="{DynamicResource InfoBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TextBlock Text="{Binding Message}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
-          </Border>
-          <Border Background="{DynamicResource BadBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TextBlock Text="{Binding Error}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" />
-          </Border>
-
-          <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasItems}">
-            <TextBlock Classes="lbl" Text="TCP И UDP ОТДЕЛЬНО" VerticalAlignment="Center" />
-            <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="tcpUdpSplit" />
-            <TextBlock Classes="lbl" Text="· СВОЙ СЕРВЕР" VerticalAlignment="Center" Margin="6,0,0,0" />
-            <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="ruleServer" />
-          </StackPanel>
-          <ItemsControl ItemsSource="{Binding Items}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:RuleItemViewModel">
-                <!-- Две строки: название не сжимается выпадающими списками в узком окне -->
-                <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="4,10">
-                  <StackPanel Spacing="8">
+              <TabControl Padding="0" Margin="0,4,0,0">
+                <!-- Сайты и программы -->
+                <TabItem Header="Сайты и программы">
+                  <StackPanel Spacing="10" Margin="0,10,0,0">
                     <DockPanel>
-                      <Button DockPanel.Dock="Right" Command="{Binding RemoveCommand}" ToolTip.Tip="Убрать из маршрута" AutomationProperties.Name="Убрать из маршрута" Margin="8,0,0,0">
-                        <v:Icon Data="{StaticResource IconClose}" />
+                      <Button DockPanel.Dock="Right" Classes="primary" Content="Добавить" Command="{Binding AddItemCommand}" Margin="8,0,0,0" />
+                      <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding RefreshRunningAppsCommand}" ToolTip.Tip="Обновить список запущенных программ"
+                              Margin="6,0,0,0" AutomationProperties.Name="Обновить список запущенных программ">
+                        <v:Icon Data="{StaticResource IconRefresh}" />
                       </Button>
-                      <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding Enabled}" OnContent="" OffContent="" ToolTip.Tip="Включить или выключить пункт" />
+                      <AutoCompleteBox Text="{Binding NewItem}" ItemsSource="{Binding RunningApps}" FilterMode="Contains" MinimumPrefixLength="0"
+                                       PlaceholderText="2ip.io, Discord.exe или IP" />
+                    </DockPanel>
+                    <Border Background="{DynamicResource WarnBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding AppRulesNote, Converter={x:Static ObjectConverters.IsNotNull}}">
+                      <TextBlock Text="{Binding AppRulesNote}" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap" />
+                    </Border>
+                    <Border Background="{DynamicResource InfoBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}">
+                      <TextBlock Text="{Binding Message}" Foreground="{DynamicResource InfoFg}" TextWrapping="Wrap" />
+                    </Border>
+                    <Border Background="{DynamicResource BadBg}" CornerRadius="10" Padding="10,8" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}">
+                      <TextBlock Text="{Binding Error}" Foreground="{DynamicResource BadFg}" TextWrapping="Wrap" />
+                    </Border>
+
+                    <ItemsControl ItemsSource="{Binding Items}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RuleItemViewModel">
+                          <Border Classes="row">
+                            <StackPanel Spacing="8">
+                              <DockPanel>
+                                <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding RemoveCommand}" ToolTip.Tip="Убрать из маршрута" AutomationProperties.Name="Убрать из маршрута" Margin="4,0,0,0">
+                                  <v:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
+                                </Button>
+                                <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding Enabled}" OnContent="" OffContent="" MinWidth="0" ToolTip.Tip="Включить или выключить пункт" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" VerticalAlignment="Center" MaxWidth="240" />
+                                  <TextBlock Text="{Binding Kind}" Classes="lbl" VerticalAlignment="Center" />
+                                  <TextBlock Text="{Binding CountText}" Classes="lbl" VerticalAlignment="Center" IsVisible="{Binding CountText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                </StackPanel>
+                              </DockPanel>
+                              <Grid ColumnDefinitions="Auto,*,Auto,*">
+                                <TextBlock Grid.Column="0" Classes="lbl" Text="TCP" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding TcpIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="TCP" />
+                                <TextBlock Grid.Column="2" Classes="lbl" Text="UDP" VerticalAlignment="Center" Margin="10,0,6,0" />
+                                <ComboBox Grid.Column="3" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding UdpIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="UDP" />
+                              </Grid>
+                              <ComboBox ItemsSource="{Binding Servers}" SelectedIndex="{Binding ServerIndex}" IsVisible="{Binding ShowServer}" HorizontalAlignment="Stretch"
+                                        ToolTip.Tip="Через какой сервер идёт этот пункт" AutomationProperties.Name="Сервер пункта" />
+                            </StackPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Classes="hint" IsVisible="{Binding !HasItems}"
+                               Text="Пока пусто. Например: 2ip.io — через сервер «Германия», Discord.exe — TCP и UDP через сервер." />
+                  </StackPanel>
+                </TabItem>
+
+                <!-- Ещё: наборы гео-баз и свои списки -->
+                <TabItem Header="Ещё">
+                  <StackPanel Spacing="10" Margin="0,10,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Classes="lbl" Text="НАБОР ИЗ ГЕО-БАЗ" VerticalAlignment="Center" />
+                      <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="routeGeoImport" />
+                    </StackPanel>
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Content="Добавить" Command="{Binding AddGeoSetCommand}" Margin="8,0,0,0" />
+                      <ComboBox ItemsSource="{Binding GeoSets}" SelectedIndex="{Binding GeoSetIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Набор гео-базы" />
+                    </DockPanel>
+                    <TextBlock Classes="hint" Text="Например, «Госсайты» или «Банки» напрямую. Пункт появится на вкладке «Сайты и программы»." />
+
+                    <DockPanel Margin="0,14,0,0">
+                      <Button DockPanel.Dock="Right" Content="Создать список" Command="{Binding CreateListCommand}" VerticalAlignment="Center" />
                       <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding Kind}" Classes="lbl" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding CountText}" Classes="lbl" VerticalAlignment="Center" IsVisible="{Binding CountText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <TextBlock Classes="lbl" Text="СВОИ СПИСКИ" VerticalAlignment="Center" />
+                        <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="geoLists" />
                       </StackPanel>
                     </DockPanel>
-                    <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,1.3*">
-                      <TextBlock Grid.Column="0" Classes="lbl" Text="TCP" VerticalAlignment="Center" Margin="0,0,8,0" />
-                      <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding TcpIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="TCP" />
-                      <TextBlock Grid.Column="2" Classes="lbl" Text="UDP" VerticalAlignment="Center" Margin="14,0,8,0" />
-                      <ComboBox Grid.Column="3" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding UdpIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="UDP" />
-                      <TextBlock Grid.Column="4" Classes="lbl" Text="СЕРВЕР" VerticalAlignment="Center" Margin="14,0,8,0" IsVisible="{Binding ShowServer}" />
-                      <ComboBox Grid.Column="5" ItemsSource="{Binding Servers}" SelectedIndex="{Binding ServerIndex}" IsVisible="{Binding ShowServer}" HorizontalAlignment="Stretch"
-                                ToolTip.Tip="Через какой сервер идёт этот пункт" AutomationProperties.Name="Сервер пункта" />
-                    </Grid>
+                    <TextBlock Classes="hint" Text="Маски, поддомены, слова, выражения, сети. Список из v2rayN вставляется как есть. Выше — главнее." />
+                    <ItemsControl ItemsSource="{Binding Lists}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:GeoListRow">
+                          <Border Classes="row">
+                            <DockPanel>
+                              <Button DockPanel.Dock="Right" Content="Открыть" Command="{Binding OpenCommand}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                              <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding MoveDownCommand}" IsEnabled="{Binding CanMoveDown}" VerticalAlignment="Center"
+                                      ToolTip.Tip="Ниже — проверяется позже" AutomationProperties.Name="Опустить список">
+                                <v:Icon Data="{StaticResource IconDown}" Width="14" Height="14" />
+                              </Button>
+                              <Button DockPanel.Dock="Right" Classes="icon" Command="{Binding MoveUpCommand}" IsEnabled="{Binding CanMoveUp}" VerticalAlignment="Center"
+                                      ToolTip.Tip="Выше — главнее: проверяется раньше" AutomationProperties.Name="Поднять список">
+                                <v:Icon Data="{StaticResource IconUp}" Width="14" Height="14" />
+                              </Button>
+                              <StackPanel Spacing="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="hint"><Run Text="{Binding Kind}" /><Run Text=" · " /><Run Text="{Binding Description}" /></TextBlock>
+                              </StackPanel>
+                            </DockPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                   </StackPanel>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <TextBlock Classes="muted" IsVisible="{Binding !HasItems}" TextWrapping="Wrap"
-                     Text="Пока пусто. Пример: 2ip.io — через сервер «Германия»; Discord.exe — TCP и UDP через сервер (иначе не работает голос); игра — TCP через сервер, UDP напрямую ради пинга." />
-        </StackPanel>
-      </Border>
-
-      <!-- Наборы гео-баз -->
-      <Border Classes="card">
-        <StackPanel Spacing="10">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="Из гео-баз" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="routeGeoImport" />
-          </StackPanel>
-          <TextBlock Classes="muted" TextWrapping="Wrap" Text="Готовый набор geoip / geosite целиком — одним пунктом. Действие и сервер выбираются в списке выше, как у сайта." />
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Content="Добавить в маршрут" Command="{Binding AddGeoSetCommand}" Margin="8,0,0,0" />
-            <ComboBox ItemsSource="{Binding GeoSets}" SelectedIndex="{Binding GeoSetIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Набор гео-базы" />
-          </DockPanel>
-        </StackPanel>
-      </Border>
-
-      <!-- Свои списки маршрута: маски, поддомены, слова, выражения (ADR-040) -->
-      <Border Classes="card">
-        <StackPanel Spacing="10">
-          <DockPanel>
-            <Button DockPanel.Dock="Right" Content="Создать список" Command="{Binding CreateListCommand}" VerticalAlignment="Center" />
-            <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,12,0">
-              <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Text="Списки: маски, поддомены, слова" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="geoLists" />
-              </StackPanel>
-              <TextBlock Classes="muted" TextWrapping="Wrap" Text="Много записей с одним действием: «только этот адрес», «с поддоменами», «содержит слово», регулярное выражение, сети. Список из v2rayN можно вставить как есть. Выше — главнее." />
+                </TabItem>
+              </TabControl>
             </StackPanel>
-          </DockPanel>
-          <ItemsControl ItemsSource="{Binding Lists}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:GeoListRow">
-                <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="4,10">
-                  <DockPanel>
-                    <Button DockPanel.Dock="Right" Content="Открыть" Command="{Binding OpenCommand}" VerticalAlignment="Center" Margin="12,0,0,0" />
-                    <Button DockPanel.Dock="Right" Width="36" Command="{Binding MoveDownCommand}" IsEnabled="{Binding CanMoveDown}" Margin="6,0,0,0" VerticalAlignment="Center"
-                            ToolTip.Tip="Ниже — проверяется позже" AutomationProperties.Name="Опустить список">
-                      <v:Icon Data="{StaticResource IconDown}" Width="14" Height="14" />
-                    </Button>
-                    <Button DockPanel.Dock="Right" Width="36" Command="{Binding MoveUpCommand}" IsEnabled="{Binding CanMoveUp}" Margin="12,0,0,0" VerticalAlignment="Center"
-                            ToolTip.Tip="Выше — главнее: проверяется раньше" AutomationProperties.Name="Поднять список">
-                      <v:Icon Data="{StaticResource IconUp}" Width="14" Height="14" />
-                    </Button>
-                    <Border DockPanel.Dock="Right" Classes="pill" Background="{DynamicResource InfoBg}" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Kind}" Foreground="{DynamicResource InfoFg}" FontSize="12" />
-                    </Border>
-                    <TextBlock DockPanel.Dock="Left" Text="{Binding Position}" Classes="lbl" Width="22" VerticalAlignment="Center" />
-                    <StackPanel Spacing="2" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Classes="muted" Text="{Binding Description}" />
-                    </StackPanel>
-                  </DockPanel>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </StackPanel>
-      </Border>
-
-      <Button Content="← Все маршруты" Command="{Binding CloseCommand}" HorizontalAlignment="Left" />
-    </StackPanel>
-        </DataTemplate>
-      </ContentControl.ContentTemplate>
-    </ContentControl>
-  </Panel>
+          </DataTemplate>
+        </ContentControl.ContentTemplate>
+      </ContentControl>
+    </Border>
+  </Grid>
 </UserControl>

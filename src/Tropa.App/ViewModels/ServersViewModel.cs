@@ -182,6 +182,10 @@ internal sealed partial class ServerItemViewModel(Profile profile) : ObservableO
     [ObservableProperty]
     public partial bool Testing { get; set; }
 
+    /// <summary>Подробности проверки под строкой (ADR-072): только у единственного выделенного сервера.</summary>
+    [ObservableProperty]
+    public partial bool ShowDetails { get; set; }
+
     public void Apply(ServerTestResult? r)
     {
         if (r is null)
@@ -287,6 +291,7 @@ internal sealed partial class ServersViewModel : ObservableObject
         var restore = Tabs.FirstOrDefault(t => selectedTab is not null && t.SubscriptionId == selectedTab.SubscriptionId && t.Manual == selectedTab.Manual) ?? Tabs[0];
         restore.IsSelected = true;
         OnPropertyChanged(nameof(CurrentTabInfo));
+        OnPropertyChanged(nameof(TabPick));
 
         RebuildItems();
         var updated = s.Subscriptions.Where(x => x.LastUpdated is not null).Select(x => x.LastUpdated!.Value).DefaultIfEmpty().Max();
@@ -300,6 +305,17 @@ internal sealed partial class ServersViewModel : ObservableObject
 
     /// <summary>Открытая вкладка: для полосы действий с подпиской и кнопки «Вернуть удалённые».</summary>
     public GroupTab? CurrentTabInfo => CurrentTab;
+
+    /// <summary>Вкладки подписок одним выпадающим списком (ADR-072).</summary>
+    public GroupTab? TabPick
+    {
+        get => CurrentTab;
+        set
+        {
+            if (value is not null && value != CurrentTab)
+                SelectTab(value);
+        }
+    }
 
     private void RebuildItems()
     {
@@ -539,6 +555,7 @@ internal sealed partial class ServersViewModel : ObservableObject
         PendingSubscriptionDelete = null;
         PendingSubscriptionName = null;
         OnPropertyChanged(nameof(CurrentTabInfo));
+        OnPropertyChanged(nameof(TabPick));
         RebuildItems();
     }
 
@@ -570,10 +587,19 @@ internal sealed partial class ServersViewModel : ObservableObject
     public void SetPicked(IEnumerable<ServerItemViewModel> items)
     {
         _picked = items.ToList();
+        foreach (var item in Items)
+            item.ShowDetails = _picked.Count == 1 && _picked[0] == item;
         OnPropertyChanged(nameof(PickedCount));
+        OnPropertyChanged(nameof(PickedMany));
+        OnPropertyChanged(nameof(PickedText));
     }
 
     public int PickedCount => _picked.Count;
+
+    /// <summary>Выделено несколько — снизу полоса действий для выбранных (ADR-072).</summary>
+    public bool PickedMany => _picked.Count > 1;
+
+    public string PickedText => $"Выбрано: {_picked.Count}";
 
     /// <summary>С чем работает действие: все выделенные, а если выделена одна строка или ни одной — текущая.</summary>
     private List<ServerItemViewModel> Targets() =>
@@ -789,6 +815,15 @@ internal sealed partial class ServersViewModel : ObservableObject
         }
     }
 
+    /// <summary>«Проверить» (ADR-072): сначала обновить подписки, затем проверить все серверы вкладки.</summary>
+    [RelayCommand]
+    private async Task CheckAllAsync()
+    {
+        if (_engine.State.Subscriptions.Count > 0)
+            await UpdateSubscriptionsAsync();
+        await TestAllAsync();
+    }
+
     [RelayCommand]
     private Task TestAllAsync() => RunTestsAsync(Items.ToList(), TestKinds.Standard,
         "Проверяю серверы: пинг, задержка, скорость и UDP. Текущее подключение не прерывается…");
@@ -804,12 +839,15 @@ internal sealed partial class ServersViewModel : ObservableObject
     [RelayCommand]
     private void Clone()
     {
-        if (Selected is not { } item)
+        var targets = Targets();
+        if (targets.Count == 0)
             return;
-        var copy = _engine.CloneProfile(item.Id);
+        var copies = targets.Select(t => _engine.CloneProfile(t.Id)).ToList();
         Refresh();
-        Selected = Items.FirstOrDefault(i => i.Id == copy.Id) ?? Selected;
-        Message = $"Создана копия «{copy.Name}» в «Мои». Её можно менять, не трогая исходный сервер.";
+        Selected = Items.FirstOrDefault(i => i.Id == copies[^1].Id) ?? Selected;
+        Message = copies.Count == 1
+            ? $"Создана копия «{copies[0].Name}» в «Мои». Её можно менять, не трогая исходный сервер."
+            : $"Создано копий: {copies.Count}, они в «Мои».";
     }
 
     [RelayCommand]

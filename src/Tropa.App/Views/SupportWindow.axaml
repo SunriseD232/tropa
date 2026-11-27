@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="using:Tropa.App.Views"
+        xmlns:vm="using:Tropa.App.ViewModels"
+        x:Class="Tropa.App.Views.SupportWindow"
+        x:DataType="vm:DiagnosticsViewModel"
+        Title="Тропа — журнал и отчёт"
+        Icon="/Assets/tropa.ico"
+        Width="860" Height="640" MinWidth="560" MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+  <!-- Окно «Для поддержки» (ADR-072): журнал, проверка домена, отчёт. Отчёт уходит только по явному действию (правило 7). -->
+  <DockPanel Margin="20,16">
+    <!-- Проверка домена -->
+    <StackPanel DockPanel.Dock="Top" Spacing="8">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="Проверить" Command="{Binding CheckDomainCommand}" Margin="8,0,0,0" />
+        <Button DockPanel.Dock="Right" Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="dnsCheck" Margin="8,0,0,0" />
+        <TextBox Text="{Binding Domain}" PlaceholderText="Проверить домен: discord.com" AutomationProperties.Name="Проверить домен">
+          <TextBox.KeyBindings>
+            <KeyBinding Gesture="Enter" Command="{Binding CheckDomainCommand}" />
+          </TextBox.KeyBindings>
+        </TextBox>
+      </DockPanel>
+      <Border CornerRadius="10" Padding="12,8" Background="{DynamicResource Card2}" Classes.bad="{Binding DomainSpoofed}"
+              IsVisible="{Binding DomainResult, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <Border.Styles>
+          <Style Selector="Border.bad"><Setter Property="Background" Value="{DynamicResource WarnBg}" /></Style>
+        </Border.Styles>
+        <TextBlock Text="{Binding DomainResult}" TextWrapping="Wrap" />
+      </Border>
+    </StackPanel>
+
+    <TabControl Margin="0,12,0,0">
+      <TabItem Header="Журнал">
+        <DockPanel Margin="0,10,0,0">
+          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBox DockPanel.Dock="Right" Width="200" Text="{Binding LogFilter}" PlaceholderText="Свой фильтр" AutomationProperties.Name="Фильтр журнала" />
+            <ListBox Classes="chips" ItemsSource="{x:Static vm:DiagnosticsViewModel.LogFilters}" SelectedIndex="{Binding LogFilterIndex}" AutomationProperties.Name="Что показать">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+            </ListBox>
+          </DockPanel>
+          <TextBox Text="{Binding LogText}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                   FontFamily="{StaticResource Mono}" FontSize="11" PlaceholderText="Журнал пуст: ядро ещё ничего не сообщало." />
+        </DockPanel>
+      </TabItem>
+      <TabItem Header="Отчёт">
+        <DockPanel Margin="0,10,0,0">
+          <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                <Button Content="Собрать заново" Command="{Binding OpenReportCommand}" />
+                <Button Content="Сохранить…" Click="OnSaveReport" IsEnabled="{Binding ReportOpen}" />
+                <Button Classes="primary" Content="Скопировать отчёт" Click="OnCopyReport" IsEnabled="{Binding ReportOpen}" />
+              </StackPanel>
+              <TextBlock Classes="hint" VerticalAlignment="Center" Margin="0,0,12,0"
+                         Text="Ключи, пароли и адреса серверов уже убраны (адреса заменены на server-1, server-2…). Проверьте текст перед отправкой." />
+            </DockPanel>
+            <TextBlock x:Name="ReportNote" Classes="hint" />
+          </StackPanel>
+          <TextBox Text="{Binding ReportText}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                   FontFamily="{StaticResource Mono}" FontSize="12" PlaceholderText="Нажмите «Собрать заново»." />
+        </DockPanel>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</Window>

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Tropa.App.ViewModels;
@@ -15,16 +16,29 @@ internal sealed partial class ServersView : UserControl
 {
     public ServersView() => InitializeComponent();
 
-    // Узкое окно: панель сервера уходит под список, иначе списку не остаётся места и имена пропадают.
-    private void OnBodySizeChanged(object? sender, SizeChangedEventArgs e)
+    // «⋯» у строки: выделить этот сервер и открыть то же меню, что и по правому щелчку.
+    private void OnRowMore(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        var narrow = e.NewSize.Width < 820;
-        if (Body.ColumnDefinitions.Count == (narrow ? 1 : 3))
+        if (sender is not Control { DataContext: ServerItemViewModel item } button)
             return;
-        Body.ColumnDefinitions = narrow ? new ColumnDefinitions("*") : new ColumnDefinitions("*,16,260");
-        Grid.SetColumn(Details, narrow ? 0 : 2);
-        Grid.SetRow(Details, narrow ? 1 : 0);
-        Details.Margin = narrow ? new Avalonia.Thickness(0, 16, 0, 0) : default;
+        if (List.SelectedItems is { } picked && !picked.Contains(item))
+        {
+            picked.Clear();
+            List.SelectedItem = item;
+        }
+
+        RowMenu.Open(button);
+    }
+
+    private void OnClearPicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => List.SelectedItems?.Clear();
+
+    private void OnListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && List.SelectedItems is { Count: > 0 } picked)
+        {
+            picked.Clear();
+            e.Handled = true;
+        }
     }
 
     // Выделение нескольких серверов: модель знает, к чему применять «Удалить» и «Проверить».
@@ -51,10 +65,12 @@ internal sealed partial class RoutesView : UserControl
 {
     public RoutesView() => InitializeComponent();
 
-    // Двойной щелчок по маршруту — редактор (ADR-067). Щелчок по кнопкам карточки сюда не доходит.
-    private void OnRouteDoubleTapped(object? sender, TappedEventArgs e)
+    // Щелчок по карточке маршрута — редактор справа; щелчки по кнопкам внутри карточки не открывают его.
+    private void OnRouteTapped(object? sender, TappedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is RouteCardViewModel card && e.Source is not Button)
+        if (e.Source is Avalonia.Visual source && source.FindAncestorOfType<Button>(includeSelf: true) is not null)
+            return;
+        if (sender is Control { DataContext: RouteCardViewModel card })
             card.EditCommand.Execute(null);
     }
 }
@@ -77,35 +93,6 @@ internal sealed partial class PlaceholderView : UserControl
 internal sealed partial class DiagnosticsView : UserControl
 {
     public DiagnosticsView() => InitializeComponent();
-
-    // Отчёт уходит из программы только по явному действию пользователя (docs/02-security.md, правило 7).
-    private async void OnCopyReport(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (DataContext is DiagnosticsViewModel { ReportText: { } text } && TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-        {
-            await clipboard.SetTextAsync(text);
-            ReportNote.Text = "Отчёт скопирован.";
-        }
-    }
-
-    private async void OnSaveReport(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (DataContext is not DiagnosticsViewModel { ReportText: { } text } || TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
-            return;
-        var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Сохранить отчёт диагностики",
-            SuggestedFileName = $"tropa-report-{DateTime.Now:yyyyMMdd-HHmm}.md",
-            DefaultExtension = "md",
-            FileTypeChoices = [new FilePickerFileType("Markdown") { Patterns = ["*.md"] }],
-        });
-        if (file is null)
-            return;
-        await using (var stream = await file.OpenWriteAsync())
-        await using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false)))
-            await writer.WriteAsync(text);
-        ReportNote.Text = "Отчёт сохранён: " + file.Name;
-    }
 }
 
 internal sealed partial class SettingsView : UserControl

@@ -18,8 +18,11 @@ public static class RuleSets
     /// <summary>ИИ-сервисы, закрытые для России с их стороны (OpenAI, Anthropic, Gemini…): только через сервер.</summary>
     public const string GeositeAiNonCn = "geosite-category-ai-noncn";
 
-    /// <summary>Всегда напрямую: госуслуги, банки, сайты, доступные только из России.</summary>
-    public static IReadOnlyList<string> AlwaysDirect { get; } = [RuServices, GeositeGovRu, GeositeBankRu, GeositeRuOnlyInside];
+    /// <summary>
+    /// Госуслуги, банки, сервисы РФ, сайты «только из России»: напрямую в основе «Всё, кроме российского».
+    /// Жёсткого правила «всегда напрямую» для всех маршрутов нет (ADR-072).
+    /// </summary>
+    public static IReadOnlyList<string> RussianDirect { get; } = [RuServices, GeositeGovRu, GeositeBankRu, GeositeRuOnlyInside];
 
     /// <summary>Заблокированное в России (runetfreedom/russia-v2ray-rules-dat).</summary>
     public static IReadOnlyList<string> Blocked { get; } = [GeositeRuBlocked, GeoipRuBlocked, GeoipRuBlockedCommunity];

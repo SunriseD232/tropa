@@ -18,13 +18,15 @@ namespace Tropa.App.ViewModels;
 internal sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly TropaEngine _engine;
+    private readonly UpdatesViewModel _updates;
     private readonly InfoViewModel _info;
     private readonly Action<string> _navigate;
 
-    public SettingsViewModel(TropaEngine engine, InfoViewModel info, Action<string> navigate)
+    public SettingsViewModel(TropaEngine engine, InfoViewModel info, Action<string> navigate, UpdatesViewModel updates)
     {
         _engine = engine;
         _info = info;
+        _updates = updates;
         _navigate = navigate;
         Sections =
         [
@@ -80,14 +82,55 @@ internal sealed partial class SettingsViewModel : ObservableObject
 
     public event EventHandler? ImportRequested;
 
-    [RelayCommand]
-    private void Select(SettingsSection section) => Current = section;
+    /// <summary>Плитки разделов (вход в настройки) или открытый раздел со списком слева (ADR-072).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSection))]
+    public partial bool IsOverview { get; set; } = true;
 
-    /// <summary>Открыть раздел по ключу (меню вида v2rayN).</summary>
+    public bool IsSection => !IsOverview;
+
+    [RelayCommand]
+    private void Select(SettingsSection section)
+    {
+        Current = section;
+        IsOverview = false;
+        SearchText = null;
+    }
+
+    [RelayCommand]
+    private void ShowOverview()
+    {
+        IsOverview = true;
+        foreach (var s in Sections)
+            s.UpdateSummary();
+    }
+
+    /// <summary>Открыть раздел по ключу (меню вида v2rayN, «Ядра и обновления» с главной).</summary>
     public void ShowSection(string key)
     {
         if (Sections.FirstOrDefault(s => s.Key == key) is { } section)
-            Current = section;
+            Select(section);
+    }
+
+    /// <summary>Поиск по названиям и подсказкам всех пунктов (ADR-072).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSearching))]
+    public partial string? SearchText { get; set; }
+
+    public bool IsSearching => !string.IsNullOrWhiteSpace(SearchText);
+
+    [ObservableProperty]
+    public partial IReadOnlyList<SettingRow> SearchResults { get; set; } = [];
+
+    partial void OnSearchTextChanged(string? value)
+    {
+        var q = value?.Trim();
+        SearchResults = string.IsNullOrEmpty(q) ? []
+            : Sections.SelectMany(s => s.Rows.Where(r =>
+                    r.Title.Contains(q, StringComparison.OrdinalIgnoreCase)
+                    || (r.Hint?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || s.Title.Contains(q, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
     }
 
     partial void OnCurrentChanged(SettingsSection value)
@@ -117,6 +160,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
         }
         foreach (var row in Sections.SelectMany(s => s.Rows))
             row.Load(_engine.State.Settings, compat);
+        foreach (var section in Sections)
+            section.UpdateSummary();
     }
 
     private void Commit(Func<AppSettings, AppSettings> change)
@@ -322,7 +367,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
             ("Открыть «Диагностику»", new RelayCommand(() => _navigate("diagnostics")))),
     ]);
 
-    private static SettingsSection Dpi() => new("dpi", "Соединение", "Как выглядит само подключение к серверу.",
+    private static SettingsSection Dpi() => new("dpi", "Обход блокировок", "Как выглядит само подключение к серверу.",
     [
         new ChoiceRow("Отпечаток браузера (uTLS)", "utls", Opts("Chrome", "Firefox", "Edge", "Safari", "Случайный"),
             s => s.Dpi.Utls switch { "firefox" => 1, "edge" => 2, "safari" => 3, "random" or "randomized" => 4, _ => 0 },
@@ -345,6 +390,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
     private SettingsSection CoresSection() => new("cores", "Ядра и обновления", null,
     [
         new LabelRow("Версии", "cores", () => $"Тропа {TropaEngine.AppVersion.ToString(3)} · {_engine.CoreVersions}"),
+        new ActionRow("Обновления Тропы и ядер", "appUpdate", "Новая версия показывается на главной полоской; проверить можно и сейчас.",
+            ("Проверить обновления", _updates.CheckCommand)),
         new LabelRow("Что умеют ядра", "coreMatrix", () => "sing-box: TUN, правила, DNS · Xray: XHTTP, шум"),
         new LabelRow("Списки сайтов и адресов", "geoBases", () => "Обновляются вместе с ядрами по подписанному манифесту"),
         new ChoiceRow("Какое ядро использовать", "coreChoice", Opts("Автоматически (рекомендуется)", "Всегда sing-box", "Всегда Xray"),
