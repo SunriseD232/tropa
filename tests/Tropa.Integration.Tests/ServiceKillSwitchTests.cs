@@ -89,7 +89,7 @@ public sealed class ServiceKillSwitchTests : IAsyncLifetime
                     _switches.Add(ks);
                 return ks;
             },
-            FindTunLuid = _ => Task.FromResult<ulong?>(42),
+            FindTunLuid = (_, _) => Task.FromResult<ulong?>(42),
             Updates = new Infrastructure.Updates.UpdateConfig("https://updates.example/manifest.json",
                 Convert.ToBase64String(_updateKey.ExportSubjectPublicKeyInfo()), 0),
             GitHubHttp = () => new HttpClient(new FakeGitHub(_github)),

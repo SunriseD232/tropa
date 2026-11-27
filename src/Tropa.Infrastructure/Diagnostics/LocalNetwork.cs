@@ -25,7 +25,7 @@ public static class LocalNetwork
                     && ni.NetworkInterfaceType is NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211 or NetworkInterfaceType.GigabitEthernet
                     && !foreign.Contains(ni.Name)
                     && ni.GetIPProperties().GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork && !g.Address.Equals(IPAddress.Any))
-                    && !ni.GetIPProperties().UnicastAddresses.Any(u => u.Address.Equals(Diagnosis.OwnTunAddress)))
+                    && !ni.GetIPProperties().UnicastAddresses.Any(u => Diagnosis.IsOwnTunAddress(u.Address)))
                 .OrderBy(ni => ni.GetIPProperties().GetIPv4Properties()?.Index ?? int.MaxValue)
                 .Select(ni => ni.Name)
                 .FirstOrDefault();

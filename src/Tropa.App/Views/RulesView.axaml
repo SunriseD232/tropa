@@ -7,20 +7,20 @@
   <StackPanel Spacing="18">
     <StackPanel Spacing="8">
       <StackPanel Orientation="Horizontal" Spacing="10">
-        <TextBlock Classes="h1" Text="Правила" />
+        <TextBlock Classes="h1" Text="Маршруты" />
         <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruleOrder" />
       </StackPanel>
       <DockPanel>
         <Button DockPanel.Dock="Right" Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="finalRule" ToolTip.Tip="Что, если ни одно правило не подошло" Margin="8,0,0,0" />
         <Button DockPanel.Dock="Right" Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="ruServices" Margin="8,0,0,0" />
-        <TextBlock Classes="muted" Text="Правила проверяются сверху вниз, срабатывает первое подходящее. Госуслуги и банки всегда идут напрямую." VerticalAlignment="Center" />
+        <TextBlock Classes="muted" Text="Пункты проверяются сверху вниз, срабатывает первый подходящий. Госуслуги и банки всегда идут напрямую." TextWrapping="Wrap" VerticalAlignment="Center" />
       </DockPanel>
       <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
         <TextBlock Classes="muted" Text="Основа" VerticalAlignment="Center" />
         <ComboBox SelectedIndex="{Binding PresetIndex}" MinWidth="280">
           <ComboBoxItem Content="Всё, кроме российского" />
           <ComboBoxItem Content="Только заблокированное (рекомендуется)" />
-          <ComboBoxItem Content="Всё через прокси" />
+          <ComboBoxItem Content="Всё через сервер" />
         </ComboBox>
         <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="route" />
       </StackPanel>
@@ -30,7 +30,7 @@
       <DockPanel>
         <Button DockPanel.Dock="Right" Classes="primary" Content="Применить сейчас" Command="{Binding ApplyCommand}" />
         <TextBlock Foreground="{DynamicResource InfoFg}" VerticalAlignment="Center" TextWrapping="Wrap"
-                   Text="Правила изменены. Чтобы они заработали, подключение переподключится на секунду." />
+                   Text="Маршрут изменён. Чтобы изменения заработали, подключение переподключится на секунду." />
       </DockPanel>
     </Border>
 
@@ -73,27 +73,33 @@
           <AutoCompleteBox Text="{Binding NewApp}" ItemsSource="{Binding RunningApps}" FilterMode="Contains"
                            PlaceholderText="Программа: начните вводить или выберите из запущенных (Discord.exe)" MinimumPrefixLength="0" />
         </DockPanel>
-        <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4,4,0">
-          <TextBlock Grid.Column="0" Classes="lbl" Text="ПРОГРАММА" />
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-            <TextBlock Classes="lbl" Text="TCP" VerticalAlignment="Center" />
-            <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="tcpUdpSplit" />
-          </StackPanel>
-          <TextBlock Grid.Column="2" Classes="lbl" Text="UDP" />
-          <TextBlock Grid.Column="3" Classes="lbl" Text="ВКЛ" />
-        </Grid>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Classes="lbl" Text="TCP И UDP ОТДЕЛЬНО" VerticalAlignment="Center" />
+          <Button Classes="info" Width="20" Height="20" MinHeight="20" FontSize="11" Command="{Binding ShowInfoCommand}" CommandParameter="tcpUdpSplit" />
+        </StackPanel>
         <ItemsControl ItemsSource="{Binding Apps}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:RuleItemViewModel">
-              <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4">
-                <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding TcpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
-                <ComboBox Grid.Column="2" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding UdpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
-                <ToggleSwitch Grid.Column="3" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
-                <Button Grid.Column="4" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" AutomationProperties.Name="Удалить правило">
-<v:Icon Data="{StaticResource IconClose}" />
-</Button>
-              </Grid>
+              <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="4,10">
+                <StackPanel Spacing="8">
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" AutomationProperties.Name="Удалить правило" Margin="8,0,0,0">
+                      <v:Icon Data="{StaticResource IconClose}" />
+                    </Button>
+                    <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" />
+                  </DockPanel>
+                  <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,1.3*">
+                    <TextBlock Grid.Column="0" Classes="lbl" Text="TCP" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding TcpIndex}" HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Column="2" Classes="lbl" Text="UDP" VerticalAlignment="Center" Margin="14,0,8,0" />
+                    <ComboBox Grid.Column="3" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding UdpIndex}" HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Column="4" Classes="lbl" Text="СЕРВЕР" VerticalAlignment="Center" Margin="14,0,8,0" IsVisible="{Binding ShowServer}" />
+                    <ComboBox Grid.Column="5" ItemsSource="{Binding Servers}" SelectedIndex="{Binding ServerIndex}" IsVisible="{Binding ShowServer}" HorizontalAlignment="Stretch"
+                              ToolTip.Tip="Через какой сервер идёт это правило" AutomationProperties.Name="Сервер правила" />
+                  </Grid>
+                </StackPanel>
+              </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
@@ -139,15 +145,26 @@
         <ItemsControl ItemsSource="{Binding Sites}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:RuleItemViewModel">
-              <Grid ColumnDefinitions="*,170,170,60,48" Margin="4,4">
-                <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding TcpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
-                <ComboBox Grid.Column="2" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding UdpIndex}" Margin="0,0,8,0" HorizontalAlignment="Stretch" />
-                <ToggleSwitch Grid.Column="3" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
-                <Button Grid.Column="4" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" AutomationProperties.Name="Удалить правило">
-<v:Icon Data="{StaticResource IconClose}" />
-</Button>
-              </Grid>
+              <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="4,10">
+                <StackPanel Spacing="8">
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Command="{Binding RemoveCommand}" ToolTip.Tip="Удалить правило" AutomationProperties.Name="Удалить правило" Margin="8,0,0,0">
+                      <v:Icon Data="{StaticResource IconClose}" />
+                    </Button>
+                    <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding Enabled}" OnContent="" OffContent="" />
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" />
+                  </DockPanel>
+                  <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,1.3*">
+                    <TextBlock Grid.Column="0" Classes="lbl" Text="TCP" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding TcpIndex}" HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Column="2" Classes="lbl" Text="UDP" VerticalAlignment="Center" Margin="14,0,8,0" />
+                    <ComboBox Grid.Column="3" ItemsSource="{x:Static vm:RuleItemViewModel.Actions}" SelectedIndex="{Binding UdpIndex}" HorizontalAlignment="Stretch" />
+                    <TextBlock Grid.Column="4" Classes="lbl" Text="СЕРВЕР" VerticalAlignment="Center" Margin="14,0,8,0" IsVisible="{Binding ShowServer}" />
+                    <ComboBox Grid.Column="5" ItemsSource="{Binding Servers}" SelectedIndex="{Binding ServerIndex}" IsVisible="{Binding ShowServer}" HorizontalAlignment="Stretch"
+                              ToolTip.Tip="Через какой сервер идёт это правило" AutomationProperties.Name="Сервер правила" />
+                  </Grid>
+                </StackPanel>
+              </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

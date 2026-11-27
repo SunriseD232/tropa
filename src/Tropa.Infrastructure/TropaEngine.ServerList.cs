@@ -43,7 +43,7 @@ public sealed partial class TropaEngine
         var settings = State.Settings with
         {
             Connection = State.Settings.Connection with { Mode = CaptureMode.PortsOnly, RandomPorts = false },
-            Routing = State.Settings.Routing with { Rules = [.. State.Settings.Routing.Rules, .. AdminRules()] },
+            Routing = RoutingForCore(),
         };
         var all = State.Profiles.Select(p => p.Profile).ToList();
         var used = UsedProfiles(profile, all, CompatRules.Evaluate(settings, profile).Effective).ToList();

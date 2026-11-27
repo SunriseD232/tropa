@@ -130,7 +130,7 @@
           </MenuItem>
           <MenuItem Header="_Настройки">
             <MenuItem Header="Параметры…" Command="{Binding NavigateCommand}" CommandParameter="settings" />
-            <MenuItem Header="Маршрутизация и правила…" Command="{Binding NavigateCommand}" CommandParameter="rules" />
+            <MenuItem Header="Маршруты…" Command="{Binding NavigateCommand}" CommandParameter="rules" />
             <MenuItem Header="Игры…" Command="{Binding NavigateCommand}" CommandParameter="games" />
             <MenuItem Header="Диагностика…" Command="{Binding NavigateCommand}" CommandParameter="diagnostics" />
             <Separator />
@@ -173,12 +173,8 @@
             <Button Classes="info" Width="22" Height="22" MinHeight="22" Padding="0" FontSize="11" VerticalAlignment="Center" Command="{Binding Home.ShowInfoCommand}" CommandParameter="tunSwitch" />
             <Border Classes="sep" />
             <TextBlock Text="Маршрут" Classes="muted" VerticalAlignment="Center" />
-            <ComboBox SelectedIndex="{Binding Home.RouteIndex}" Width="220" VerticalAlignment="Center" ToolTip.Tip="{Binding Home.RouteDescription}"
-                      AutomationProperties.Name="Маршрут">
-              <ComboBoxItem Content="Всё, кроме российского" />
-              <ComboBoxItem Content="Только заблокированное (рекомендуется)" />
-              <ComboBoxItem Content="Всё через прокси" />
-            </ComboBox>
+            <ComboBox ItemsSource="{Binding Home.RouteNames}" SelectedIndex="{Binding Home.RouteIndex}" Width="220" VerticalAlignment="Center" ToolTip.Tip="{Binding Home.RouteDescription}"
+                      AutomationProperties.Name="Маршрут" />
             <Button Classes="info" Width="22" Height="22" MinHeight="22" Padding="0" FontSize="11" VerticalAlignment="Center" Command="{Binding Home.ShowInfoCommand}" CommandParameter="route" />
             <Border Classes="sep" />
             <ComboBox SelectedIndex="{Binding Home.ProxyIndex}" IsEnabled="{Binding !Home.IsBusy}" Width="230" VerticalAlignment="Center"

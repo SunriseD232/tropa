@@ -28,15 +28,22 @@ internal sealed partial class MainWindowViewModel : ObservableObject
         Servers = new ServersViewModel(engine, Info, () => Import.Open(), Edit);
         GeoEditor = new GeoListEditorViewModel(engine, Info);
         Rules = new RulesViewModel(engine, Info, GeoEditor);
+        Routes = new RoutesViewModel(engine, Info, GeoEditor, Rules);
         Games = new GamesViewModel(engine, Info);
         Diagnostics = new DiagnosticsViewModel(engine, Info);
         Settings = new SettingsViewModel(engine, Info, page => Navigate(page));
         Onboarding = new OnboardingViewModel(engine, Info);
         CurrentPage = Home;
         Warning = App.StartupNotice ?? engine.StartupWarning ?? PortableImportHint(engine);
-        engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => FooterStatus = s.State == ConnectionState.Connected ? "Подключено" : "Отключено");
+        engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => FooterStatus = s.State != ConnectionState.Connected ? "Отключено" : _engine.NoNetwork ? "Подключено · нет сети" : "Подключено");
         IsV2rayLayout = engine.State.Settings.General.Layout == WindowLayout.V2rayN;
-        engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(() => IsV2rayLayout = _engine.State.Settings.General.Layout == WindowLayout.V2rayN);
+        engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            IsV2rayLayout = _engine.State.Settings.General.Layout == WindowLayout.V2rayN;
+            // Переключили вид экрана маршрутов в настройках, пока он открыт, — показываем выбранный.
+            if (IsRules && CurrentPage != RoutesPage())
+                CurrentPage = RoutesPage();
+        });
         // Журнал внизу вида «как в v2rayN»: строки уже без секретов (RecentLog), обновление не чаще раза в секунду.
         _logTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => FlushLog());
         engine.Log += (_, _) => _logDirty = true;
@@ -65,7 +72,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
 
     public string PageTitle => CurrentPage switch
     {
-        RulesViewModel => "Маршрутизация и правила",
+        RulesViewModel or RoutesViewModel => "Маршруты",
         GamesViewModel => "Игры",
         DiagnosticsViewModel => "Диагностика",
         SettingsViewModel => "Параметры",
@@ -123,6 +130,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     public ServersViewModel Servers { get; }
     public GeoListEditorViewModel GeoEditor { get; }
     public RulesViewModel Rules { get; }
+    public RoutesViewModel Routes { get; }
     public GamesViewModel Games { get; }
     public DiagnosticsViewModel Diagnostics { get; }
     public SettingsViewModel Settings { get; }
@@ -140,7 +148,17 @@ internal sealed partial class MainWindowViewModel : ObservableObject
 
     public bool IsHome => CurrentPage == Home;
     public bool IsServers => CurrentPage == Servers;
-    public bool IsRules => CurrentPage == Rules;
+    public bool IsRules => CurrentPage == Rules || CurrentPage == Routes;
+
+    /// <summary>Экран маршрутов: новый (ADR-067) или прежний «Правила» — по настройке.</summary>
+    private object RoutesPage() => _engine.State.Settings.General.ClassicRoutes ? Rules : Routes;
+
+    private object ShowRoutes()
+    {
+        if (RoutesPage() == Routes)
+            Routes.OnShown();
+        return RoutesPage();
+    }
     public bool IsGames => CurrentPage == Games;
     public bool IsDiagnostics => CurrentPage == Diagnostics;
     public bool IsSettings => CurrentPage == Settings;
@@ -151,7 +169,7 @@ internal sealed partial class MainWindowViewModel : ObservableObject
     private void Navigate(string page) => CurrentPage = page switch
     {
         "servers" => Servers,
-        "rules" => Rules,
+        "rules" => ShowRoutes(),
         "games" => ShowGames(),
         "diagnostics" => ShowDiagnostics(),
         "settings" => Settings,

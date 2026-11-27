@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Tropa.App.Services;
 using Tropa.Core.Model;
+using Tropa.Core.Routing;
 using Tropa.Infrastructure;
 using Tropa.Infrastructure.Net;
 
@@ -167,6 +168,13 @@ internal sealed partial class HomeViewModel : ObservableObject
 
     [ObservableProperty]
     public partial int RouteIndex { get; set; }
+
+    /// <summary>Названия маршрутов для выбора (ADR-067): встроенные и свои.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<string> RouteNames { get; set; } = [];
+
+    private IReadOnlyList<RouteChoice> _routeChoices = [];
+    private bool _routeLoading;
 
     [ObservableProperty]
     public partial string RouteDescription { get; set; } = "";
@@ -369,8 +377,7 @@ internal sealed partial class HomeViewModel : ObservableObject
         KillSwitch = s.Settings.General.KillSwitch;
         OnPropertyChanged(nameof(KillSwitchReason));
         OnPropertyChanged(nameof(KillSwitchEnabled));
-        RouteIndex = (int)s.Settings.Routing.Preset;
-        RouteDescription = RouteText(s.Settings.Routing.Preset);
+        FillRoutes(s.Settings);
     }
 
     internal static string SubscriptionText(Subscription sub)
@@ -387,22 +394,63 @@ internal sealed partial class HomeViewModel : ObservableObject
         return string.Join(" · ", parts);
     }
 
-    private static string RouteText(RoutePreset preset) => preset switch
+    private void FillRoutes(AppSettings settings)
     {
-        RoutePreset.ExceptRu => "Госуслуги, банки и российские сайты идут напрямую, остальное — через сервер. Заблокированное в РФ — всегда через сервер.",
-        RoutePreset.BlockedOnly => "Через сервер идут только сайты из списка блокировок. Остальное — напрямую.",
-        _ => "Через сервер идёт всё. Госуслуги и банки всё равно напрямую — они не пускают с зарубежных IP.",
-    };
+        _routeLoading = true;
+        try
+        {
+            var choices = RouteBook.Choices(settings);
+            var names = choices.Select(c => c.Key == "preset:BlockedOnly" ? c.Name + " (рекомендуется)" : c.Name).ToList();
+            _routeChoices = choices;
+            if (!names.SequenceEqual(RouteNames))
+                RouteNames = names;
+            var active = RouteBook.Active(settings);
+            RouteIndex = Math.Max(0, choices.ToList().FindIndex(c => c.Key == active.Key));
+            RouteDescription = RouteText(settings, active);
+        }
+        finally
+        {
+            _routeLoading = false;
+        }
+    }
+
+    internal static string RouteText(AppSettings settings, RouteChoice route)
+    {
+        if (route.RouteId is not { } id || settings.Routing.Routes.FirstOrDefault(r => r.Id == id) is not { } custom)
+            return RouteBook.BaseDescription(route.Base);
+        var items = custom.Rules.Count(r => r.Enabled) + custom.CustomLists.Count(l => !l.Disabled);
+        return $"Свой маршрут, пунктов: {items}. Основа: «{RouteBook.BaseTitle(custom.Base)}». " + RouteBook.BaseDescription(custom.Base);
+    }
 
     partial void OnRouteIndexChanged(int value)
     {
-        var preset = (RoutePreset)Math.Clamp(value, 0, 2);
-        RouteDescription = RouteText(preset);
-        if (_engine.State.Settings.Routing.Preset == preset)
+        if (_routeLoading)
             return;
-        _engine.UpdateSettings(s => s with { Routing = s.Routing with { Preset = preset } });
+        // -1 приходит, пока выпадающий список меняет варианты: возвращаем действующий маршрут.
+        if (value < 0 || value >= _routeChoices.Count)
+        {
+            Dispatcher.UIThread.Post(() => FillRoutes(_engine.State.Settings));
+            return;
+        }
+
+        var key = _routeChoices[value].Key;
+        if (RouteBook.ActiveKey(_engine.State.Settings) == key)
+            return;
+        RouteDescription = RouteText(_engine.State.Settings, _routeChoices[value]);
         // Маршрут меняется сразу: при подключении — переподключение с новыми правилами, без «Применить».
-        _ = ApplyNowAsync();
+        _ = SelectRouteAsync(key);
+    }
+
+    private async Task SelectRouteAsync(string key)
+    {
+        try
+        {
+            await _engine.SelectRouteAsync(key);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Infrastructure.Service.ServiceException or TimeoutException)
+        {
+            Message = _engine.Scrubber.Scrub(ex.Message);
+        }
     }
 
     private async Task ApplyNowAsync()
@@ -447,6 +495,7 @@ internal sealed partial class HomeViewModel : ObservableObject
         OnPropertyChanged(nameof(Blocking));
         StateText = s.State switch
         {
+            ConnectionState.Connected when _engine.NoNetwork => "Нет сети",
             ConnectionState.Connected => "Подключено",
             ConnectionState.Connecting => "Подключение…",
             ConnectionState.Disconnecting => "Отключение…",

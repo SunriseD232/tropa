@@ -87,7 +87,8 @@ internal sealed class GeoListRow
     }
 
     /// <param name="position">Место списка сверху (1 — главнее всех).</param>
-    public GeoListRow(CustomGeoList list, Action<Guid> open, Action<Guid, int> move, int position, int total)
+    /// <param name="serverName">Свой сервер списка «через сервер» (ADR-067); null — выбранный.</param>
+    public GeoListRow(CustomGeoList list, Action<Guid> open, Action<Guid, int> move, int position, int total, string? serverName = null)
     {
         Position = position;
         CanMoveUp = position > 1;
@@ -97,7 +98,7 @@ internal sealed class GeoListRow
         Title = list.Name;
         var count = list.Entries.Count.ToString("N0", CultureInfo.GetCultureInfo("ru-RU"));
         Description = (list.Disabled ? "Выключен. " : "") + $"Свой список · записей: {count}";
-        Kind = ActionLabel(list.Action);
+        Kind = list.Action == RuleActionKind.Proxy && serverName is not null ? $"Через «{Services.Format.NameWithoutFlag(serverName)}»" : ActionLabel(list.Action);
         EditSummary = "";
         IsCustom = true;
         OpenCommand = new RelayCommand(() => open(list.Id));
@@ -150,6 +151,9 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
 
     // Свой список (ADR-040): null — открыт встроенный набор.
     private Guid? _customId;
+
+    /// <summary>Маршрут, которому принадлежит свой список (ADR-067); null — общие пункты встроенных маршрутов.</summary>
+    private Guid? _routeId;
     private bool _hasIp;
     private bool _hasSites;
     private bool _loadingCustom;
@@ -195,7 +199,26 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
 
     partial void OnListNameChanged(string? value) => MarkCustomDirty();
 
-    partial void OnActionIndexChanged(int value) => MarkCustomDirty();
+    partial void OnActionIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(ShowServer));
+        MarkCustomDirty();
+    }
+
+    /// <summary>Серверы для «через сервер» (ADR-067): первый — выбранный сейчас.</summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<ServerOption> ServerOptions { get; set; } = [];
+
+    [ObservableProperty]
+    public partial int ServerIndex { get; set; }
+
+    partial void OnServerIndexChanged(int value)
+    {
+        if (value >= 0)
+            MarkCustomDirty();
+    }
+
+    public bool ShowServer => IsCustom && ActionIndex == 0;
 
     partial void OnListEnabledChanged(bool value) => MarkCustomDirty();
 
@@ -362,17 +385,24 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
     }
 
     /// <summary>Открыть свой список; null — создать новый (сохраняется кнопкой «Сохранить»).</summary>
-    public void OpenCustom(Guid? id)
+    public void OpenCustom(Guid? id, Guid? routeId = null)
     {
         ++_generation;
-        var existing = id is { } g ? _engine.State.Settings.Routing.CustomLists.FirstOrDefault(l => l.Id == g) : null;
+        _routeId = routeId;
+        var existing = id is { } g ? RouteBook.Items(_engine.State.Settings.Routing, routeId).Lists.FirstOrDefault(l => l.Id == g) : null;
         _list = null;
         _customId = existing?.Id ?? Guid.NewGuid();
         _loadingCustom = true;
         IsCustom = true;
-        Reset(existing?.Name ?? "Новый список", "Свой список: сайты и адреса с одним действием. Проверяется после правил «Приложения» и «Сайты».", ip: true, sites: true);
+        Reset(existing?.Name ?? "Новый список", "Свой список: маски, поддомены, слова, выражения и адреса с одним действием. Проверяется после приложений и сайтов маршрута.", ip: true, sites: true);
         ListName = existing?.Name ?? "Новый список";
         ActionIndex = existing?.Action switch { RuleActionKind.Direct => 1, RuleActionKind.Block => 2, _ => 0 };
+        ServerOptions = ServerOption.List(_engine, existing?.ServerId);
+        // Новый список вариантов сбрасывает выбор в выпадающем списке; без смены значения индекс
+        // не пришёл бы туда заново и поле осталось бы пустым.
+        ServerIndex = -1;
+        ServerIndex = Math.Max(0, ServerOptions.ToList().FindIndex(o => o.Id == existing?.ServerId));
+        OnPropertyChanged(nameof(ShowServer));
         ListEnabled = existing is not { Disabled: true };
         _loadingCustom = false;
         _original = existing?.Entries ?? [];
@@ -399,6 +429,7 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
         _list = list;
         _customId = null;
         IsCustom = false;
+        OnPropertyChanged(nameof(ShowServer));
         Reset(list.Title, list.Description, list.IsIp, !list.IsIp);
         var edit = _engine.State.Settings.Routing.GeoEdits.FirstOrDefault(e => e.Tag == tag);
         foreach (var e in edit?.Added ?? [])
@@ -786,20 +817,25 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
             Name = name,
             Disabled = !ListEnabled,
             Action = ActionIndex switch { 1 => RuleActionKind.Direct, 2 => RuleActionKind.Block, _ => RuleActionKind.Proxy },
+            ServerId = ActionIndex == 0 && ServerIndex > 0 && ServerIndex < ServerOptions.Count ? ServerOptions[ServerIndex].Id : null,
             Entries = GeoEdits.Apply(_original, new GeoListEdit { Tag = "custom", Added = [.. _added], Removed = [.. _removed] }),
         };
         var full = false;
-        _engine.UpdateSettings(s =>
+        var routeId = _routeId;
+        _engine.UpdateSettings(s => s with
         {
-            var lists = s.Routing.CustomLists.ToList();
-            var i = lists.FindIndex(l => l.Id == id);
-            if (i >= 0)
-                lists[i] = list;
-            else if (lists.Count < GeoEdits.MaxCustomLists)
-                lists.Add(list);
-            else
-                full = true;
-            return s with { Routing = s.Routing with { CustomLists = lists } };
+            Routing = RouteBook.WithLists(s.Routing, routeId, current =>
+            {
+                var lists = current.ToList();
+                var i = lists.FindIndex(l => l.Id == id);
+                if (i >= 0)
+                    lists[i] = list;
+                else if (lists.Count < GeoEdits.MaxCustomLists)
+                    lists.Add(list);
+                else
+                    full = true;
+                return lists;
+            }),
         });
         if (full)
         {
@@ -823,7 +859,8 @@ internal sealed partial class GeoListEditorViewModel : ObservableObject
             return;
         }
 
-        _engine.UpdateSettings(s => s with { Routing = s.Routing with { CustomLists = [.. s.Routing.CustomLists.Where(l => l.Id != id)] } });
+        var routeId = _routeId;
+        _engine.UpdateSettings(s => s with { Routing = RouteBook.WithLists(s.Routing, routeId, lists => [.. lists.Where(l => l.Id != id)]) });
         ConfirmDelete = false;
         IsDirty = false;
         IsOpen = false;

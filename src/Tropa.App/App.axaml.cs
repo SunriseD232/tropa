@@ -18,6 +18,8 @@ internal sealed partial class App : Application
     private TrayIcon? _tray;
     private NativeMenuItem? _toggleItem;
     private NativeMenuItem? _refreshItem;
+    private NativeMenu? _routeMenu;
+    private string? _routeMenuSignature;
     private bool _exiting;
 
     public static bool StartMinimized { get; set; }
@@ -90,6 +92,8 @@ internal sealed partial class App : Application
             _ = _engine.AttachServiceAsync();
             var vm = new MainWindowViewModel(_engine);
             _window = new MainWindow { DataContext = vm };
+            // Окно о новой версии (ADR-069): Тропа обычно свёрнута в трей — показываем окно, иначе его никто не увидит.
+            vm.Home.Updates.AttentionNeeded += (_, _) => ShowWindow();
             ApplyTheme(_engine.State.Settings.General.Theme);
             CreateTray();
             _hotkey = new Services.GlobalHotkey(_window, () => Dispatcher.UIThread.Post(() => _ = ToggleAsync()));
@@ -117,6 +121,9 @@ internal sealed partial class App : Application
             });
             _subscriptionTimer.Start();
             _engine.StatusChanged += (_, s) => Dispatcher.UIThread.Post(() => UpdateTray(s));
+            // Маршруты в трее (ADR-067): список и отметка следуют за настройками.
+            _engine.StateChanged += (_, _) => Dispatcher.UIThread.Post(UpdateRouteMenu);
+            UpdateRouteMenu();
             // При выходе из Windows ShutdownEngine обнуляет _engine, а отключение ещё шлёт ExitRegionChanged:
             // отложенный вызов не должен разыменовывать уже обнулённое поле.
             _engine.ExitRegionChanged += (_, _) => Dispatcher.UIThread.Post(() =>
@@ -197,8 +204,10 @@ internal sealed partial class App : Application
         refresh.Click += (_, _) => _engine?.RefreshExitRegion();
         var exit = new NativeMenuItem("Выход");
         exit.Click += async (_, _) => await ExitAsync();
+        _routeMenu = new NativeMenu();
+        var route = new NativeMenuItem("Маршрут") { Menu = _routeMenu };
 
-        var menu = new NativeMenu { Items = { _toggleItem, refresh, open, new NativeMenuItemSeparator(), emergency, exit } };
+        var menu = new NativeMenu { Items = { _toggleItem, route, refresh, open, new NativeMenuItemSeparator(), emergency, exit } };
         // Правый клик по значку сам обновляет страну выхода: флаг в трее догоняет переключение выхода сервером.
         menu.Opening += (_, _) => _engine?.RefreshExitRegion();
         _tray = new TrayIcon
@@ -211,6 +220,49 @@ internal sealed partial class App : Application
         TrayIcon.SetIcons(this, new TrayIcons { _tray });
     }
 
+    /// <summary>Подменю «Маршрут»: все маршруты, действующий отмечен; выбор применяется сразу.</summary>
+    private void UpdateRouteMenu()
+    {
+        if (_routeMenu is null || _engine is not { } engine)
+            return;
+        var settings = engine.State.Settings;
+        var choices = Core.Routing.RouteBook.Choices(settings);
+        var active = Core.Routing.RouteBook.ActiveKey(settings);
+        var signature = active + "|" + string.Join("|", choices.Select(c => c.Key + ":" + c.Name));
+        if (signature == _routeMenuSignature)
+            return;
+        _routeMenuSignature = signature;
+        _routeMenu.Items.Clear();
+        foreach (var choice in choices)
+        {
+            var key = choice.Key;
+            var item = new NativeMenuItem(choice.Name)
+            {
+                ToggleType = MenuItemToggleType.Radio,
+                IsChecked = key == active,
+            };
+            item.Click += async (_, _) =>
+            {
+                if (_engine is not { } e)
+                    return;
+                try
+                {
+                    await e.SelectRouteAsync(key);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or Infrastructure.Service.ServiceException or TimeoutException)
+                {
+                    // Ошибку переподключения покажет состояние подключения (значок и главная).
+                }
+                finally
+                {
+                    _routeMenuSignature = null;
+                    UpdateRouteMenu();
+                }
+            };
+            _routeMenu.Items.Add(item);
+        }
+    }
+
     private void UpdateTray(ConnectionStatus s)
     {
         if (_tray is null || _toggleItem is null)
@@ -220,6 +272,7 @@ internal sealed partial class App : Application
         _tray.Icon = Services.TrayIconArt.Get(s.State, region?.CountryCode);
         (_tray.ToolTipText, _toggleItem.Header) = s.State switch
         {
+            ConnectionState.Connected when _engine?.NoNetwork == true => ("Тропа — нет интернета, жду сеть", "Отключить"),
             ConnectionState.Connected => (region is null ? "Тропа — подключено" : $"Тропа — подключено, выход: {region.Name}", "Отключить"),
             ConnectionState.Connecting or ConnectionState.Disconnecting => ("Тропа — подключение…", "Подключить"),
             ConnectionState.Error => ("Тропа — ошибка подключения", "Подключить"),

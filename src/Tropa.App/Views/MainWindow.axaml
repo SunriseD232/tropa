@@ -13,6 +13,7 @@
     <DataTemplate DataType="vm:HomeViewModel"><v:HomeView /></DataTemplate>
     <DataTemplate DataType="vm:ServersViewModel"><v:ServersView /></DataTemplate>
     <DataTemplate DataType="vm:RulesViewModel"><v:RulesView /></DataTemplate>
+    <DataTemplate DataType="vm:RoutesViewModel"><v:RoutesView /></DataTemplate>
     <DataTemplate DataType="vm:GamesViewModel"><v:GamesView /></DataTemplate>
     <DataTemplate DataType="vm:DiagnosticsViewModel"><v:DiagnosticsView /></DataTemplate>
     <DataTemplate DataType="vm:SettingsViewModel"><v:SettingsView /></DataTemplate>
@@ -159,6 +160,29 @@
       </Border>
     </Border>
 
+    <!-- Окно «Вышла новая версия» (ADR-069): Обновить / Не сейчас / Больше не показывать для этого обновления -->
+    <Border IsVisible="{Binding Home.Updates.IsPromptOpen}" Background="{DynamicResource Overlay}">
+      <Border Classes="card" MaxWidth="560" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Image Source="/Assets/logo.png" Width="32" Height="32" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Home.Updates.PromptTitle}" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap" />
+          </StackPanel>
+          <TextBlock Text="{Binding Home.Updates.PromptText}" TextWrapping="Wrap" />
+          <Border Background="{DynamicResource Card2}" CornerRadius="10" Padding="12,10"
+                  IsVisible="{Binding Home.Updates.PromptNotes, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <SelectableTextBlock Text="{Binding Home.Updates.PromptNotes}" TextWrapping="Wrap" />
+          </Border>
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,6,0,0">
+            <Button Content="Больше не показывать для этого обновления" Command="{Binding Home.Updates.PromptSkipCommand}"
+                    ToolTip.Tip="Окно не появится, пока не выйдет следующая версия. Обновиться можно на главной: «Версии и обновления»." />
+            <Button Content="Не сейчас" Command="{Binding Home.Updates.PromptLaterCommand}" ToolTip.Tip="Напомнить завтра или при следующем запуске Тропы" />
+            <Button Classes="primary" Content="Обновить" Command="{Binding Home.Updates.PromptUpdateCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Border>
+
     <!-- Окно «Сервер» -->
     <Border IsVisible="{Binding Edit.IsOpen}" Background="{DynamicResource Overlay}">
       <v:EditServerView DataContext="{Binding Edit}" />
@@ -178,10 +202,12 @@
                 <Button Classes="info" Command="{Binding GeoEditor.ShowInfoCommand}" CommandParameter="geoLists" />
               </StackPanel>
               <TextBlock Classes="muted" Text="{Binding GeoEditor.Description}" />
-              <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,10,0,0" IsVisible="{Binding GeoEditor.IsCustom}">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,10,0,0" IsVisible="{Binding GeoEditor.IsCustom}">
                 <TextBox Grid.Column="0" Text="{Binding GeoEditor.ListName}" PlaceholderText="Название, например «Игры»" MaxLength="64" />
                 <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:GeoListEditorViewModel.Actions}" SelectedIndex="{Binding GeoEditor.ActionIndex}" MinWidth="170" Margin="8,0,0,0" ToolTip.Tip="Что делать с сайтами и адресами из списка" />
-                <ToggleSwitch Grid.Column="2" IsChecked="{Binding GeoEditor.ListEnabled}" OnContent="Вкл" OffContent="Выкл" Margin="12,0,0,0" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="2" ItemsSource="{Binding GeoEditor.ServerOptions}" SelectedIndex="{Binding GeoEditor.ServerIndex}" IsVisible="{Binding GeoEditor.ShowServer}" MinWidth="170" MaxWidth="240" Margin="8,0,0,0"
+                          ToolTip.Tip="Через какой сервер идёт этот список" AutomationProperties.Name="Сервер списка" />
+                <ToggleSwitch Grid.Column="3" IsChecked="{Binding GeoEditor.ListEnabled}" OnContent="Вкл" OffContent="Выкл" Margin="12,0,0,0" VerticalAlignment="Center" />
               </Grid>
             </StackPanel>
           </DockPanel>

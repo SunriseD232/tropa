@@ -257,6 +257,9 @@ public static class SingBoxConfigBuilder
             return tag;
         }
 
+        public Profile? TryFindProfile(Guid id) =>
+            Input.Profiles.FirstOrDefault(p => p.Id == id) ?? (Input.Active.Id == id ? Input.Active : null);
+
         public Profile FindProfile(Guid id) =>
             Input.Profiles.FirstOrDefault(p => p.Id == id) ?? (Input.Active.Id == id
                 ? Input.Active
@@ -421,7 +424,7 @@ public static class SingBoxConfigBuilder
                 // Постоянное имя: при перезапуске ядра Windows переиспользует тот же адаптер, а не
                 // заводит рядом «tun1», и Тропа узнаёт свой адаптер даже до того, как ему выдан адрес.
                 ["interface_name"] = Diagnostics.Diagnosis.OwnTunName,
-                ["address"] = StrArray(["172.19.0.1/30", "fdfe:dcba:9876::1/126"]),
+                ["address"] = StrArray(Diagnostics.Diagnosis.OwnTunCidrs),
                 ["mtu"] = s.Connection.Mtu,
                 ["auto_route"] = true,
                 ["strict_route"] = s.Connection.StrictRoute,
@@ -511,14 +514,12 @@ public static class SingBoxConfigBuilder
         ctx.ServerTags[active.Id] = ProxyTag;
         outbounds.Insert(0, Outbound(ctx, active, ProxyTag));
 
-        // Серверы, на которые ссылаются правила «через конкретный сервер».
-        foreach (var rule in s.Routing.Rules.Where(r => r.Enabled))
+        // Серверы, на которые ссылаются правила и списки «через конкретный сервер» (ADR-067).
+        // Удалённый сервер не ломает подключение: такой пункт идёт через выбранный (Route).
+        foreach (var id in RouteBook.ServerIds(s.Routing))
         {
-            foreach (var action in new[] { rule.Tcp, rule.Udp })
-            {
-                if (action.Kind == RuleActionKind.Server && action.ServerId is { } id)
-                    AddServer(ctx.FindProfile(id));
-            }
+            if (ctx.TryFindProfile(id) is { } p)
+                AddServer(p);
         }
 
         outbounds.Push(new JsonObject { ["type"] = "direct", ["tag"] = DirectTag });
@@ -784,7 +785,8 @@ public static class SingBoxConfigBuilder
         // Госуслуги, банки и сайты, доступные только из России, — напрямую раньше всего остального.
         rules.Push(Route(ctx, SetsMatch(ctx, RuleSets.AlwaysDirect), RuleAction.Direct));
 
-        var final = s.Routing.Preset == RoutePreset.BlockedOnly ? DirectTag : ProxyTag;
+        // «Только заблокированное» и свой маршрут «только пункты» (ADR-067): не подошло ни одно правило — напрямую.
+        var final = s.Routing.Preset is RoutePreset.BlockedOnly or RoutePreset.ItemsOnly ? DirectTag : ProxyTag;
 
         // Соединение по домену (FakeIP, прокси Windows, определение домена) несёт только имя, и
         // правила по IP-спискам без адреса не срабатывают никогда. Перед ними ядро узнаёт адрес;
@@ -823,7 +825,8 @@ public static class SingBoxConfigBuilder
                 var tag = GeoEdits.CustomTag(list, ipPart);
                 ctx.RuleSetTags.Add(tag);
                 ctx.InlineSets[tag] = entries;
-                rules.Push(Route(ctx, new JsonObject { ["rule_set"] = StrArray([tag]) }, new RuleAction(list.Action)));
+                var action = list.Action == RuleActionKind.Proxy && list.ServerId is { } sid ? new RuleAction(RuleActionKind.Server, sid) : new RuleAction(list.Action);
+                rules.Push(Route(ctx, new JsonObject { ["rule_set"] = StrArray([tag]) }, action));
             }
         }
 
@@ -858,7 +861,7 @@ public static class SingBoxConfigBuilder
     private static void AddServerRoute(Context ctx, JsonArray rules, Action resolve)
     {
         var s = ctx.S;
-        if (s.Routing.Preset != RoutePreset.All)
+        if (s.Routing.Preset is RoutePreset.ExceptRu or RoutePreset.BlockedOnly)
         {
             // ИИ-сервисы закрыты для России их владельцами с их стороны — только через сервер.
             AddRuleSetRule(ctx, rules, RuleSets.GeositeAiNonCn, RuleAction.Proxy);
@@ -1079,9 +1082,9 @@ public static class SingBoxConfigBuilder
                 match["action"] = "route";
                 match["outbound"] = DirectTag;
                 return match;
-            case RuleActionKind.Server:
+            case RuleActionKind.Server when action.ServerId is { } id && ctx.TryFindProfile(id) is { } server:
                 match["action"] = "route";
-                match["outbound"] = ctx.TagFor(ctx.FindProfile(action.ServerId ?? throw new UnsupportedProfileException("В правиле не указан сервер.")));
+                match["outbound"] = ctx.TagFor(server);
                 return match;
             default:
                 match["action"] = "route";

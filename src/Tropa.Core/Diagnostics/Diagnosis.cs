@@ -27,6 +27,21 @@ public static partial class Diagnosis
     /// <summary>Адреса TUN самой Тропы (SingBoxConfigBuilder): такой адаптер — наш.</summary>
     public static readonly IPAddress OwnTunAddress = IPAddress.Parse("172.19.0.1");
 
+    /// <summary>Сети TUN Тропы — те же, что у sing-box по умолчанию.</summary>
+    public static IReadOnlyList<string> OwnTunCidrs { get; } = ["172.19.0.1/30", "fdfe:dcba:9876::1/126"];
+
+    /// <summary>
+    /// Запасной адрес TUN (ADR-070). Hiddify и другие клиенты на sing-box берут тот же 172.19.0.1, и с их
+    /// туннелем ядро падает: «set ipv4 address: The object already exists» (журнал разработчика, 2026-11-24).
+    /// </summary>
+    public static readonly IPAddress OwnTunAddressAlt = IPAddress.Parse("172.23.233.1");
+
+    public static IReadOnlyList<string> OwnTunCidrsAlt { get; } = ["172.23.233.1/30", "fdfe:dcba:9877::1/126"];
+
+    /// <summary>Адрес принадлежит TUN Тропы (основной или запасной).</summary>
+    public static bool IsOwnTunAddress(IPAddress? address) =>
+        address is not null && (address.Equals(OwnTunAddress) || address.Equals(OwnTunAddressAlt));
+
     /// <summary>Имя адаптера TUN Тропы.</summary>
     public const string OwnTunName = "Tropa";
 
@@ -122,7 +137,7 @@ public static partial class Diagnosis
     /// <summary>Чужие VPN-адаптеры: включены, похожи на VPN и это не наш TUN.</summary>
     public static IReadOnlyList<AdapterInfo> ForeignVpnAdapters(IEnumerable<AdapterInfo> adapters) =>
         adapters.Where(a => a.IsUp
-                && !a.Addresses.Contains(OwnTunAddress)
+                && !a.Addresses.Any(IsOwnTunAddress)
                 && !IsOwnTunName(a.Name)
                 && !FilterPseudoAdapter().IsMatch(a.Name) && !FilterPseudoAdapter().IsMatch(a.Description)
                 && (VpnAdapterPattern().IsMatch(a.Description) || VpnAdapterPattern().IsMatch(a.Name)))
@@ -161,7 +176,7 @@ public static partial class Diagnosis
         if (!connected)
             return new StepResult("leaks", StepStatus.Skipped, "Утечки проверяются при подключении");
 
-        var hasIpv6 = adapters.Any(a => a.IsUp && a.HasDefaultGateway && !a.Addresses.Contains(OwnTunAddress) && a.HasGlobalIpv6);
+        var hasIpv6 = adapters.Any(a => a.IsUp && a.HasDefaultGateway && !a.Addresses.Any(IsOwnTunAddress) && a.HasGlobalIpv6);
         var notes = new List<string>();
         var status = StepStatus.Ok;
 

@@ -186,6 +186,9 @@ internal sealed partial class SettingsViewModel : ObservableObject
             s => s.General.Layout == WindowLayout.V2rayN ? 1 : 0,
             (s, i) => s with { General = s.General with { Layout = i == 1 ? WindowLayout.V2rayN : WindowLayout.Tropa } },
             hint: "Меняется сразу. Серверы, настройки и подключение те же — другое только расположение."),
+        new ToggleRow("Прежний экран «Правила»", "classicRoutes", s => s.General.ClassicRoutes,
+            (s, v) => s with { General = s.General with { ClassicRoutes = v } },
+            hint: "Вместо списка маршрутов — прежний экран: основа из трёх вариантов и правила. Свои маршруты сохраняются, но не действуют, пока экран прежний."),
         new ActionRow("Права администратора", "runAsAdmin",
             Services.Elevation.IsAdmin
                 ? "Тропа запущена от имени администратора. Чтобы вернуться к обычным правам, закройте её (Выход в трее) и запустите снова."
@@ -276,8 +279,8 @@ internal sealed partial class SettingsViewModel : ObservableObject
         new ToggleRow("Строгий маршрут", "strictRoute", s => s.Connection.StrictRoute, (s, v) => s with { Connection = s.Connection with { StrictRoute = v } }),
         new ToggleRow("Локальная сеть напрямую", "lanBypass", s => s.Connection.LanBypass, (s, v) => s with { Connection = s.Connection with { LanBypass = v } }),
         new TextRow("Исключения прокси Windows", "sysBypass", s => s.Connection.SysBypass, (s, v) => s with { Connection = s.Connection with { SysBypass = v } }, V.SysBypass),
-        new ActionRow("Приложения из Microsoft Store", "uwpLoopback", "Выбираются на экране «Правила».",
-            ("Открыть «Правила»", new RelayCommand(() => _navigate("rules")))),
+        new ActionRow("Приложения из Microsoft Store", "uwpLoopback", "Выбираются на экране «Маршруты».",
+            ("Открыть «Маршруты»", new RelayCommand(() => _navigate("rules")))),
         TextRow.Number("Порт прокси (SOCKS5 и HTTP)", "ports", s => s.Connection.SocksPort, (s, v) => s with { Connection = s.Connection with { SocksPort = v } },
             v => V.Port(v, _engine.State.Settings.Connection.LanPort), hint: "Только 127.0.0.1."),
         new ToggleRow("Случайный порт при каждом подключении", "ports", s => s.Connection.RandomPorts, (s, v) => s with { Connection = s.Connection with { RandomPorts = v } },
@@ -377,7 +380,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
             s => s.Admin.RefreshMinutes switch { 15 => 1, 60 => 2, _ => 0 },
             (s, i) => s with { Admin = s.Admin with { RefreshMinutes = i switch { 1 => 15, 2 => 60, _ => 5 } } }),
         new ToggleRow("Отправлять и правила", "adminRules", s => s.Admin.PublishRules, (s, v) => s with { Admin = s.Admin with { PublishRules = v } },
-            hint: "Правила с экрана «Правила». Свои правила друга главнее ваших."),
+            hint: "Приложения и сайты встроенных маршрутов с экрана «Маршруты». Свои правила друга главнее ваших."),
         new LabelRow("Состояние", "adminPublish", () => _engine.AdminPublishStatus
             ?? (_engine.HasAdminUrl ? $"Ещё не публиковали. Серверов для друзей: {_engine.FriendsServerCount}." : "Укажите адрес публикации.")),
         new ActionRow("Публикация", "adminPublish", null,
@@ -568,7 +571,7 @@ internal sealed partial class SettingsViewModel : ObservableObject
         var action = SiteImportAction switch { 1 => RuleAction.Direct, 2 => RuleAction.Block, _ => RuleAction.Proxy };
         var label = $"Импорт: {list.Count} адр. ({DateTime.Now:dd.MM HH:mm})";
         Commit(s => s with { Routing = s.Routing with { Rules = [.. s.Routing.Rules, list.ToRule(label, action, action)] } });
-        Report($"Добавлено правило «{label}» — оно в «Правилах → Сайты», там его можно выключить или удалить.");
+        Report($"Добавлено правило «{label}» — оно в «Маршрутах», в пунктах встроенных маршрутов: там его можно выключить или удалить.");
         CancelSiteImport();
     }
 

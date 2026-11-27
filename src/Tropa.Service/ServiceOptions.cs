@@ -44,8 +44,8 @@ internal sealed record ServiceOptions
     public Func<IReadOnlyList<string>, bool, IKillSwitch>? KillSwitchFactory { get; init; }
 
     /// <summary>Поиск LUID нашего TUN (в тестах подменяется).</summary>
-    public Func<CancellationToken, Task<ulong?>> FindTunLuid { get; init; } =
-        ct => KillSwitch.FindTunLuidAsync(Core.Diagnostics.Diagnosis.OwnTunAddress, TimeSpan.FromSeconds(10), ct);
+    public Func<System.Net.IPAddress, CancellationToken, Task<ulong?>> FindTunLuid { get; init; } =
+        (address, ct) => KillSwitch.FindTunLuidAsync(address, TimeSpan.FromSeconds(10), ct);
 
     public string GeoDirectory => Path.Combine(DataDirectory, "geo");
     public string RunDirectory => Path.Combine(DataDirectory, "run");

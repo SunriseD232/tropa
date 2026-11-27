@@ -9,29 +9,53 @@ using Tropa.Infrastructure;
 
 namespace Tropa.App.ViewModels;
 
-/// <summary>Строка правила: приложение или сайт с отдельными действиями для TCP и UDP.</summary>
+/// <summary>
+/// Строка пункта маршрута: приложение, сайт или набор гео-базы с отдельными действиями для TCP и UDP
+/// и сервером для «через сервер» (ADR-067).
+/// </summary>
 internal sealed partial class RuleItemViewModel : ObservableObject
 {
     private readonly Action<Rule> _changed;
     private Rule _rule;
     private bool _loading = true;
 
-    public RuleItemViewModel(Rule rule, Action<Rule> changed, Action<Guid> remove)
+    public RuleItemViewModel(Rule rule, IReadOnlyList<ServerOption> servers, Action<Rule> changed, Action<Guid> remove)
     {
         _rule = rule;
         _changed = changed;
+        var m = rule.Match;
+        var geoTag = RouteBook.GeoSetTag(rule);
+        var geo = geoTag is null ? null : GeoEdits.Find(geoTag);
         Title = rule.Label is { Length: > 0 } label ? label
-            : rule.Match.Processes.Count > 0 ? rule.Match.Processes[0]
-            : rule.Match.DomainSuffixes.Count > 0 ? rule.Match.DomainSuffixes[0]
+            : geo is not null ? geo.Title
+            : m.Processes.Count > 0 ? m.Processes[0]
+            : m.DomainSuffixes.Count > 0 ? m.DomainSuffixes[0]
+            : m.Domains.Count > 0 ? m.Domains[0]
+            : m.IpCidrs.Count > 0 ? m.IpCidrs[0]
             : "?";
+        Kind = m.HasProcessCondition ? "Программа" : geo is not null ? (RuleSets.IsIpSet(geo.Tag) ? "Гео-база · IP" : "Гео-база · сайты") : m.IpCidrs.Count > 0 && m.DomainSuffixes.Count == 0 ? "Адреса" : "Сайт";
+        Count = m.Processes.Count + m.DomainSuffixes.Count + m.Domains.Count + m.IpCidrs.Count + m.DomainKeywords.Count + m.DomainRegexes.Count;
+        Servers = servers;
         TcpIndex = Index(rule.Tcp);
         UdpIndex = Index(rule.Udp);
+        var serverId = (rule.Tcp.Kind == RuleActionKind.Server ? rule.Tcp.ServerId : null) ?? (rule.Udp.Kind == RuleActionKind.Server ? rule.Udp.ServerId : null);
+        ServerIndex = Math.Max(0, servers.ToList().FindIndex(o => o.Id == serverId));
         Enabled = rule.Enabled;
         RemoveCommand = new RelayCommand(() => remove(rule.Id));
         _loading = false;
     }
 
+    public Guid Id => _rule.Id;
+
     public string Title { get; }
+
+    /// <summary>Что это за пункт: программа, сайт, гео-база.</summary>
+    public string Kind { get; }
+
+    /// <summary>Сколько записей в пункте (импорт списка сайтов даёт одно правило на много доменов).</summary>
+    public int Count { get; }
+
+    public string? CountText => Count > 1 ? $"и ещё {Count - 1}" : null;
 
     /// <summary>
     /// Варианты действия. Статический список: привязка к родителю пропадала, когда вкладку закрывали,
@@ -39,16 +63,29 @@ internal sealed partial class RuleItemViewModel : ObservableObject
     /// </summary>
     public static IReadOnlyList<string> Actions { get; } = ["Через сервер", "Напрямую", "Блокировать"];
 
+    /// <summary>Свой список серверов у каждой строки — по той же причине, что и статические действия.</summary>
+    public IReadOnlyList<ServerOption> Servers { get; }
+
     public IRelayCommand RemoveCommand { get; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowServer))]
     public partial int TcpIndex { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowServer))]
     public partial int UdpIndex { get; set; }
 
     [ObservableProperty]
+    public partial int ServerIndex { get; set; }
+
+    [ObservableProperty]
     public partial bool Enabled { get; set; }
+
+    /// <summary>Выбор сервера нужен, только если TCP или UDP идёт через сервер.</summary>
+    public bool ShowServer => TcpIndex == 0 || UdpIndex == 0;
+
+    private Guid? ServerId => ServerIndex > 0 && ServerIndex < Servers.Count ? Servers[ServerIndex].Id : null;
 
     private static int Index(RuleAction a) => a.Kind switch
     {
@@ -57,11 +94,11 @@ internal sealed partial class RuleItemViewModel : ObservableObject
         _ => 0,
     };
 
-    private static RuleAction Action(int i) => i switch
+    private RuleAction Action(int i) => i switch
     {
         1 => RuleAction.Direct,
         2 => RuleAction.Block,
-        _ => RuleAction.Proxy,
+        _ => ServerId is { } id ? new RuleAction(RuleActionKind.Server, id) : RuleAction.Proxy,
     };
 
     // -1 приходит, когда список пересоздаётся (ItemsSource ещё не привязан или уже отцеплен), —
@@ -80,6 +117,17 @@ internal sealed partial class RuleItemViewModel : ObservableObject
             Push(_rule with { Udp = Action(value) });
         else
             RestoreLater(() => UdpIndex = Index(_rule.Udp));
+    }
+
+    partial void OnServerIndexChanged(int value)
+    {
+        if (value < 0)
+        {
+            RestoreLater(() => ServerIndex = Math.Max(0, Servers.ToList().FindIndex(o => o.Id == ((_rule.Tcp.ServerId ?? _rule.Udp.ServerId)))));
+            return;
+        }
+
+        Push(_rule with { Tcp = Action(TcpIndex), Udp = Action(UdpIndex) });
     }
 
     // Список на миг потерял выбор — возвращаем сохранённое значение, чтобы поле не осталось пустым.
@@ -112,7 +160,7 @@ internal sealed partial class StoreAppViewModel(string sid, string name, bool is
     partial void OnIsCheckedChanged(bool value) => changed(Sid, value);
 }
 
-/// <summary>Экран «Правила» (docs/06-features.md, §3).</summary>
+/// <summary>Прежний экран «Правила» (docs/06-features.md, §3); с ADR-067 — по настройке «Прежний экран «Правила»».</summary>
 internal sealed partial class RulesViewModel : ObservableObject
 {
     private readonly TropaEngine _engine;
@@ -263,6 +311,7 @@ internal sealed partial class RulesViewModel : ObservableObject
         : "Правила для приложений работают только в режиме «Весь компьютер»: системный прокси не знает, какая программа подключается.";
 
     private IReadOnlyList<Rule>? _shownRules;
+    private string? _shownServers;
 
     private void LoadAdminRules()
     {
@@ -305,15 +354,17 @@ internal sealed partial class RulesViewModel : ObservableObject
         BlockQuic = routing.BlockQuic;
         UdpProxy = routing.UdpProxy;
         // Состояние меняется часто (проверки серверов, подключение) — строки пересоздаём, только если правила другие.
-        if (_shownRules is null || !_shownRules.SequenceEqual(routing.Rules))
+        var servers = ServerOption.Signature(_engine);
+        if (_shownRules is null || !_shownRules.SequenceEqual(routing.Rules) || servers != _shownServers)
         {
+            _shownServers = servers;
             foreach (var old in Apps.Concat(Sites))
                 old.Detach();
             Apps.Clear();
             Sites.Clear();
             foreach (var rule in routing.Rules)
             {
-                var item = new RuleItemViewModel(rule, Change, Remove);
+                var item = new RuleItemViewModel(rule, ServerOption.List(_engine, ServerOf(rule)), Change, Remove);
                 if (rule.Match.HasProcessCondition)
                     Apps.Add(item);
                 else
@@ -341,6 +392,8 @@ internal sealed partial class RulesViewModel : ObservableObject
         OnPropertyChanged(nameof(StoreAppsSummary));
         _loading = false;
     }
+
+    internal static Guid? ServerOf(Rule rule) => rule.Tcp.ServerId ?? rule.Udp.ServerId;
 
     private void Update(Func<RoutingSettings, RoutingSettings> change)
     {

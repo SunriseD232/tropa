@@ -50,6 +50,9 @@ public sealed record GeneralSettings
     public bool HideExitRegion { get; init; }
     public AppTheme Theme { get; init; } = AppTheme.Dark;
 
+    /// <summary>Прежний экран «Правила» с выбором основы вместо экрана «Маршруты» (ADR-067).</summary>
+    public bool ClassicRoutes { get; init; }
+
     /// <summary>Вид окна: свой или «как в v2rayN» — меняется только представление, логика одна.</summary>
     public WindowLayout Layout { get; init; }
     public string Lang { get; init; } = "ru";
@@ -148,6 +151,12 @@ public sealed record CoreSettings
     public bool GeoViaProxy { get; init; } = true;
     public string AppChannel { get; init; } = "stable";
     public bool AppCheck { get; init; } = true;
+
+    /// <summary>
+    /// Версия Тропы, о которой пользователь попросил больше не напоминать окном (ADR-069): «Больше не показывать
+    /// для этого обновления». Следующая версия снова покажет окно; кнопка на карточке обновлений остаётся.
+    /// </summary>
+    public string? SkippedAppVersion { get; init; }
 
     /// <summary>
     /// Показывать при выборе версии ядра выпуски прямо с GitHub, которые владелец не проверял (ADR-058).

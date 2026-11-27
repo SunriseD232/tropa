@@ -5,6 +5,7 @@ using Tropa.Core.Diagnostics;
 using Tropa.Core.Generation;
 using Tropa.Core.Model;
 using Tropa.Core.Parsing;
+using Tropa.Core.Routing;
 using Tropa.Core.Security;
 using Tropa.Core.Testing;
 using Tropa.Infrastructure.Cores;
@@ -502,8 +503,14 @@ public sealed partial class TropaEngine : IAsyncDisposable
     public async Task UpdateDueSubscriptionsAsync(CancellationToken ct = default)
     {
         var defaults = State.Settings.Subscriptions;
-        foreach (var sub in State.Subscriptions.Where(s => s.RefreshInterval(defaults) is { } every && (s.LastUpdated is null || _now() - s.LastUpdated >= every)).ToList())
+        var now = _now();
+        foreach (var sub in State.Subscriptions.Where(s => s.RefreshInterval(defaults) is { } every && (s.LastUpdated is null || now - s.LastUpdated >= every)).ToList())
         {
+            // Неудачная загрузка не меняет LastUpdated — без отсрочки мёртвый адрес скачивался раз в минуту
+            // бесконечно (журнал 2026-11-24…27: до 2800 попыток за четыре дня у одной установки).
+            if (_subscriptionRetry.TryGetValue(sub.Id, out var retry) && now < retry.Next)
+                continue;
+
             try
             {
                 await UpdateSubscriptionAsync(sub.Id, ct).ConfigureAwait(false);
@@ -528,11 +535,19 @@ public sealed partial class TropaEngine : IAsyncDisposable
         }
         catch (SubscriptionFetchException ex)
         {
+            var fails = RegisterSubscriptionFailure(sub);
             ReplaceSubscription(sub with { LastError = ex.Message });
-            RecUrgent(Ev.SubscriptionUpdated, ("ok", "0"), ("error", NetLogClassifier.Anonymize(Scrubber.Scrub(ex.Message))),
-                ("viaProxyAvailable", Flag(proxy is not null)));
+            (string, string?)[] fields = [("ok", "0"), ("error", NetLogClassifier.Anonymize(Scrubber.Scrub(ex.Message))),
+                ("viaProxyAvailable", Flag(proxy is not null)), ("fails", Num(fails))];
+            // Первая неудача подряд — сразу, повторы — обычным порядком: подписка может лежать сутками.
+            if (fails == 1)
+                RecUrgent(Ev.SubscriptionUpdated, fields);
+            else
+                Rec(Ev.SubscriptionUpdated, fields);
             return new ImportReport(0, 0, 1, 0, [ex.Message]);
         }
+
+        _subscriptionRetry.TryRemove(sub.Id, out _);
 
         // Подписка от администратора (ADR-048): серверы плюс выбор сервера и правила.
         var admin = AdminDocument.Looks(fetched.Body) ? AdminDocument.TryParse(fetched.Body) : null;
@@ -589,6 +604,30 @@ public sealed partial class TropaEngine : IAsyncDisposable
         if (fetched.ViaProxy)
             messages.Insert(0, "Адрес подписки недоступен напрямую — загружено через сервер.");
         return new ImportReport(merged.Added, merged.Updated, parsed.Errors.Count, parsed.SkippedUnsupported, messages);
+    }
+
+    /// <summary>Отсрочка автообновления после неудачных загрузок подряд: подписка → (сколько подряд, когда снова).</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, (int Fails, DateTimeOffset Next)> _subscriptionRetry = new();
+
+    /// <summary>Первый повтор через 5 минут, затем 10, 20, 40…, но не реже интервала подписки и не реже раза в час.</summary>
+    internal static TimeSpan SubscriptionRetryDelay(int fails, TimeSpan? every)
+    {
+        var cap = TimeSpan.FromMinutes(60);
+        if (every is { } e && e < cap)
+            cap = e;
+        var minutes = 5.0 * Math.Pow(2, Math.Clamp(fails - 1, 0, 10));
+        var delay = TimeSpan.FromMinutes(minutes);
+        return delay < cap ? delay : cap;
+    }
+
+    private int RegisterSubscriptionFailure(Subscription sub)
+    {
+        var now = _now();
+        var every = sub.RefreshInterval(State.Settings.Subscriptions);
+        var entry = _subscriptionRetry.AddOrUpdate(sub.Id,
+            _ => (1, now + SubscriptionRetryDelay(1, every)),
+            (_, old) => (old.Fails + 1, now + SubscriptionRetryDelay(old.Fails + 1, every)));
+        return entry.Fails;
     }
 
     /// <summary>
@@ -782,7 +821,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
                 ("effMode", State.Settings.Connection.Mode == CaptureMode.Tun && !TunAvailable ? CaptureMode.SystemProxy.ToString() : State.Settings.Connection.Mode.ToString()),
                 ("service", ServiceAvailable ? (TunAvailable ? "tun" : "no-tun") : ServiceStarting ? "starting" : "none"),
                 ("killSwitch", Flag(State.Settings.General.KillSwitch)),
-                ("route", State.Settings.Routing.Preset.ToString()),
+                ("route", RouteBook.ActiveCustom(State.Settings) is { } customRoute ? "Custom-" + customRoute.Base : State.Settings.Routing.Preset.ToString()),
                 .. ServerFields(State.ActiveProfile)]);
             if (State.Settings.Connection.Mode == CaptureMode.Tun && ServiceStarting)
             {
@@ -815,6 +854,9 @@ public sealed partial class TropaEngine : IAsyncDisposable
             // Другой VPN рядом — частая причина «подключено, но ничего не открывается».
             if (ForeignVpnWarning() is { } foreign)
                 note = note is null ? foreign : foreign + " " + note;
+            NoNetwork = NetworkSignatureSafe().Length == 0;
+            if (NoNetwork)
+                note = WithNoNetworkNote(note);
             SetStatus(new ConnectionStatus(ConnectionState.Connected, note, _now()));
             Rec(Ev.Connected, ("ms", Ms(_now() - started)), ("viaService", Flag(_runningViaService)), ("xray", Flag(_lastPlanNeedsXray)),
                 ("note", note is null ? null : NetLogClassifier.Anonymize(note)));
@@ -1020,15 +1062,44 @@ public sealed partial class TropaEngine : IAsyncDisposable
             var signature = NetworkSignature();
             var changed = signature != _networkSignature;
             _networkSignature = signature;
+            var noNetwork = signature.Length == 0;
             if (slept)
                 Rec(Ev.WokeUp, ("connected", Flag(Status.State == ConnectionState.Connected)));
             if (changed)
             {
-                Rec(Ev.NetworkChanged, ("connected", Flag(Status.State == ConnectionState.Connected)));
+                Rec(Ev.NetworkChanged, ("connected", Flag(Status.State == ConnectionState.Connected)), ("noNet", noNetwork ? "1" : null));
                 RecordEnvironment("network-changed");
             }
+
+            // Нет ни одного адаптера со шлюзом (Wi-Fi пропал, кабель без интернета): переподключаться не к чему.
+            // Раньше Тропа переподключалась в пустоту и показывала «Подключено», а ядро сыпало ~1300 ошибок
+            // в минуту (журнал 2026-11-24, ADR-071). Теперь — «Нет сети», а когда шлюз появится, сеть снова
+            // «сменится» и Тропа переподключится как обычно.
+            if (Status.State == ConnectionState.Connected)
+            {
+                if (noNetwork && !NoNetwork)
+                {
+                    NoNetwork = true;
+                    Log?.Invoke(this, "Нет подключения к интернету — жду сеть.");
+                    SetStatus(Status with { Message = WithNoNetworkNote(Status.Message) });
+                    return;
+                }
+
+                if (noNetwork)
+                    return;
+            }
+
             if (!(slept || changed) || !State.Settings.General.Reconnect || Status.State != ConnectionState.Connected)
+            {
+                if (!noNetwork && NoNetwork && Status.State == ConnectionState.Connected)
+                {
+                    // Сеть вернулась, но переподключение выключено — хотя бы убираем «Нет сети».
+                    NoNetwork = false;
+                    SetStatus(Status with { Message = WithoutNoNetworkNote(Status.Message) });
+                }
+
                 return;
+            }
             // Сеть после пробуждения поднимается не сразу.
             await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
             Log?.Invoke(this, slept ? "Компьютер проснулся — переподключаюсь." : "Сеть сменилась — переподключаюсь.");
@@ -1044,6 +1115,35 @@ public sealed partial class TropaEngine : IAsyncDisposable
         }
     }
 
+    /// <summary>Текст для статуса и трея, пока у компьютера нет сети (ADR-071).</summary>
+    public const string NoNetworkNote = "Нет интернета: у компьютера сейчас нет подключения к сети. Тропа ждёт и переподключится сама, когда сеть появится.";
+
+    /// <summary>Подключение есть, но ни у одного адаптера нет шлюза — интернета нет (ADR-071).</summary>
+    public bool NoNetwork { get; private set; }
+
+    internal static string WithNoNetworkNote(string? message) =>
+        message is null ? NoNetworkNote : message.Contains(NoNetworkNote, StringComparison.Ordinal) ? message : NoNetworkNote + " " + message;
+
+    internal static string? WithoutNoNetworkNote(string? message)
+    {
+        if (message is null)
+            return null;
+        var rest = message.Replace(NoNetworkNote, "", StringComparison.Ordinal).Trim();
+        return rest.Length == 0 ? null : rest;
+    }
+
+    private static string NetworkSignatureSafe()
+    {
+        try
+        {
+            return NetworkSignature();
+        }
+        catch (Exception ex) when (ex is System.Net.NetworkInformation.NetworkInformationException or InvalidOperationException)
+        {
+            return "?"; // не знаем — не считаем, что сети нет
+        }
+    }
+
     internal static string NetworkSignature()
     {
         var parts = new List<string>();
@@ -1054,7 +1154,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
             var props = ni.GetIPProperties();
             var gateways = props.GatewayAddresses.Select(g => g.Address).Where(a => !a.Equals(IPAddress.Any) && !a.Equals(IPAddress.IPv6Any)).ToList();
             var addresses = props.UnicastAddresses.Select(u => u.Address).ToList();
-            if (gateways.Count == 0 || addresses.Contains(Diagnosis.OwnTunAddress) || Diagnosis.IsOwnTunName(ni.Name))
+            if (gateways.Count == 0 || addresses.Any(Diagnosis.IsOwnTunAddress) || Diagnosis.IsOwnTunName(ni.Name))
                 continue;
             parts.Add(ni.Id + "=" + string.Join(",", addresses.Where(a => a.AddressFamily == AddressFamily.InterNetwork).OrderBy(a => a.ToString(), StringComparer.Ordinal))
                 + "@" + string.Join(",", gateways.OrderBy(a => a.ToString(), StringComparer.Ordinal)));
@@ -1076,7 +1176,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
         var settings = State.Settings with
         {
             Connection = State.Settings.Connection with { Mode = !TunAvailable && State.Settings.Connection.Mode == CaptureMode.Tun ? CaptureMode.SystemProxy : State.Settings.Connection.Mode },
-            Routing = State.Settings.Routing with { Rules = [.. State.Settings.Routing.Rules, .. AdminRules()] },
+            Routing = RoutingForCore(),
         };
         var config = SingBoxConfigBuilder.Build(new SingBoxInput
         {
@@ -1288,7 +1388,7 @@ public sealed partial class TropaEngine : IAsyncDisposable
                 Mode = !TunAvailable && State.Settings.Connection.Mode == CaptureMode.Tun ? CaptureMode.SystemProxy : State.Settings.Connection.Mode,
             },
             // Правила администраторов подписок, которым доверяют, — после своих: свои главнее (ADR-048).
-            Routing = State.Settings.Routing with { Rules = [.. State.Settings.Routing.Rules, .. AdminRules()] },
+            Routing = RoutingForCore(),
         };
         var effective = CompatRules.Evaluate(settings, active).Effective;
 
@@ -1412,6 +1512,25 @@ public sealed partial class TropaEngine : IAsyncDisposable
             _ = WatchExitRegionAsync(probe, _trafficCts.Token);
     }
 
+    /// <summary>
+    /// Маршрутизация для ядра: действующий маршрут (свой — со своими пунктами, ADR-067), а после пунктов —
+    /// правила администраторов подписок, которым доверяют: свои главнее (ADR-048).
+    /// </summary>
+    private RoutingSettings RoutingForCore()
+    {
+        var routing = RouteBook.Effective(State.Settings);
+        return routing with { Rules = [.. routing.Rules, .. AdminRules()] };
+    }
+
+    /// <summary>Делает маршрут действующим и при подключении сразу переподключает (как выбор основы на главной).</summary>
+    public async Task SelectRouteAsync(string key, CancellationToken ct = default)
+    {
+        var before = RouteBook.ActiveKey(State.Settings);
+        UpdateSettings(s => s with { Routing = RouteBook.Select(s.Routing, key) });
+        if (RouteBook.ActiveKey(State.Settings) != before)
+            await ApplyIfConnectedAsync(ct).ConfigureAwait(false);
+    }
+
     /// <summary>Серверы, которые попадут в конфиг: активный, промежуточные звенья цепочек и серверы из правил.</summary>
     private static List<Profile> UsedProfiles(Profile active, IReadOnlyList<Profile> all, AppSettings settings)
     {
@@ -1425,13 +1544,10 @@ public sealed partial class TropaEngine : IAsyncDisposable
         }
 
         Add(active);
-        foreach (var rule in settings.Routing.Rules.Where(r => r.Enabled))
+        foreach (var id in RouteBook.ServerIds(settings.Routing))
         {
-            foreach (var action in new[] { rule.Tcp, rule.Udp })
-            {
-                if (action.ServerId is { } id && all.FirstOrDefault(x => x.Id == id) is { } target)
-                    Add(target);
-            }
+            if (all.FirstOrDefault(x => x.Id == id) is { } target)
+                Add(target);
         }
 
         return [.. used.Values];
@@ -1720,6 +1836,8 @@ public sealed partial class TropaEngine : IAsyncDisposable
 
     private void SetStatus(ConnectionStatus status)
     {
+        if (status.State != ConnectionState.Connected)
+            NoNetwork = false;
         Status = status;
         StatusChanged?.Invoke(this, status);
     }

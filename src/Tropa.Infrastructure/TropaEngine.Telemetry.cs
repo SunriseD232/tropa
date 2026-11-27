@@ -335,8 +335,9 @@ public sealed partial class TropaEngine
         }
 
         var connected = Status.State == ConnectionState.Connected ? "1" : "0";
+        var noNet = NoNetwork ? "1" : null;
         foreach (var ((code, source, template), count) in items)
-            Rec(code, ("n", Num(count)), ("src", source), ("tpl", template), ("connected", connected));
+            Rec(code, ("n", Num(count)), ("src", source), ("tpl", template), ("connected", connected), ("noNet", noNet));
     }
 
     /// <summary>Необработанная ошибка интерфейса — пишется сразу в очередь, уйдёт при следующей отправке.</summary>

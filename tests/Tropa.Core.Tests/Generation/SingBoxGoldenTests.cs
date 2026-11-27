@@ -227,7 +227,62 @@ public sealed class SingBoxGoldenTests
                 },
             },
             Reality),
+
+        // Свой маршрут (ADR-067): только пункты — 2ip.io через свой сервер, список через другой, остальное напрямую.
+        ["18-custom-route-items-only"] = () => Input(EffectiveRoute(CustomRouteSettings), Reality, profiles: [Reality, Trojan, VmessWsProfile]),
     };
+
+    internal static Profile RealityProfile => Reality;
+
+    /// <summary>Настройки со своим действующим маршрутом: пункты общих встроенных маршрутов не должны попасть в конфиг.</summary>
+    private static AppSettings CustomRouteSettings => Defaults with
+    {
+        Routing = Defaults.Routing with
+        {
+            Rules = [new Rule { Id = new Guid(20, 0, 0, new byte[8]), Match = new RuleMatch { DomainSuffixes = ["shared-builtin.example"] }, Tcp = RuleAction.Block, Udp = RuleAction.Block }],
+            ActiveRouteId = new Guid(30, 0, 0, new byte[8]),
+            Routes =
+            [
+                new CustomRoute
+                {
+                    Id = new Guid(30, 0, 0, new byte[8]),
+                    Name = "Только 2ip",
+                    Base = RoutePreset.ItemsOnly,
+                    Rules =
+                    [
+                        new Rule
+                        {
+                            Id = new Guid(31, 0, 0, new byte[8]),
+                            Match = new RuleMatch { DomainSuffixes = ["2ip.io"] },
+                            Tcp = new RuleAction(RuleActionKind.Server, Trojan.Id),
+                            Udp = new RuleAction(RuleActionKind.Server, Trojan.Id),
+                        },
+                        new Rule
+                        {
+                            Id = new Guid(32, 0, 0, new byte[8]),
+                            Match = new RuleMatch { DomainSuffixes = ["gone.example"] },
+                            Tcp = new RuleAction(RuleActionKind.Server, new Guid(99, 0, 0, new byte[8])),
+                            Udp = RuleAction.Direct,
+                        },
+                        Core.Routing.RouteBook.GeoSetRule(Core.Routing.RuleSets.GeositeAiNonCn, RuleAction.Proxy) with { Id = new Guid(33, 0, 0, new byte[8]) },
+                    ],
+                    CustomLists =
+                    [
+                        new CustomGeoList
+                        {
+                            Id = new Guid(34, 0, 0, new byte[8]),
+                            Name = "Маски",
+                            Action = RuleActionKind.Proxy,
+                            ServerId = VmessWsProfile.Id,
+                            Entries = [new GeoEntry(GeoEntryKind.Keyword, "linked"), new GeoEntry(GeoEntryKind.Domain, "only.example.com")],
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+
+    private static AppSettings EffectiveRoute(AppSettings s) => s with { Routing = Core.Routing.RouteBook.Effective(s) };
 
 
     private static SingBoxInput Input(AppSettings settings, Profile active, IReadOnlyList<Profile>? profiles = null,

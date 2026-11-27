@@ -11,7 +11,8 @@ namespace Tropa.App.ViewModels;
 
 /// <summary>
 /// Карточка «Версии и обновления» (docs/06-features.md, «Ядра и обновления»). Автоматической установки
-/// нет (docs/02-security.md, §3.8): Тропа только сообщает, ставит пользователь кнопкой.
+/// нет (docs/02-security.md, §3.8): Тропа только сообщает — плашкой и окном «Вышла новая версия»
+/// (ADR-069), — ставит пользователь кнопкой.
 /// </summary>
 internal sealed partial class UpdatesViewModel : ObservableObject
 {
@@ -48,6 +49,79 @@ internal sealed partial class UpdatesViewModel : ObservableObject
     }
 
     public string Versions => $"Тропа {TropaEngine.AppVersion.ToString(3)} · {_engine.CoreVersions}";
+
+    // ---------------- Окно «Вышла новая версия» (ADR-069) ----------------
+
+    /// <summary>
+    /// Нужно показать окно Тропы: журнал 24–27.11 — пять установок из тринадцати видели новую версию только
+    /// плашкой и неделями оставались на старой (одна — на 0.1.22). Окно открывается само, из трея.
+    /// </summary>
+    public event EventHandler? AttentionNeeded;
+
+    /// <summary>«Не сейчас»: снова через сутки или при следующем запуске.</summary>
+    internal static readonly TimeSpan PromptSnooze = TimeSpan.FromHours(24);
+
+    private string? _snoozedVersion;
+    private DateTimeOffset _snoozedUntil;
+
+    [ObservableProperty]
+    public partial bool IsPromptOpen { get; set; }
+
+    [ObservableProperty]
+    public partial string PromptTitle { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string PromptText { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string? PromptNotes { get; set; }
+
+    private string? _promptVersion;
+
+    /// <summary>Показывать ли окно для этой версии: не пропущена навсегда и не отложена.</summary>
+    internal static bool ShouldPrompt(string version, string? skipped, string? snoozedVersion, DateTimeOffset snoozedUntil, DateTimeOffset now) =>
+        !string.Equals(version, skipped, StringComparison.Ordinal)
+        && !(string.Equals(version, snoozedVersion, StringComparison.Ordinal) && now < snoozedUntil);
+
+    private void MaybePrompt()
+    {
+        if (_check?.NewApp is not { } app || IsPromptOpen || !_engine.State.Settings.Cores.AppCheck)
+            return;
+        var version = app.Version.ToString(3);
+        if (!ShouldPrompt(version, _engine.State.Settings.Cores.SkippedAppVersion, _snoozedVersion, _snoozedUntil, DateTimeOffset.Now))
+            return;
+        _promptVersion = version;
+        PromptTitle = $"Вышла Тропа {version}";
+        PromptText = $"У вас {TropaEngine.AppVersion.ToString(3)}. Новые версии исправляют ошибки подключения — лучше не откладывать."
+            + " Обновление займёт полминуты: Windows спросит разрешение, Тропа закроется и откроется сама"
+            + (_engine.Status.State == ConnectionState.Connected ? " и снова подключится." : ".");
+        PromptNotes = app.Notes;
+        IsPromptOpen = true;
+        AttentionNeeded?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private async Task PromptUpdateAsync()
+    {
+        IsPromptOpen = false;
+        await InstallAppAsync();
+    }
+
+    [RelayCommand]
+    private void PromptLater()
+    {
+        IsPromptOpen = false;
+        _snoozedVersion = _promptVersion;
+        _snoozedUntil = DateTimeOffset.Now + PromptSnooze;
+    }
+
+    [RelayCommand]
+    private void PromptSkip()
+    {
+        IsPromptOpen = false;
+        if (_promptVersion is { } version)
+            _engine.UpdateSettings(s => s with { Cores = s.Cores with { SkippedAppVersion = version } });
+    }
 
     public bool Enabled => _engine.Updates.Enabled;
 
@@ -109,6 +183,9 @@ internal sealed partial class UpdatesViewModel : ObservableObject
                 BannerDismissed = false;
             if (!quiet || _check.Any)
                 Report(_check.Any ? null : "Установлены последние версии.");
+            // Тихая проверка нашла новую Тропу — окно. По кнопке «Проверить» человек и так смотрит на ответ.
+            if (quiet)
+                MaybePrompt();
         }
         catch (Exception ex) when (ex is IntegrityException or HttpRequestException or TaskCanceledException or InvalidOperationException or InvalidDataException or IOException)
         {

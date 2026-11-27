@@ -41,7 +41,8 @@ public static class DiagnosticReport
         sb.AppendLine(inv, $"- Ядра: {input.CoreVersions}");
         sb.AppendLine(inv, $"- Windows: {input.WindowsVersion}");
         sb.AppendLine(inv, $"- Режим: {s.Connection.Mode}, стек TUN: {s.Connection.TunStack}, строгий маршрут: {OnOff(s.Connection.StrictRoute)}");
-        sb.AppendLine(inv, $"- Основа правил: {s.Routing.Preset}, QUIC блокируется: {OnOff(s.Routing.BlockQuic)}, UDP через сервер: {OnOff(s.Routing.UdpProxy)}");
+        var routing = Routing.RouteBook.Effective(s);
+        sb.AppendLine(inv, $"- Маршрут: {(Routing.RouteBook.ActiveCustom(s) is null ? "встроенный" : "свой")}, основа: {routing.Preset}, QUIC блокируется: {OnOff(s.Routing.BlockQuic)}, UDP через сервер: {OnOff(s.Routing.UdpProxy)}");
         sb.AppendLine(inv, $"- DNS: удалённый {Host(s.Dns.RemoteDns)}, FakeIP {OnOff(s.Dns.Fakeip)}, перехват {OnOff(s.Dns.DnsHijack)}");
         sb.AppendLine(inv, $"- Соединение: uTLS {s.Dpi.Utls}, Mux {OnOff(s.Dpi.Mux)}");
         sb.AppendLine(inv, $"- Kill switch: {OnOff(s.General.KillSwitch)}, ядро: {s.Cores.CoreChoice}");
@@ -59,12 +60,12 @@ public static class DiagnosticReport
         }
 
         sb.AppendLine();
-        sb.AppendLine("## Правила");
-        if (s.Routing.Rules.Count == 0)
-            sb.AppendLine("- нет своих правил");
-        foreach (var r in s.Routing.Rules)
+        sb.AppendLine("## Пункты маршрута");
+        if (routing.Rules.Count == 0)
+            sb.AppendLine("- нет своих пунктов");
+        foreach (var r in routing.Rules)
         {
-            var what = string.Join(", ", r.Match.Processes.Concat(r.Match.DomainSuffixes));
+            var what = string.Join(", ", r.Match.Processes.Concat(r.Match.DomainSuffixes).Concat(r.Match.GeoSite.Select(g => "geosite:" + g)).Concat(r.Match.GeoIp.Select(g => "geoip:" + g)));
             sb.AppendLine(inv, $"- {(r.Enabled ? "" : "(выкл) ")}{what}: TCP {r.Tcp.Kind}, UDP {r.Udp.Kind}");
         }
 

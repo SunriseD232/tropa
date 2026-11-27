@@ -131,11 +131,7 @@
               <TextBlock Classes="lbl" Text="МАРШРУТ" VerticalAlignment="Center" />
               <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="route" />
             </StackPanel>
-            <ComboBox SelectedIndex="{Binding RouteIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Маршрут">
-              <ComboBoxItem Content="Всё, кроме российского" />
-              <ComboBoxItem Content="Только заблокированное (рекомендуется)" />
-              <ComboBoxItem Content="Всё через прокси" />
-            </ComboBox>
+            <ComboBox ItemsSource="{Binding RouteNames}" SelectedIndex="{Binding RouteIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Маршрут" />
             <TextBlock Classes="muted" Text="{Binding RouteDescription}" TextWrapping="Wrap" />
 
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">

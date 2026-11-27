@@ -36,7 +36,9 @@ public static class SettingsBackup
             Telemetry = new(),
             Routing = settings.Routing with
             {
-                Rules = settings.Routing.Rules.Select(r => r with { Tcp = Portable(r.Tcp), Udp = Portable(r.Udp) }).ToList(),
+                Rules = PortableRules(settings.Routing.Rules),
+                CustomLists = PortableLists(settings.Routing.CustomLists),
+                Routes = settings.Routing.Routes.Select(r => r with { Rules = PortableRules(r.Rules), CustomLists = PortableLists(r.CustomLists) }).ToList(),
             },
         };
         return JsonSerializer.Serialize(new SettingsBackupFile { Exported = now, Settings = clean }, BackupJsonContext.Default.SettingsBackupFile);
@@ -44,6 +46,10 @@ public static class SettingsBackup
 
     // «Через конкретный сервер» в чужой копии Тропы смысла не имеет: такого сервера там нет.
     private static RuleAction Portable(RuleAction a) => a.Kind == RuleActionKind.Server ? RuleAction.Proxy : a;
+
+    private static List<Rule> PortableRules(IReadOnlyList<Rule> rules) => rules.Select(r => r with { Tcp = Portable(r.Tcp), Udp = Portable(r.Udp) }).ToList();
+
+    private static List<CustomGeoList> PortableLists(IReadOnlyList<CustomGeoList> lists) => lists.Select(l => l with { ServerId = null }).ToList();
 
     public static (AppSettings Settings, IReadOnlyList<string> Warnings) Import(string json, AppSettings current, IReadOnlySet<Guid> knownProfiles)
     {
@@ -117,28 +123,54 @@ public static class SettingsBackup
             UpdateMinutes = s.Subscriptions.UpdateMinutes is 0 or (>= SubscriptionDefaults.MinCustomMinutes and <= SubscriptionDefaults.MaxCustomMinutes) ? s.Subscriptions.UpdateMinutes : current.Subscriptions.UpdateMinutes,
         };
 
-        var rules = new List<Rule>();
-        foreach (var r in (s.Routing.Rules ?? []).Take(MaxRules))
+        List<Rule> CleanRules(IReadOnlyList<Rule>? source, string where)
         {
-            var match = r.Match with
+            var rules = new List<Rule>();
+            foreach (var r in (source ?? []).Take(MaxRules))
             {
-                Processes = (r.Match.Processes ?? []).Select(RuleInput.NormalizeProcess).OfType<string>().ToList(),
-                DomainSuffixes = (r.Match.DomainSuffixes ?? []).Select(RuleInput.NormalizeDomain).OfType<string>().ToList(),
-                Domains = (r.Match.Domains ?? []).Select(RuleInput.NormalizeDomain).OfType<string>().ToList(),
-            };
-            if (match.IsEmpty)
-                continue;
-            rules.Add(r with
-            {
-                Id = Guid.NewGuid(),
-                Match = match,
-                Tcp = Known(r.Tcp, knownProfiles),
-                Udp = Known(r.Udp, knownProfiles),
-            });
+                if (r?.Match is null)
+                    continue;
+                var match = RouteBook.KnownSetsOnly(r.Match with
+                {
+                    Processes = (r.Match.Processes ?? []).Select(RuleInput.NormalizeProcess).OfType<string>().ToList(),
+                    DomainSuffixes = (r.Match.DomainSuffixes ?? []).Select(RuleInput.NormalizeDomain).OfType<string>().ToList(),
+                    Domains = (r.Match.Domains ?? []).Select(RuleInput.NormalizeDomain).OfType<string>().ToList(),
+                });
+                if (match.IsEmpty)
+                    continue;
+                rules.Add(r with
+                {
+                    Id = Guid.NewGuid(),
+                    Label = r.Label is null ? null : NameSanitizer.Sanitize(r.Label, ""),
+                    Match = match,
+                    Tcp = Known(r.Tcp, knownProfiles),
+                    Udp = Known(r.Udp, knownProfiles),
+                });
+            }
+
+            if ((source?.Count ?? 0) > rules.Count)
+                warnings.Add($"{where}: пропущено пунктов: {source!.Count - rules.Count} (пустые или неверные).");
+            return rules;
         }
 
-        if ((s.Routing.Rules?.Count ?? 0) > rules.Count)
-            warnings.Add($"Пропущено правил: {s.Routing.Rules!.Count - rules.Count} (пустые или неверные).");
+        List<CustomGeoList> CleanLists(IReadOnlyList<CustomGeoList>? source) =>
+            GeoEdits.SanitizeCustom(source).Select(l => l.ServerId is { } id && !knownProfiles.Contains(id) ? l with { ServerId = null } : l).ToList();
+
+        var rules = CleanRules(s.Routing.Rules, "Встроенные маршруты");
+        var routes = new List<CustomRoute>();
+        foreach (var route in (s.Routing.Routes ?? []).Take(RouteBook.MaxRoutes))
+        {
+            if (route is null || route.Id == Guid.Empty || routes.Any(x => x.Id == route.Id))
+                continue;
+            var name = NameSanitizer.Sanitize(route.Name, "Свой маршрут");
+            routes.Add(route with
+            {
+                Name = name,
+                Base = Enum.IsDefined(route.Base) ? route.Base : RoutePreset.ItemsOnly,
+                Rules = CleanRules(route.Rules, "Маршрут «" + name + "»"),
+                CustomLists = CleanLists(route.CustomLists),
+            });
+        }
 
         var result = s with
         {
@@ -157,7 +189,15 @@ public static class SettingsBackup
             Cores = s.Cores with { LastManifestSequence = current.Cores.LastManifestSequence, LastUpdateCheck = current.Cores.LastUpdateCheck },
             // Имя и согласие на журнал — личное, из чужого файла не берём.
             Telemetry = current.Telemetry,
-            Routing = s.Routing with { Rules = rules, GeoEdits = GeoEdits.Sanitize(s.Routing.GeoEdits), CustomLists = GeoEdits.SanitizeCustom(s.Routing.CustomLists) },
+            Routing = s.Routing with
+            {
+                Preset = s.Routing.Preset is RoutePreset.ExceptRu or RoutePreset.BlockedOnly or RoutePreset.All ? s.Routing.Preset : current.Routing.Preset,
+                Rules = rules,
+                GeoEdits = GeoEdits.Sanitize(s.Routing.GeoEdits),
+                CustomLists = CleanLists(s.Routing.CustomLists),
+                Routes = routes,
+                ActiveRouteId = routes.Any(r => r.Id == s.Routing.ActiveRouteId) ? s.Routing.ActiveRouteId : null,
+            },
         };
         return (result, warnings);
     }

@@ -390,7 +390,7 @@ public static class DiagnosticsRunner
             if (ni.OperationalStatus != OperationalStatus.Up || ni.NetworkInterfaceType == NetworkInterfaceType.Loopback)
                 continue;
             var props = ni.GetIPProperties();
-            if (props.UnicastAddresses.Any(u => u.Address.Equals(Diagnosis.OwnTunAddress))
+            if (props.UnicastAddresses.Any(u => Diagnosis.IsOwnTunAddress(u.Address))
                 || !props.GatewayAddresses.Any(g => !g.Address.Equals(IPAddress.Any)))
                 continue;
             var dns = props.DnsAddresses.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a));

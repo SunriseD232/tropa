@@ -40,6 +40,44 @@ public sealed class LogAnomalyTests
     public void Stale_tun_adapter_is_recognized(string message, bool expected) =>
         Assert.Equal(expected, CoreSupervisor.IsStaleTunAdapter(message));
 
+    // Журнал 2026-11-24: рядом работал Hiddify со своим TUN на том же 172.19.0.1 (ADR-070).
+    [Theory]
+    [InlineData("FATAL[0000] start service: start inbound/tun[tun-in]: configure tun interface: set ipv4 address: The object already exists.", true)]
+    [InlineData("FATAL[0000] start service: start inbound/tun[tun-in]: configure tun interface: set ipv6 address: The object already exists.", true)]
+    [InlineData("FATAL[0015] start service: start inbound/tun[tun-in]: configure tun interface: (create adapter: Cannot create a file when that file already exists. | open existing adapter: Element not found.)", false)]
+    [InlineData("FATAL[0000] start service: start inbound/tun[tun-in]: configure tun interface: Access is denied.", false)]
+    public void Tun_address_conflict_is_recognized(string message, bool expected)
+    {
+        Assert.Equal(expected, CoreSupervisor.IsTunAddressConflict(message));
+        if (expected)
+            Assert.False(CoreSupervisor.IsStaleTunAdapter(message));
+    }
+
+    [Fact]
+    public void Tun_address_is_replaced_only_in_tun_inbound()
+    {
+        const string json = """{"inbounds":[{"type":"tun","tag":"tun-in","address":["172.19.0.1/30","fdfe:dcba:9876::1/126"]},{"type":"mixed","tag":"mixed-in"}],"outbounds":[]}""";
+        var result = System.Text.Json.Nodes.JsonNode.Parse(CoreSupervisor.WithTunAddress(json, Tropa.Core.Diagnostics.Diagnosis.OwnTunCidrsAlt))!;
+        var address = result["inbounds"]![0]!["address"]!.AsArray().Select(n => (string?)n).ToList();
+        Assert.Equal(["172.23.233.1/30", "fdfe:dcba:9877::1/126"], address);
+        Assert.Null(result["inbounds"]![1]!["address"]);
+        Assert.True(Tropa.Core.Diagnostics.Diagnosis.IsOwnTunAddress(Tropa.Core.Diagnostics.Diagnosis.OwnTunAddressAlt));
+        Assert.True(Tropa.Core.Diagnostics.Diagnosis.IsOwnTunAddress(IPAddress.Parse("172.19.0.1")));
+        Assert.False(Tropa.Core.Diagnostics.Diagnosis.IsOwnTunAddress(IPAddress.Parse("172.19.0.2")));
+    }
+
+    // Журнал 2026-11-24: 24 минуты без шлюза с «Подключено» (ADR-071).
+    [Fact]
+    public void No_network_note_is_added_once_and_removed_keeping_other_notes()
+    {
+        const string foreign = "Работает другой VPN или клиент обхода (wireguard).";
+        var withNote = Tropa.Infrastructure.TropaEngine.WithNoNetworkNote(foreign);
+        Assert.StartsWith(Tropa.Infrastructure.TropaEngine.NoNetworkNote, withNote, StringComparison.Ordinal);
+        Assert.Equal(withNote, Tropa.Infrastructure.TropaEngine.WithNoNetworkNote(withNote));
+        Assert.Equal(foreign, Tropa.Infrastructure.TropaEngine.WithoutNoNetworkNote(withNote));
+        Assert.Null(Tropa.Infrastructure.TropaEngine.WithoutNoNetworkNote(Tropa.Infrastructure.TropaEngine.WithNoNetworkNote(null)));
+    }
+
     [Fact]
     public void Tun_names_alternate()
     {

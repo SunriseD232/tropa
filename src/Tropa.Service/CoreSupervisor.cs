@@ -22,6 +22,50 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         message.Contains("create adapter", StringComparison.Ordinal)
         && message.Contains("already exists", StringComparison.Ordinal);
 
+    /// <summary>
+    /// Адрес TUN уже занят чужим туннелем (Hiddify и другие клиенты на sing-box берут тот же 172.19.0.1):
+    /// «configure tun interface: set ipv4 address: The object already exists» (ADR-070).
+    /// </summary>
+    internal static bool IsTunAddressConflict(string message) =>
+        message.Contains("already exists", StringComparison.Ordinal)
+        && (message.Contains("set ipv4 address", StringComparison.Ordinal) || message.Contains("set ipv6 address", StringComparison.Ordinal));
+
+    /// <summary>Конфиг sing-box с другими адресами у входа TUN; остальное не трогаем.</summary>
+    internal static string WithTunAddress(string json, IReadOnlyList<string> cidrs)
+    {
+        if (System.Text.Json.Nodes.JsonNode.Parse(json) is not System.Text.Json.Nodes.JsonObject root
+            || root["inbounds"] is not System.Text.Json.Nodes.JsonArray inbounds)
+            return json;
+        var changed = false;
+        foreach (var ib in inbounds.OfType<System.Text.Json.Nodes.JsonObject>())
+        {
+            if ((string?)ib["type"] == "tun")
+            {
+                var list = new System.Text.Json.Nodes.JsonArray();
+                foreach (var c in cidrs)
+                    ((ICollection<System.Text.Json.Nodes.JsonNode?>)list).Add(System.Text.Json.Nodes.JsonValue.Create(c));
+                ib["address"] = list;
+                changed = true;
+            }
+        }
+
+        return changed ? root.ToJsonString() : json;
+    }
+
+    /// <summary>
+    /// Запасной адрес TUN для этого процесса службы: однажды столкнувшись с чужим туннелем, дальше берём
+    /// его сразу — чужой клиент обычно так и работает рядом.
+    /// </summary>
+    private bool _tunAddressAlt;
+
+    private System.Net.IPAddress TunAddress => _tunAddressAlt ? Core.Diagnostics.Diagnosis.OwnTunAddressAlt : Core.Diagnostics.Diagnosis.OwnTunAddress;
+
+    private string TunConfig(string json, string name)
+    {
+        var named = WithTunName(json, name);
+        return _tunAddressAlt ? WithTunAddress(named, Core.Diagnostics.Diagnosis.OwnTunCidrsAlt) : named;
+    }
+
     /// <summary>Другое из двух имён адаптера TUN.</summary>
     internal static string OtherTunName(string? name) =>
         string.Equals(name, Core.Diagnostics.Diagnosis.OwnTunNameAlt, StringComparison.OrdinalIgnoreCase)
@@ -515,22 +559,40 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         var tun = request.Mode == CaptureModeDto.Tun;
         try
         {
-            try
+            if (!tun)
             {
-                var config = tun ? WithTunName(request.SingBoxConfig, CurrentTunName()) : request.SingBoxConfig;
-                _core = await CoreProcess.StartSingBoxAsync(Locations, config, request.ReadinessPort,
-                    options.RunDirectory, _scrubber, onLog, ct, tun ? CoreProcess.TunStartTimeout : null).ConfigureAwait(false);
+                _core = await CoreProcess.StartSingBoxAsync(Locations, request.SingBoxConfig, request.ReadinessPort,
+                    options.RunDirectory, _scrubber, onLog, ct).ConfigureAwait(false);
             }
-            catch (CoreStartException ex) when (tun && IsStaleTunAdapter(ex.Message))
+            else
             {
-                // Адаптер Wintun от убитого ядра (выключение Windows, остановка службы при обновлении) Windows
-                // удаляет не сразу: «create adapter: … already exists | open existing adapter: Element not found».
-                // GUID адаптера sing-box выводит из имени — с другим именем столкновения нет.
-                var name = UseTunName(OtherTunName(_tunName));
-                onLog($"Адаптер туннеля от прошлого запуска ещё не удалён Windows, повтор с именем {name}…");
-                await Task.Delay(StaleTunRetryDelay, ct).ConfigureAwait(false);
-                _core = await CoreProcess.StartSingBoxAsync(Locations, WithTunName(request.SingBoxConfig, name), request.ReadinessPort,
-                    options.RunDirectory, _scrubber, onLog, ct, CoreProcess.TunStartTimeout).ConfigureAwait(false);
+                var name = CurrentTunName();
+                var staleRetried = false;
+                for (var attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        _core = await CoreProcess.StartSingBoxAsync(Locations, TunConfig(request.SingBoxConfig, name), request.ReadinessPort,
+                            options.RunDirectory, _scrubber, onLog, ct, CoreProcess.TunStartTimeout).ConfigureAwait(false);
+                        break;
+                    }
+                    catch (CoreStartException ex) when (attempt < 2 && !staleRetried && IsStaleTunAdapter(ex.Message))
+                    {
+                        // Адаптер Wintun от убитого ядра (выключение Windows, остановка службы при обновлении) Windows
+                        // удаляет не сразу: «create adapter: … already exists | open existing adapter: Element not found».
+                        // GUID адаптера sing-box выводит из имени — с другим именем столкновения нет.
+                        staleRetried = true;
+                        name = UseTunName(OtherTunName(_tunName));
+                        onLog($"Адаптер туннеля от прошлого запуска ещё не удалён Windows, повтор с именем {name}…");
+                        await Task.Delay(StaleTunRetryDelay, ct).ConfigureAwait(false);
+                    }
+                    catch (CoreStartException ex) when (attempt < 2 && !_tunAddressAlt && IsTunAddressConflict(ex.Message))
+                    {
+                        _tunAddressAlt = true;
+                        onLog($"Адрес туннеля занят другим VPN-клиентом (например, Hiddify), повтор с адресом {Core.Diagnostics.Diagnosis.OwnTunAddressAlt}…");
+                        await Task.Delay(StaleTunRetryDelay, ct).ConfigureAwait(false);
+                    }
+                }
             }
         }
         catch (CoreStartException ex) when (tun)
@@ -546,7 +608,7 @@ internal sealed class CoreSupervisor(ServiceOptions options, Action<StatusEvent>
         // После каждого запуска у TUN может быть новый интерфейс: разрешаем трафик именно через него.
         if (_killSwitch is not null)
         {
-            var luid = await options.FindTunLuid(ct).ConfigureAwait(false)
+            var luid = await options.FindTunLuid(TunAddress, ct).ConfigureAwait(false)
                 ?? throw new CoreStartException("Интерфейс туннеля не появился, интернет заблокирован аварийной блокировкой.");
             _killSwitch.AllowTunInterface(luid);
         }

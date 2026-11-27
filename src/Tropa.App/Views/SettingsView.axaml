@@ -183,7 +183,7 @@
               <Button Classes="info" Command="{Binding ShowInfoCommand}" CommandParameter="siteImport" />
             </StackPanel>
             <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Вставьте список или выберите файл: домены по строке, файл hosts, правила v2rayN (JSON) или Clash. Всё станет одним правилом в «Правилах → Сайты»." />
+                       Text="Вставьте список или выберите файл: домены по строке, файл hosts, правила v2rayN (JSON) или Clash. Всё станет одним пунктом встроенных маршрутов на экране «Маршруты»." />
             <TextBox Text="{Binding SiteImportText}" AcceptsReturn="True" TextWrapping="NoWrap" Height="180"
                      FontFamily="{StaticResource Mono}" FontSize="12" PlaceholderText="discord.com&#10;DOMAIN-SUFFIX,x.com,PROXY&#10;domain:youtube.com" />
             <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding SiteImportPreview}"

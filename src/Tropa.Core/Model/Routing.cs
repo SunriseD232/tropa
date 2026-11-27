@@ -2,7 +2,11 @@ using System.Text.Json.Serialization;
 
 namespace Tropa.Core.Model;
 
-public enum RoutePreset { ExceptRu, BlockedOnly, All }
+/// <summary>
+/// Основа маршрута. ItemsOnly — только для своих маршрутов (ADR-067): через сервер идут лишь пункты
+/// маршрута, всё остальное — напрямую. Новое значение — последним: в старых settings.json числа нет.
+/// </summary>
+public enum RoutePreset { ExceptRu, BlockedOnly, All, ItemsOnly }
 
 public enum RuleActionKind { Proxy, Direct, Block, Server }
 
@@ -83,6 +87,38 @@ public sealed record RoutingSettings
     public IReadOnlyList<CustomGeoList> CustomLists { get => _customLists; init => _customLists = value ?? []; }
 
     private readonly IReadOnlyList<CustomGeoList> _customLists = [];
+
+    /// <summary>Свои маршруты (ADR-067). У каждого свои пункты; встроенные три маршрута делят Rules и CustomLists выше.</summary>
+    public IReadOnlyList<CustomRoute> Routes { get => _routes; init => _routes = value ?? []; }
+
+    private readonly IReadOnlyList<CustomRoute> _routes = [];
+
+    /// <summary>Выбранный свой маршрут; null — встроенный маршрут из <see cref="Preset"/>.</summary>
+    public Guid? ActiveRouteId { get; init; }
+}
+
+/// <summary>
+/// Свой маршрут (ADR-067): название, основа и собственные пункты — приложения и сайты (Rules),
+/// списки с масками и поддоменами (CustomLists). Наборы гео-баз — правила с GeoSite/GeoIp.
+/// </summary>
+public sealed record CustomRoute
+{
+    public Guid Id { get; init; } = Guid.NewGuid();
+
+    public string Name { get => _name; init => _name = value ?? ""; }
+
+    private readonly string _name = "";
+
+    /// <summary>Основа: ItemsOnly — только пункты маршрута через сервер, остальное напрямую.</summary>
+    public RoutePreset Base { get; init; } = RoutePreset.ItemsOnly;
+
+    public IReadOnlyList<Rule> Rules { get => _rules; init => _rules = value ?? []; }
+
+    private readonly IReadOnlyList<Rule> _rules = [];
+
+    public IReadOnlyList<CustomGeoList> CustomLists { get => _lists; init => _lists = value ?? []; }
+
+    private readonly IReadOnlyList<CustomGeoList> _lists = [];
 }
 
 /// <summary>
@@ -99,8 +135,11 @@ public sealed record CustomGeoList
 
     public bool Disabled { get; init; }
 
-    /// <summary>Proxy, Direct или Block (конкретный сервер для списков не поддерживается).</summary>
+    /// <summary>Proxy, Direct или Block.</summary>
     public RuleActionKind Action { get; init; }
+
+    /// <summary>Для Proxy: свой сервер списка (ADR-067); null или удалённый сервер — выбранный сервер.</summary>
+    public Guid? ServerId { get; init; }
 
     public IReadOnlyList<GeoEntry> Entries { get => _entries; init => _entries = value ?? []; }
 

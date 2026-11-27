@@ -47,6 +47,18 @@ internal sealed partial class RulesView : UserControl
     public RulesView() => InitializeComponent();
 }
 
+internal sealed partial class RoutesView : UserControl
+{
+    public RoutesView() => InitializeComponent();
+
+    // Двойной щелчок по маршруту — редактор (ADR-067). Щелчок по кнопкам карточки сюда не доходит.
+    private void OnRouteDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is RouteCardViewModel card && e.Source is not Button)
+            card.EditCommand.Execute(null);
+    }
+}
+
 internal sealed partial class GamesView : UserControl
 {
     public GamesView() => InitializeComponent();
